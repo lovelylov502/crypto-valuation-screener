@@ -23,6 +23,10 @@ export interface CoinRaw {
   revenueAnnual: number | null;
   revenue30d: number | null;
 
+  // 홀더 귀속 수익 (DefiLlama dataType=dailyHoldersRevenue) — 토큰 가치에 가장 직결
+  holderRevenueAnnual: number | null;
+  holderRevenue30d: number | null;
+
   // 거래량 (DefiLlama /overview/dexs)
   volumeAnnual: number | null;
   volume30d: number | null;
@@ -34,19 +38,21 @@ export interface CoinRaw {
   maxSupply: number | null;
 }
 
-// 밸류에이션 엔진이 덼붙이는 결과
+// 밸류에이션 엔진이 덧붙이는 결과
 export interface CoinScored extends CoinRaw {
   multiples: {
     pf: number | null; // P/F = mcap / feesAnnual
     ps: number | null; // P/S = mcap / revenueAnnual
+    phr: number | null; // P/HR = mcap / holderRevenueAnnual (크립토 PER)
     mcapTvl: number | null; // mcap / tvl
     fdvTvl: number | null; // fdv / tvl
     dilution: number | null; // fdv / mcap (희석 위험)
   };
-  // 같은 섹터 내 "숌 정도" 백분위 (0~100, 높을수록 저평가)
+  // 같은 섹터 내 "싼 정도" 백분위 (0~100, 높을수록 저평가)
   sectorPercentiles: {
     pf: number | null;
     ps: number | null;
+    phr: number | null;
     mcapTvl: number | null;
   };
   growthScore: number | null; // 성장성 점수 0~100
