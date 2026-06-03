@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0a0e17;
+  --color-panel: #121826;
+  --color-panel-2: #1a2234;
+  --color-border: #232c40;
+  --color-muted: #7c8aa5;
+  --color-text: #e6ebf5;
+  --color-accent: #4f8cff;
+}
+
+html,
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 얇은 스크롤바 (테이블 가로 스크롤용) */
+.thin-scroll::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
