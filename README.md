@@ -1,36 +1,38 @@
 # 크립토 밸류에이션 스크리너
 
-가격이 아니라 **펀더멘털**(수수료·매출·예치자산)로 코인의 저평가/고평가를 가늠하는 웹 스크리너.
-각 밸류에이션 멀티플을 **같은 섹터 안에서 백분위로 정규화**한 뒤 가중 평균해 **0~100 종합 점수**(높을수록 저평가)로 보여줍니다.
+가격이 아니라 **펀더멘털**(수수료·매출·**holder revenue**·예치자산)로 코인의 저평가/고평가를 가닠하는 웹 스크리너.
+각 밸류에이션 멀티플을 **같은 섹터 안에서 백분위로 정규화**한 뒤 가중 평균해 **0~100 종합 점수**(높을수록 저평가)로 보여준다.
 
+**🌐 라이브: https://crypto-valuation-screener.vercel.app**
 데이터: [DefiLlama](https://defillama.com) · [CoinGecko](https://coingecko.com) (무료 API, 키 불필요)
 
-## 점수 산정 방법
+## 핵심 지표
 
-- **P/F** = 시총 / 연수수료, **P/S** = 시총 / 연매출, **Mcap/TVL** = 시총 / 예치자산 (모두 낮을수록 쌈)
-- 연율화: 최근 1년 값(없으면 30일 × 12.17)
-- **섹터 정규화**: 멀티플을 같은 카테고리 내 백분위로 변환 (DEX vs Liquid Staking 등 구조 차이 보정). 섹터 표본 < 5개면 전체 시장 분포로 fallback
-- **활동성 필터**: 연 매출/수수료가 $100K 미만이면 P/F·P/S 비교에서 제외(좀비), 시총 $1M 미만은 점수 미산출
-- **성장성(GARP)**: 최근 30일 수수료 모멘텀 반영
-- **희석 위험**: FDV/Mcap (CoinGecko 상위 코인 보강)
-- 가중치: P/F 30% · P/S 25% · Mcap/TVL 20% · 성장성 15% · 희석 10% (결측 지표는 재정규화)
+- **P/HR** (시총÷홀더귀속수익) — 크립토 PER, 점수 최고 가중. 토큰 홀더에게 실제 귀속되는 수익 대비 시총
+- **P/S · P/F · Mcap/TVL** — 매출·수수료·자본효율 멀티플
+- 같은 섹터 내 백분위로 정규화 → 종합 점수 (P/HR 28% · P/F 18% · P/S 18% · Mcap/TVL 16% · 성장 12% · 희석 8%)
+- 활동성($100K)·규모($1M) 게이트로 좀비·마이크로캡 노이즈 제거
+
+→ 자세한 방법론: [`docs/METHODOLOGY.md`](./docs/METHODOLOGY.md)
 
 ## 스택
 
-- Next.js 16 (App Router) · TypeScript · Tailwind CSS v4
-- 서버에서 4개 DefiLlama 엔드포인트 + CoinGecko를 `slug`/`gecko_id`로 조인 후 점수화, 페이지 ISR 30분 캐시
-- Vitest 단위 테스트 (`lib/valuation.test.ts`)
+- Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Vitest
+- 서버에서 DefiLlama 4종 + CoinGecko를 **parent 프로토콜 단위로 집계·조인** 후 점수화, 페이지 ISR 30분 캐시
+- → 기술 구조: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
 
 ## 개발
 
 ```bash
 npm install
+# 사내/로컬 CA 환경에서 fetch SSL 오류 시 (PowerShell)
+$env:NODE_OPTIONS="--use-system-ca"
 npm run dev        # http://localhost:3000
 npm test           # 엔진 단위 테스트
 npm run build      # 프로덕션 빌드
 ```
 
-> 사내/로컬 CA 환경에서 fetch SSL 오류가 나면 `NODE_OPTIONS=--use-system-ca` 를 지정하세요.
+작업 지침은 [`CLAUDE.md`](./CLAUDE.md), 작업 이력은 [`docs/WORKLOG.md`](./docs/WORKLOG.md) 참고.
 
 ## ⚠️ 면책
 
