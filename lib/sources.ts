@@ -178,6 +178,8 @@ export async function fetchCoins(): Promise<CoinRaw[]> {
     if (!geckoId && symbol && hasCashflow) {
       g = gecko.bySymbol.get(symbol.toLowerCase());
     }
+    // CoinGecko로 매칭됐으면 그 id를 저장 (코인 링크용 — parent/폴백 코인도 CoinGecko 연결)
+    if (!geckoId && g) geckoId = str(g.id);
     const gMcap = g ? num(g.market_cap) : null;
 
     // 시총: DefiLlama가 알면 그걸, 아니면 CoinGecko

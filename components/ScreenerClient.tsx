@@ -15,6 +15,12 @@ function usdToSlider(usd: number): number {
   return Math.max(0, Math.min(100, ((Math.log10(usd) - 6) / 5) * 100));
 }
 
+// 코인 외부 링크: CoinGecko 우선, 없으면 DefiLlama 폴백
+function coinUrl(c: CoinScored): string {
+  if (c.geckoId) return `https://www.coingecko.com/en/coins/${c.geckoId}`;
+  return `https://defillama.com/protocol/${c.slug.replace(/^parent#/, "")}`;
+}
+
 type SortKey =
   | "valueScore"
   | "name"
@@ -294,7 +300,15 @@ export function ScreenerClient({
                     ) : (
                       <span className="w-5 h-5 rounded-full bg-[var(--color-panel-2)] shrink-0" />
                     )}
-                    <span className="font-medium truncate">{c.name}</span>
+                    <a
+                      href={coinUrl(c)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={c.geckoId ? "CoinGecko에서 열기" : "DefiLlama에서 열기"}
+                      className="font-medium truncate hover:text-[var(--color-accent)] hover:underline"
+                    >
+                      {c.name}
+                    </a>
                     {c.symbol && <span className="text-[var(--color-muted)] text-xs shrink-0">{c.symbol}</span>}
                   </div>
                 </td>
