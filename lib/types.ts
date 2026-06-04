@@ -59,7 +59,8 @@ export interface CoinScored extends CoinRaw {
   valueScore: number | null; // 종합 점수 0~100 (높을수록 저평가)
   label: ValueLabel;
   confidence: number; // 0~1
-  lowActivity: boolean; // 좀비(매출 미미) 여부
+  lowActivity: boolean; // 좀비(매출 미미)/신선도 미달 여부
+  highDilution: boolean; // 유통량 30% 미만(MC/FDV<0.3) — 미래 언락 매도압 경고
 }
 
 export type ValueLabel =

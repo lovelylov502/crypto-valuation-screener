@@ -77,7 +77,14 @@ function sortValue(c: CoinScored, key: SortKey): number | string | null {
 function renderCell(c: CoinScored, key: SortKey) {
   switch (key) {
     case "category":
-      return <span className="text-[var(--color-muted)] whitespace-nowrap">{c.category ?? "–"}</span>;
+      return (
+        <span
+          title={c.category ?? undefined}
+          className="text-[var(--color-muted)] block max-w-[100px] truncate"
+        >
+          {c.category ?? "–"}
+        </span>
+      );
     case "valueScore":
       return <ScoreBadge score={c.valueScore} label={c.label} confidence={c.confidence} />;
     case "ps": return fmtMult(c.multiples.ps);
@@ -86,7 +93,15 @@ function renderCell(c: CoinScored, key: SortKey) {
     case "holderRevenueAnnual": return fmtUsd(c.holderRevenueAnnual);
     case "revenue30d": return fmtUsd(c.revenue30d);
     case "mcap": return fmtUsd(c.mcap);
-    case "fdv": return fmtUsd(c.fdv);
+    case "fdv":
+      return (
+        <span className="whitespace-nowrap">
+          {fmtUsd(c.fdv)}
+          {c.highDilution && (
+            <span title="유통량 30% 미만 (MC/FDV<0.3) — 미래 언락 매도압 주의" className="ml-1 text-amber-400">⚠</span>
+          )}
+        </span>
+      );
     case "tvl": return fmtUsd(c.tvl);
     case "feesChange":
       return (

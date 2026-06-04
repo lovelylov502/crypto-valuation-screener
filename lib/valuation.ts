@@ -10,17 +10,61 @@ export const MIN_MCAP_USD = 1_000_000;
 // 섹터 표본이 이보다 적으면 전체 시장 풀로 fallback
 const MIN_SECTOR_SAMPLE = 5;
 
-// 종합 점수 가중치 (결측 지표는 제외 후 재정규화)
-// P/HR(홀더 귀속 수익 = 크립토 PER)을 최고 가중. P/F·Mcap/TVL은 화면엔 숨기지만
-// 데이터가 풍부해 holder revenue 없는 토큰의 점수를 받쳐준다.
+// 밸류 멀티플 가중치 (결측 지표는 제외 후 재정규화).
+// holder revenue(크립토 P/E) 최우선. fees는 supply-side(LP·검증자) 몫까지 포함하는
+// 가장 거친 지표라 최저 가중 — Token Terminal·Artemis 수익 위계 기준.
+// ※ 성장(모멘텀)·희석은 밸류 팩터가 아니므로 여기 넣지 않고 산출 후 ±보정으로만 반영.
 const WEIGHTS = {
-  phr: 0.28,
-  pf: 0.18,
-  ps: 0.18,
-  mcapTvl: 0.16,
-  growth: 0.12,
-  dilution: 0.08,
+  phr: 0.4,
+  ps: 0.25,
+  mcapTvl: 0.2,
+  pf: 0.15,
 } as const;
+
+// 밸류 점수 산출 후 적용하는 보조축 보정 한도(각 ±5점, 합 ±10).
+const MAX_ADJ = 5;
+
+// 밸류 라벨을 붙이려면 밸류 멀티플이 최소 이 개수 이상 있어야 한다(단일 신호 과신 방지).
+const MIN_VALUE_MULTIPLES = 2;
+
+// 현금흐름 멀티플(P/F·P/S·P/HR) 분포 상한. holder revenue 등이 일시적으로 거의 0이 되면
+// 멀티플이 수만 배로 튀어 섹터 분포 꼬리를 왜곡 → 이 값 초과는 분포에서 제외(본인은 최저 백분위).
+const MULTIPLE_CAP = 1000;
+
+// 고희석 경고 임계: FDV/Mcap이 이 값 초과(= MC/FDV<0.3, 유통량 30% 미만)면 태그.
+const DILUTION_WARN = 1 / 0.3;
+
+// Mcap/TVL이 가치의 선행지표로 유효한 섹터(예치자산=사업 규모). 그 외(체인·브릿지·CEX·
+// 런치패드 등 TVL이 가치와 무관)는 Mcap/TVL을 점수에서 제외 → 가중이 P/HR·P/S·P/F로 재분배.
+const MCAP_TVL_SECTORS = new Set<string>([
+  "Dexs",
+  "Lending",
+  "Yield",
+  "Derivatives",
+  "Liquid Staking",
+  "Farm",
+  "CDP",
+  "Yield Aggregator",
+  "Algo-Stables",
+  "Staking Pool",
+  "Liquidity Manager",
+  "Synthetics",
+  "Options",
+  "Options Vault",
+  "Leveraged Farming",
+  "Liquid Restaking",
+  "Restaking",
+  "Insurance",
+  "NFT Lending",
+  "RWA Lending",
+  "Basis Trading",
+  "Reserve Currency",
+  "Risk Curators",
+  "Uncollateralized Lending",
+]);
+
+const isMcapTvlSector = (category: string | null): boolean =>
+  category !== null && MCAP_TVL_SECTORS.has(category);
 
 const clamp = (x: number, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, x));
@@ -95,13 +139,17 @@ function buildPools(
     const cat = coin.category ?? "기타";
     if (!byCategory.has(cat)) byCategory.set(cat, empty());
     const bucket = byCategory.get(cat)!;
-    // 현금흐름 멀티플(P/F·P/S·P/HR)은 활동성 좀비를 분포에서 제외 (왜곡 방지). Mcap/TVL은 활동성 무관.
+    // 현금흐름 멀티플(P/F·P/S·P/HR)은 활동성 좀비를 분포에서 제외(왜곡 방지) + 극단값 클리핑.
     if (!lowActivity) {
-      if (m.pf !== null) { bucket.pf.push(m.pf); global.pf.push(m.pf); }
-      if (m.ps !== null) { bucket.ps.push(m.ps); global.ps.push(m.ps); }
-      if (m.phr !== null) { bucket.phr.push(m.phr); global.phr.push(m.phr); }
+      if (m.pf !== null && m.pf <= MULTIPLE_CAP) { bucket.pf.push(m.pf); global.pf.push(m.pf); }
+      if (m.ps !== null && m.ps <= MULTIPLE_CAP) { bucket.ps.push(m.ps); global.ps.push(m.ps); }
+      if (m.phr !== null && m.phr <= MULTIPLE_CAP) { bucket.phr.push(m.phr); global.phr.push(m.phr); }
     }
-    if (m.mcapTvl !== null) { bucket.mcapTvl.push(m.mcapTvl); global.mcapTvl.push(m.mcapTvl); }
+    // Mcap/TVL은 활동성 무관하되, TVL이 가치 선행지표인 섹터에서만 분포에 포함.
+    if (m.mcapTvl !== null && isMcapTvlSector(coin.category)) {
+      bucket.mcapTvl.push(m.mcapTvl);
+      global.mcapTvl.push(m.mcapTvl);
+    }
   }
 
   const sortPool = (b: Pool) => {
@@ -151,7 +199,13 @@ export function scoreCoins(coins: CoinRaw[]): CoinScored[] {
     const m = computeMultiples(coin);
     const fees = coin.feesAnnual ?? 0;
     const rev = coin.revenueAnnual ?? 0;
-    const lowActivity = fees < MIN_ACTIVITY_USD && rev < MIN_ACTIVITY_USD;
+    // 신선도 게이트: 연율값은 있어도 최근 30일 현금흐름이 전부 없으면 멈춘(stale) 프로토콜
+    const stale =
+      (coin.fees30d ?? 0) <= 0 &&
+      (coin.revenue30d ?? 0) <= 0 &&
+      (coin.holderRevenue30d ?? 0) <= 0;
+    const lowActivity =
+      (fees < MIN_ACTIVITY_USD && rev < MIN_ACTIVITY_USD) || stale;
     const insufficientScale = coin.mcap === null || coin.mcap < MIN_MCAP_USD;
     return { coin, m, lowActivity, insufficientScale };
   });
@@ -161,6 +215,8 @@ export function scoreCoins(coins: CoinRaw[]): CoinScored[] {
 
   // 3차: 백분위 + 종합 점수
   return staged.map(({ coin, m, lowActivity, insufficientScale }): CoinScored => {
+    const highDilution = m.dilution !== null && m.dilution > DILUTION_WARN;
+
     // 마이크로캡/토큰미발행: 멀티플은 참고용으로 채우되 점수는 판단보류
     if (insufficientScale) {
       return {
@@ -172,6 +228,7 @@ export function scoreCoins(coins: CoinRaw[]): CoinScored[] {
         label: "판단보류",
         confidence: 0,
         lowActivity,
+        highDilution,
       };
     }
 
@@ -187,8 +244,9 @@ export function scoreCoins(coins: CoinRaw[]): CoinScored[] {
       m.phr !== null && !lowActivity
         ? inversePercentile(m.phr, poolFor(pools, coin.category, "phr"))
         : null;
+    // Mcap/TVL은 TVL이 가치 선행지표인 화이트리스트 섹터에서만 점수에 반영
     const pctMcapTvl =
-      m.mcapTvl !== null
+      m.mcapTvl !== null && isMcapTvlSector(coin.category)
         ? inversePercentile(m.mcapTvl, poolFor(pools, coin.category, "mcapTvl"))
         : null;
 
@@ -200,19 +258,26 @@ export function scoreCoins(coins: CoinRaw[]): CoinScored[] {
       (pctPs !== null ? 1 : 0) +
       (pctPhr !== null ? 1 : 0) +
       (pctMcapTvl !== null ? 1 : 0);
-    const hasValueMultiple = valueMultipleCount > 0;
+    // 밸류 멀티플이 MIN_VALUE_MULTIPLES개 미만이면 단일 신호 과신 위험 → 판단보류
+    const hasValueMultiple = valueMultipleCount >= MIN_VALUE_MULTIPLES;
 
-    // 밸류 멀티플(P/HR·P/F·P/S·Mcap/TVL)이 하나도 없으면 성장성/희석만으론 점수 의미 없음 → 판단보류
-    const valueScore = hasValueMultiple
+    // 1) 순수 밸류 멀티플 가중 평균(결측 재정규화) — 모멘텀/희석은 제외
+    const baseScore = hasValueMultiple
       ? weightedScore([
           { value: pctPhr, weight: WEIGHTS.phr },
-          { value: pctPf, weight: WEIGHTS.pf },
           { value: pctPs, weight: WEIGHTS.ps },
           { value: pctMcapTvl, weight: WEIGHTS.mcapTvl },
-          { value: growthScore, weight: WEIGHTS.growth },
-          { value: dilutionScore, weight: WEIGHTS.dilution },
+          { value: pctPf, weight: WEIGHTS.pf },
         ])
       : null;
+
+    // 2) 성장(모멘텀)·희석은 밸류 팩터가 아니므로 산출 후 약한 ±보정으로만 반영
+    //    (중립 50 기준, 각 ±MAX_ADJ). 밸류 점수 오염 방지.
+    const adj = (s: number | null) => (s === null ? 0 : ((s - 50) / 50) * MAX_ADJ);
+    const valueScore =
+      baseScore === null
+        ? null
+        : clamp(baseScore + adj(growthScore) + adj(dilutionScore), 0, 100);
 
     // 신뢰도: 밸류 멀티플 가용성 + 활동성 (4개 중 몇 개 산출됐나)
     let confidence = valueMultipleCount / 4;
@@ -228,6 +293,7 @@ export function scoreCoins(coins: CoinRaw[]): CoinScored[] {
       label: labelFor(valueScore, hasValueMultiple),
       confidence: Math.round(confidence * 100) / 100,
       lowActivity,
+      highDilution,
     };
   });
 }

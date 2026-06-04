@@ -30,17 +30,19 @@ npm run build    # 프로덕션 빌드 (타입체크 포함)
 
 ## 절대 잊지 말 것 (이번 작업에서 데인 것들)
 
-1. **parent 단위로 집계한다.** DefiLlama는 한 프로젝트를 child로 쪼개다(예: `hyperliquid-perps` + `hyperliquid-spot`). `parentProtocol`로 묶어 합산하지 않으면 holder revenue가 분산돼 누락된다.
+1. **parent 단위로 집계한다.** DefiLlama는 한 프로젝트를 child로 쪼갠다(예: `hyperliquid-perps` + `hyperliquid-spot`). `parentProtocol`로 묶어 합산하지 않으면 holder revenue가 분산돼 누락된다.
 2. **gecko_id가 있으면 symbol 폴백 금지.** gecko_id 없을 때만 symbol로 CoinGecko 시총을 붙이고, 그것도 **현금흐름(fees/매출/holder rev)이 있는 그룹에만** 적용한다. 안 그러면 같은 심볼의 무관한 엔트리(브릿지 등)에 시총이 잘못 붙는다.
-3. **시총 $1M 미만·매출 연 $100K 미만은 게이트 처리** (마이크로캡/좀비 노이즈 제거) — `lib/valuation.ts`.
+3. **게이트로 노이즈 제거** — `lib/valuation.ts`: 시총<$1M(판단보류) · 매출/수수료 둘 다<$100K(좀비) · 최근 30일 현금흐름 0(stale) · 멀티플>1000(글리치 클리핑) · 밸류 멀티플<2개(단일 신호 보류).
 4. **점수 로직은 `lib/valuation.ts` 순수 함수.** 바꾸면 `lib/valuation.test.ts`로 검증.
-5. **`bodycation`은 남의 팀이 아니a 사용자 개인 Vercel 계정의 slug다.** 배포는 `--scope bodycation`.
+5. **`bodycation`은 남의 팀이 아니라 사용자 개인 Vercel 계정의 slug다.** 배포는 `--scope bodycation`.
 
 ## 밸류에이션 점수 (요약)
 
 종합 점수 = 섹터 백분위 가중 평균 (높을수록 저평가).
-**P/HR 28% · P/F 18% · P/S 18% · Mcap/TVL 16% · 성장 12% · 희석 8%**.
-P/F·Mcap/TVL은 화면엣 숨기지만 데이터가 풍부해 holder revenue 없는 토큰의 점수를 받친다.
+**밸류 멀티플만** 합 100으로 가중: **P/HR 40% · P/S 25% · Mcap/TVL 20% · P/F 15%**.
+성장·희석은 밸류 팩터가 아니므로 가중에 섞지 않고 **산출 후 각 ±5점 보정**으로만 반영(팩터 오염 방지).
+P/F는 supply-side 몫까지 포함하는 가장 거친 지표라 최저 가중. P/F·Mcap/TVL은 화면엔 숨기지만 데이터가 풍부해 holder revenue 없는 토큰의 점수를 받친다.
+Mcap/TVL은 TVL이 유효한 섹터(`MCAP_TVL_SECTORS` 화이트리스트)에서만 점수 반영 — 체인·브릿지·CEX 등은 제외.
 → 상세: [`docs/METHODOLOGY.md`](./docs/METHODOLOGY.md)
 
 ## 배포 (Vercel, 개인 계정)
