@@ -21,11 +21,11 @@ DefiLlama(4종) + CoinGecko
 
 ## 조인이 핵심 (가장 까다로운 부분)
 
-DefiLlama는 한 프로젝트를 **여러 child 엔트리로 쪼개다**. 예: Hyperliquid =
+DefiLlama는 한 프로젝트를 **여러 child 엔트리로 쪼갠다**. 예: Hyperliquid =
 `hyperliquid-perps` + `hyperliquid-spot-orderbook` + `hyperliquid-l1` …
 그리고 시총(mcap)·gecko_id는 child에 없을 수 있고(=0/빈), holder revenue는 child별로 분산된다.
 
-이걸 그대로 slug 단위로 조인하면 → 시총 누락 + 수익 분산 → **주요 토큰(HYPE 등)이 통째 누락**된다.
+이걸 그대로 slug 단위로 조인하면 → 시총 누락 + 수익 분산 → **주요 토큰(HYPE 등)이 통째로 누락**된다.
 
 ### 해결: parent 단위 집계 (`lib/sources.ts`)
 
@@ -48,16 +48,16 @@ DefiLlama는 한 프로젝트를 **여러 child 엔트리로 쪼개다**. 예: H
 ## 캐싱
 
 - 페이지·API route 모두 `revalidate = 1800` (30분 ISR).
-- DefiLlama 응답이 2MB를 넘어(`/protocols` ~10MB) Next의 **fetch 데이터 캐시**엔 안 들어가지만, **페이지 레벨 ISR이 실제 캐싱**을 담당하므로 문제없다. 빌드 시 `Failed to set Next.js data cache … over 2MB` 경고는 무시.
+- DefiLlama 응답이 2MB를 넘어(`/protocols` ~10MB) Next의 **fetch 데이터 캐시**엔 안 들어가지만, **페이지 레벨 ISR이 실제 캐싱**을 담당하므로 문제없다. 빌드 시 나오는 `Failed to set Next.js data cache … over 2MB` 경고는 무시.
 - CoinGecko는 무료 레이트리밋 때문에 상위 ~1000개(per_page 250 × 4페이지)만, TTL 6시간.
 
 ## 성능 (스크리너 테이블)
 
-- 슬라이더/입력 등 필터는 즉시 state 반영, 무거운 테이블 렌더는 `useDeferredValue`로 지연 → 드래그 버볍임 완화.
+- 슬라이더/입력 등 필터는 즉시 state 반영, 무거운 테이블 렌더는 `useDeferredValue`로 지연 → 드래그 버벅임 완화.
 - 규모 필터는 로그 슬라이더 ↔ 숫자입력(M 단위) 양방향 동기화.
 - 코인 이름 열은 `position: sticky; left: 0` 으로 가로 스크롤 시 고정.
 
 ## 환경
 
-- 사내/로컬 CA 환경이a Node의 outbound TLS가 막힘 → `NODE_OPTIONS=--use-system-ca` 필수 (dev·build·deploy 모두).
+- 사내/로컬 CA 환경이라 Node의 outbound TLS가 막힘 → `NODE_OPTIONS=--use-system-ca` 필수 (dev·build·deploy 모두).
 - Windows / PowerShell. 디렉토리명에 공백(`holder revenue`)이 있어 Vercel `--project` 이름을 명시해야 함.

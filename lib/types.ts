@@ -13,10 +13,18 @@ export interface CoinRaw {
   tvl: number | null;
   change1d: number | null; // 가격/시총 24h 변화율(%)
   change7d: number | null;
+  price: number | null;
+  marketCapRank: number | null;
+  totalVolume: number | null;
+  priceChange7d: number | null;
+  priceChange14d: number | null;
+  priceChange30d: number | null;
 
   // 수수료/매출 (DefiLlama /overview/fees)
   feesAnnual: number | null; // 연율화 수수료
+  fees7d: number | null;
   fees30d: number | null;
+  feesChange7dover7d: number | null; // 최근 7일 vs 직전 7일 변화율(%)
   feesChange30dover30d: number | null; // 최근 30일 vs 직전 30일 변화율(%)
 
   // 매출 (DefiLlama dataType=dailyRevenue)
@@ -76,4 +84,29 @@ export interface ScreenerResponse {
   categories: string[];
   updatedAt: string; // ISO
   fdvCoverage: number; // FDV 보강된 코인 수
+  onchain: OnchainDashboard;
+}
+
+export type OnchainMetricStatus = "ok" | "missing-token" | "unavailable";
+
+export interface OnchainMetricPoint {
+  time: string;
+  value: number;
+}
+
+export interface OnchainMetric {
+  key: "mvrv" | "sopr" | "realizedPrice";
+  label: string;
+  value: number | null;
+  previousValue: number | null;
+  change7d: number | null;
+  updatedAt: string | null;
+  status: OnchainMetricStatus;
+  points: OnchainMetricPoint[];
+}
+
+export interface OnchainDashboard {
+  source: "ResearchBitcoin";
+  status: OnchainMetricStatus;
+  metrics: OnchainMetric[];
 }

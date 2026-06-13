@@ -16,6 +16,7 @@ async function getJson<T>(url: string, revalidate: number): Promise<T> {
   const res = await fetch(url, {
     next: { revalidate },
     headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) throw new Error(`fetch ${url} -> ${res.status}`);
   return (await res.json()) as T;
@@ -56,7 +57,7 @@ async function fetchGecko(): Promise<{ byId: Map<string, Json>; bySymbol: Map<st
   const byId = new Map<string, Json>();
   const bySymbol = new Map<string, Json>();
   for (let page = 1; page <= GECKO_PAGES; page++) {
-    const url = `${GECKO}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${page}`;
+    const url = `${GECKO}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${page}&price_change_percentage=7d,14d,30d`;
     try {
       const rows = await getJson<Json[]>(url, TTL_COINGECKO);
       for (const r of rows) {
@@ -78,7 +79,7 @@ async function fetchGecko(): Promise<{ byId: Map<string, Json>; bySymbol: Map<st
 }
 
 // 한 그룹의 overview 집계 (연율화·30일·직전30일 합산)
-interface Agg { annual: number; d30: number; prev30: number; hit: boolean }
+interface Agg { annual: number; d7: number; prev7: number; d30: number; prev30: number; hit: boolean }
 
 function aggregateByGroup(list: Json[], groupKey: (slug: string) => string): Map<string, Agg> {
   const m = new Map<string, Agg>();
@@ -87,8 +88,10 @@ function aggregateByGroup(list: Json[], groupKey: (slug: string) => string): Map
     if (!slug) continue;
     const k = groupKey(slug);
     let a = m.get(k);
-    if (!a) { a = { annual: 0, d30: 0, prev30: 0, hit: false }; m.set(k, a); }
+    if (!a) { a = { annual: 0, d7: 0, prev7: 0, d30: 0, prev30: 0, hit: false }; m.set(k, a); }
     const an = annualize(p); if (an) a.annual += an;
+    const d7 = num(p.total7d); if (d7 && d7 > 0) a.d7 += d7;
+    const p7 = num(p.total14dto7d); if (p7 && p7 > 0) a.prev7 += p7;
     const d30 = num(p.total30d); if (d30 && d30 > 0) a.d30 += d30;
     const pv = num(p.total60dto30d); if (pv && pv > 0) a.prev30 += pv;
     a.hit = true;
@@ -186,6 +189,8 @@ export async function fetchCoins(): Promise<CoinRaw[]> {
     const mcap = dlMcap ?? gMcap;
     if (mcap === null && tvl === null) continue; // 둘 다 없으면 의미 없음
 
+    const feesChange7 =
+      fees && fees.prev7 > 0 ? ((fees.d7 - fees.prev7) / fees.prev7) * 100 : null;
     const feesChange =
       fees && fees.prev30 > 0 ? ((fees.d30 - fees.prev30) / fees.prev30) * 100 : null;
 
@@ -202,9 +207,17 @@ export async function fetchCoins(): Promise<CoinRaw[]> {
       tvl,
       change1d: num(rep.change_1d),
       change7d: num(rep.change_7d),
+      price: g ? num(g.current_price) : null,
+      marketCapRank: g ? num(g.market_cap_rank) : null,
+      totalVolume: g ? num(g.total_volume) : null,
+      priceChange7d: g ? num(g.price_change_percentage_7d_in_currency) : num(rep.change_7d),
+      priceChange14d: g ? num(g.price_change_percentage_14d_in_currency) : null,
+      priceChange30d: g ? num(g.price_change_percentage_30d_in_currency) : null,
 
       feesAnnual: fees && fees.annual > 0 ? fees.annual : null,
+      fees7d: fees && fees.d7 > 0 ? fees.d7 : null,
       fees30d: fees && fees.d30 > 0 ? fees.d30 : null,
+      feesChange7dover7d: feesChange7,
       feesChange30dover30d: feesChange,
 
       revenueAnnual: rev && rev.annual > 0 ? rev.annual : null,

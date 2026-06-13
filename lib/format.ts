@@ -24,3 +24,15 @@ export function fmtPct(v: number | null | undefined): string {
   const s = v >= 0 ? "+" : "";
   return `${s}${v.toFixed(1)}%`;
 }
+
+export function fmtKstMinute(iso: string): string {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "–";
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  const yy = String(kst.getUTCFullYear()).slice(2);
+  const mo = kst.getUTCMonth() + 1;
+  const day = kst.getUTCDate();
+  const hour = String(kst.getUTCHours()).padStart(2, "0");
+  const minute = String(kst.getUTCMinutes()).padStart(2, "0");
+  return `${yy}. ${mo}. ${day}. ${hour}:${minute} KST`;
+}

@@ -2,7 +2,7 @@
 
 import { useDeferredValue, useMemo, useState } from "react";
 import type { CoinScored } from "@/lib/types";
-import { fmtUsd, fmtMult, fmtPct } from "@/lib/format";
+import { fmtKstMinute, fmtUsd, fmtMult, fmtPct } from "@/lib/format";
 import { ScoreBadge } from "./ScoreBadge";
 
 // 로그 슬라이더(0~100) <-> USD 양방향. 0이면 필터 없음, 100이면 $100B
@@ -13,6 +13,16 @@ function sliderToUsd(s: number): number {
 function usdToSlider(usd: number): number {
   if (usd <= 0) return 0;
   return Math.max(0, Math.min(100, ((Math.log10(usd) - 6) / 5) * 100));
+}
+
+// P/HR 같은 멀티플용 로그 슬라이더. 0이면 필터 없음, 100이면 1000x
+function sliderToMultiple(s: number): number {
+  if (s <= 0) return 0;
+  return Math.pow(10, -1 + (s / 100) * 4); // 0.1x ~ 1000x
+}
+function multipleToSlider(v: number): number {
+  if (v <= 0) return 0;
+  return Math.max(0, Math.min(100, ((Math.log10(v) + 1) / 4) * 100));
 }
 
 // 코인 외부 링크: CoinGecko 우선, 없으면 DefiLlama 폴백
@@ -33,7 +43,9 @@ type SortKey =
   | "mcap"
   | "fdv"
   | "tvl"
-  | "feesChange";
+  | "priceChange14d"
+  | "priceChange30d"
+  | "feesChange7d";
 
 interface Col {
   key: SortKey;
@@ -53,7 +65,9 @@ const COLS: Col[] = [
   { key: "mcap", label: "시총", title: "유통 시가총액" },
   { key: "fdv", label: "FDV", title: "완전희석가치 (CoinGecko, 상위코인)" },
   { key: "tvl", label: "TVL", title: "예치자산" },
-  { key: "feesChange", label: "수수료Δ", title: "최근 30일 vs 직전 30일 수수료 변화" },
+  { key: "priceChange14d", label: "가격 14d", title: "CoinGecko 14일 가격 변화율" },
+  { key: "priceChange30d", label: "가격 30d", title: "CoinGecko 30일 가격 변화율" },
+  { key: "feesChange7d", label: "수수료Δ", title: "최근 7일 vs 직전 7일 수수료 변화 (30일 변화 보조 표시)" },
 ];
 
 function sortValue(c: CoinScored, key: SortKey): number | string | null {
@@ -69,8 +83,15 @@ function sortValue(c: CoinScored, key: SortKey): number | string | null {
     case "mcap": return c.mcap;
     case "fdv": return c.fdv;
     case "tvl": return c.tvl;
-    case "feesChange": return c.feesChange30dover30d;
+    case "priceChange14d": return c.priceChange14d;
+    case "priceChange30d": return c.priceChange30d;
+    case "feesChange7d": return c.feesChange7dover7d;
   }
+}
+
+function changeClass(v: number | null): string {
+  if (v === null) return "";
+  return v >= 0 ? "text-emerald-400" : "text-red-400";
 }
 
 // 셀 렌더 (코인 제외)
@@ -103,45 +124,145 @@ function renderCell(c: CoinScored, key: SortKey) {
         </span>
       );
     case "tvl": return fmtUsd(c.tvl);
-    case "feesChange":
+    case "priceChange14d":
+      return <span className={changeClass(c.priceChange14d)}>{fmtPct(c.priceChange14d)}</span>;
+    case "priceChange30d":
+      return <span className={changeClass(c.priceChange30d)}>{fmtPct(c.priceChange30d)}</span>;
+    case "feesChange7d":
       return (
-        <span className={c.feesChange30dover30d == null ? "" : c.feesChange30dover30d >= 0 ? "text-emerald-400" : "text-red-400"}>
-          {fmtPct(c.feesChange30dover30d)}
+        <span className="inline-flex flex-col items-end gap-0.5">
+          <span className={changeClass(c.feesChange7dover7d)}>{fmtPct(c.feesChange7dover7d)}</span>
+          <span className={`${changeClass(c.feesChange30dover30d)} text-[11px] opacity-75`}>
+            30d {fmtPct(c.feesChange30dover30d)}
+          </span>
         </span>
       );
     default: return null;
   }
 }
 
-// 규모 필터 1개 (숫자입력 M단위 + 로그 슬라이더, 같은 USD 값 공유)
-function ScaleFilter({
-  label, usd, onChange,
-}: { label: string; usd: number; onChange: (usd: number) => void }) {
+function UsdRangeFilter({
+  label, minUsd, maxUsd, onMinChange, onMaxChange,
+}: {
+  label: string;
+  minUsd: number;
+  maxUsd: number;
+  onMinChange: (usd: number) => void;
+  onMaxChange: (usd: number) => void;
+}) {
+  const setMin = (usd: number) => onMinChange(maxUsd > 0 ? Math.min(usd, maxUsd) : usd);
+  const setMax = (usd: number) => onMaxChange(usd > 0 ? Math.max(usd, minUsd) : 0);
+
   return (
-    <div className="min-w-[210px]">
-      <div className="flex items-center justify-between mb-1 text-xs text-[var(--color-muted)]">
-        <span>{label}</span>
-        <div className="flex items-center gap-1">
-          <span>≥ $</span>
+    <div className="min-w-[250px]">
+      <div className="mb-2 text-xs text-[var(--color-muted)]">{label}</div>
+      <div className="grid grid-cols-2 gap-2 text-xs text-[var(--color-muted)]">
+        <label className="flex items-center gap-1">
+          <span>최소 $</span>
           <input
             type="number" min={0} step={1}
-            value={usd > 0 ? Math.round(usd / 1e6) : ""}
+            value={minUsd > 0 ? Math.round(minUsd / 1e6) : ""}
             onChange={(e) => {
               const m = parseFloat(e.target.value);
-              onChange(Number.isFinite(m) && m > 0 ? m * 1e6 : 0);
+              setMin(Number.isFinite(m) && m > 0 ? m * 1e6 : 0);
             }}
             placeholder="0"
-            className="w-20 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
+            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
           />
           <span>M</span>
-        </div>
+        </label>
+        <label className="flex items-center gap-1">
+          <span>최대 $</span>
+          <input
+            type="number" min={0} step={1}
+            value={maxUsd > 0 ? Math.round(maxUsd / 1e6) : ""}
+            onChange={(e) => {
+              const m = parseFloat(e.target.value);
+              setMax(Number.isFinite(m) && m > 0 ? m * 1e6 : 0);
+            }}
+            placeholder="∞"
+            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
+          />
+          <span>M</span>
+        </label>
       </div>
-      <input
-        type="range" min={0} max={100} step={0.5}
-        value={usdToSlider(usd)}
-        onChange={(e) => onChange(sliderToUsd(Number(e.target.value)))}
-        className="w-full accent-[var(--color-accent)]"
-      />
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <input
+          type="range" min={0} max={100} step={0.5}
+          value={usdToSlider(minUsd)}
+          onChange={(e) => setMin(sliderToUsd(Number(e.target.value)))}
+          className="w-full accent-[var(--color-accent)]"
+        />
+        <input
+          type="range" min={0} max={100} step={0.5}
+          value={maxUsd > 0 ? usdToSlider(maxUsd) : 100}
+          onChange={(e) => setMax(sliderToUsd(Number(e.target.value)))}
+          className="w-full accent-[var(--color-accent)]"
+        />
+      </div>
+    </div>
+  );
+}
+
+function MultipleRangeFilter({
+  label, min, max, onMinChange, onMaxChange,
+}: {
+  label: string;
+  min: number;
+  max: number;
+  onMinChange: (v: number) => void;
+  onMaxChange: (v: number) => void;
+}) {
+  const setMin = (v: number) => onMinChange(max > 0 ? Math.min(v, max) : v);
+  const setMax = (v: number) => onMaxChange(v > 0 ? Math.max(v, min) : 0);
+
+  return (
+    <div className="min-w-[250px]">
+      <div className="mb-2 text-xs text-[var(--color-muted)]">{label}</div>
+      <div className="grid grid-cols-2 gap-2 text-xs text-[var(--color-muted)]">
+        <label className="flex items-center gap-1">
+          <span>최소</span>
+          <input
+            type="number" min={0} step={0.1}
+            value={min > 0 ? Number(min.toFixed(1)) : ""}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              setMin(Number.isFinite(v) && v > 0 ? v : 0);
+            }}
+            placeholder="0"
+            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
+          />
+          <span>x</span>
+        </label>
+        <label className="flex items-center gap-1">
+          <span>최대</span>
+          <input
+            type="number" min={0} step={0.1}
+            value={max > 0 ? Number(max.toFixed(1)) : ""}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              setMax(Number.isFinite(v) && v > 0 ? v : 0);
+            }}
+            placeholder="∞"
+            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
+          />
+          <span>x</span>
+        </label>
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <input
+          type="range" min={0} max={100} step={0.5}
+          value={multipleToSlider(min)}
+          onChange={(e) => setMin(sliderToMultiple(Number(e.target.value)))}
+          className="w-full accent-[var(--color-accent)]"
+        />
+        <input
+          type="range" min={0} max={100} step={0.5}
+          value={max > 0 ? multipleToSlider(max) : 100}
+          onChange={(e) => setMax(sliderToMultiple(Number(e.target.value)))}
+          className="w-full accent-[var(--color-accent)]"
+        />
+      </div>
     </div>
   );
 }
@@ -157,8 +278,11 @@ export function ScreenerClient({
   const [search, setSearch] = useState("");
   const [cats, setCats] = useState<Set<string>>(new Set());
   const [minMcap, setMinMcap] = useState(0);
+  const [maxMcap, setMaxMcap] = useState(0);
   const [minTvl, setMinTvl] = useState(0);
-  const [minScore, setMinScore] = useState(0);
+  const [maxTvl, setMaxTvl] = useState(0);
+  const [minPhr, setMinPhr] = useState(0);
+  const [maxPhr, setMaxPhr] = useState(0);
   const [hideZombie, setHideZombie] = useState(true);
   const [holderOnly, setHolderOnly] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("valueScore");
@@ -181,10 +305,13 @@ export function ScreenerClient({
     const filtered = coins.filter((c) => {
       if (hideZombie && c.lowActivity) return false;
       if (holderOnly && c.holderRevenueAnnual == null) return false;
-      if (minScore > 0 && (c.valueScore ?? -1) < minScore) return false;
       if (cats.size > 0 && (!c.category || !cats.has(c.category))) return false;
       if (minMcap > 0 && (c.mcap ?? 0) < minMcap) return false;
+      if (maxMcap > 0 && (c.mcap === null || c.mcap > maxMcap)) return false;
       if (minTvl > 0 && (c.tvl ?? 0) < minTvl) return false;
+      if (maxTvl > 0 && (c.tvl === null || c.tvl > maxTvl)) return false;
+      if (minPhr > 0 && (c.multiples.phr === null || c.multiples.phr < minPhr)) return false;
+      if (maxPhr > 0 && (c.multiples.phr === null || c.multiples.phr > maxPhr)) return false;
       if (q) {
         const hay = `${c.name} ${c.symbol ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -202,7 +329,7 @@ export function ScreenerClient({
       return ((va as number) - (vb as number)) * dir;
     });
     return filtered;
-  }, [coins, search, cats, minMcap, minTvl, minScore, hideZombie, holderOnly, sortKey, sortDir]);
+  }, [coins, search, cats, minMcap, maxMcap, minTvl, maxTvl, minPhr, maxPhr, hideZombie, holderOnly, sortKey, sortDir]);
 
   // 입력은 즉시 반응시키고, 무거운 테이블 렌더는 지연 → 슬라이더 드래그 버벅임 완화
   const deferredRows = useDeferredValue(rows);
@@ -234,25 +361,28 @@ export function ScreenerClient({
           </label>
         </div>
 
-        <div className="flex flex-wrap gap-x-8 gap-y-3">
-          <ScaleFilter label="최소 시총" usd={minMcap} onChange={setMinMcap} />
-          <ScaleFilter label="최소 TVL" usd={minTvl} onChange={setMinTvl} />
-          <div className="min-w-[150px]">
-            <div className="flex items-center justify-between mb-1 text-xs text-[var(--color-muted)]">
-              <span>최소 점수</span>
-              <input
-                type="number" min={0} max={100} step={1}
-                value={minScore > 0 ? minScore : ""}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  setMinScore(Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0);
-                }}
-                placeholder="0"
-                className="w-16 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
-              />
-            </div>
-            <input type="range" min={0} max={100} step={1} value={minScore} onChange={(e) => setMinScore(Number(e.target.value))} className="w-full accent-[var(--color-accent)]" />
-          </div>
+        <div className="flex flex-wrap gap-x-8 gap-y-4">
+          <UsdRangeFilter
+            label="시총 범위"
+            minUsd={minMcap}
+            maxUsd={maxMcap}
+            onMinChange={setMinMcap}
+            onMaxChange={setMaxMcap}
+          />
+          <UsdRangeFilter
+            label="TVL 범위"
+            minUsd={minTvl}
+            maxUsd={maxTvl}
+            onMinChange={setMinTvl}
+            onMaxChange={setMaxTvl}
+          />
+          <MultipleRangeFilter
+            label="P/HR 범위"
+            min={minPhr}
+            max={maxPhr}
+            onMinChange={setMinPhr}
+            onMaxChange={setMaxPhr}
+          />
         </div>
 
         <details className="group">
@@ -277,9 +407,9 @@ export function ScreenerClient({
         </details>
       </div>
 
-      <div className="flex items-center justify-between text-xs text-[var(--color-muted)] px-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--color-muted)] px-1">
         <span>{deferredRows.length.toLocaleString()}개 표시</span>
-        <span>FDV 보강 {fdvCoverage}개 · 갱신 {new Date(updatedAt).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}</span>
+        <span>FDV 보강 {fdvCoverage}개 · 갱신 {fmtKstMinute(updatedAt)}</span>
       </div>
 
       {/* 테이블 */}

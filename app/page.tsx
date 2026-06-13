@@ -1,5 +1,5 @@
 import { buildScreener } from "@/lib/screener";
-import { ScreenerClient } from "@/components/ScreenerClient";
+import { CryptoDashboardClient } from "@/components/CryptoDashboardClient";
 
 export const revalidate = 1800; // 30분
 
@@ -40,11 +40,12 @@ export default async function Home() {
         </div>
       </header>
 
-      <ScreenerClient
+      <CryptoDashboardClient
         coins={scored}
         categories={data.categories}
         updatedAt={data.updatedAt}
         fdvCoverage={data.fdvCoverage}
+        onchain={data.onchain}
       />
 
       <footer className="mt-8 pt-5 border-t border-[var(--color-border)] text-xs text-[var(--color-muted)] leading-relaxed space-y-1.5">
