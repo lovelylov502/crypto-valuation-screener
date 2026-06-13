@@ -41,6 +41,7 @@ npm run build    # 프로덕션 빌드 (타입체크 포함)
 종합 점수 = 섹터 백분위 가중 평균 (높을수록 저평가).
 **밸류 멀티플만** 합 100으로 가중: **P/HR 40% · P/S 25% · Mcap/TVL 20% · P/F 15%**.
 성장·희석은 밸류 팩터가 아니므로 가중에 섞지 않고 **산출 후 각 ±5점 보정**으로만 반영(팩터 오염 방지).
+별도 **가치포획 점수**는 holder revenue 존재, 매출 대비 귀속 비중, P/HR 상대 매력, 희석 리스크를 합쳐 “매출이 토큰에 실제로 꽂히는가”를 본다.
 P/F는 supply-side 몫까지 포함하는 가장 거친 지표라 최저 가중. P/F·Mcap/TVL은 화면엔 숨기지만 데이터가 풍부해 holder revenue 없는 토큰의 점수를 받친다.
 Mcap/TVL은 TVL이 유효한 섹터(`MCAP_TVL_SECTORS` 화이트리스트)에서만 점수 반영 — 체인·브릿지·CEX 등은 제외.
 → 상세: [`docs/METHODOLOGY.md`](./docs/METHODOLOGY.md)

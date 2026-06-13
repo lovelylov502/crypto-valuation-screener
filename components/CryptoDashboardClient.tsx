@@ -5,7 +5,7 @@ import type { CoinScored, OnchainDashboard, OnchainMetric } from "@/lib/types";
 import { fmtKstMinute, fmtMult, fmtPct, fmtUsd } from "@/lib/format";
 import { ScreenerClient } from "./ScreenerClient";
 
-type Tab = "dashboard" | "screener";
+type Tab = "dashboard" | "capture" | "screener";
 
 function coinUrl(c: CoinScored): string {
   if (c.geckoId) return `https://www.coingecko.com/en/coins/${c.geckoId}`;
@@ -15,6 +15,13 @@ function coinUrl(c: CoinScored): string {
 function changeClass(v: number | null): string {
   if (v === null) return "text-[var(--color-muted)]";
   return v >= 0 ? "text-emerald-400" : "text-red-400";
+}
+
+function captureClass(score: number | null): string {
+  if (score === null) return "text-[var(--color-muted)]";
+  if (score >= 70) return "text-emerald-400";
+  if (score >= 45) return "text-amber-300";
+  return "text-[var(--color-muted)]";
 }
 
 function avg(values: number[]): number | null {
@@ -268,6 +275,105 @@ function Dashboard({ coins, updatedAt, fdvCoverage, onchain }: {
   );
 }
 
+function ValueCaptureView({ coins, updatedAt }: { coins: CoinScored[]; updatedAt: string }) {
+  const data = useMemo(() => {
+    const direct = coins.filter((c) =>
+      c.valueCapture.label === "강한 가치포획" || c.valueCapture.label === "가치포획 후보"
+    );
+    const indirect = coins.filter((c) => c.valueCapture.label === "간접 포획");
+    const highDilution = coins.filter((c) => c.valueCapture.risks.includes("고희석"));
+    const shares = direct
+      .map((c) => c.valueCapture.holderRevenueShare)
+      .filter((v): v is number => v !== null);
+    const rows = [...direct]
+      .sort((a, b) => (b.valueCapture.score ?? -1) - (a.valueCapture.score ?? -1))
+      .slice(0, 18);
+    return {
+      direct,
+      indirect,
+      highDilution,
+      medianShare: median(shares),
+      rows,
+    };
+  }, [coins]);
+
+  return (
+    <div className="space-y-5">
+      <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">가치포획 렌즈</h2>
+            <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--color-muted)]">
+              단순 매출 성장보다 <strong className="text-[var(--color-text)]">그 돈이 토큰 홀더에게 실제로 꽂히는가</strong>를 먼저 봅니다.
+              holder revenue가 있으면 직접 포획, 매출/수수료만 있으면 간접 포획으로 분리합니다.
+            </p>
+          </div>
+          <span className="text-xs text-[var(--color-muted)]">갱신 {fmtKstMinute(updatedAt)}</span>
+        </div>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
+          <div className="text-xs text-[var(--color-muted)]">직접 가치포획</div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-emerald-400">{data.direct.length.toLocaleString()}개</div>
+        </div>
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
+          <div className="text-xs text-[var(--color-muted)]">간접 포획</div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-amber-300">{data.indirect.length.toLocaleString()}개</div>
+        </div>
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
+          <div className="text-xs text-[var(--color-muted)]">holder revenue 비중 중앙값</div>
+          <div className="mt-2 text-2xl font-bold tabular-nums">{data.medianShare === null ? "–" : fmtPct(data.medianShare * 100)}</div>
+        </div>
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
+          <div className="text-xs text-[var(--color-muted)]">고희석 리스크</div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-red-400">{data.highDilution.length.toLocaleString()}개</div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] overflow-x-auto thin-scroll">
+        <div className="border-b border-[var(--color-border)] px-4 py-3">
+          <h2 className="text-sm font-semibold">직접 가치포획 후보</h2>
+          <p className="mt-1 text-xs text-[var(--color-muted)]">포획점수는 holder revenue 존재·매출 대비 귀속 비중·P/HR 상대 매력·희석 리스크를 함께 봅니다.</p>
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-[var(--color-border)] text-xs text-[var(--color-muted)]">
+              <th className="px-4 py-2 text-left font-medium">코인</th>
+              <th className="px-3 py-2 text-right font-medium">포획점수</th>
+              <th className="px-3 py-2 text-right font-medium">귀속비중</th>
+              <th className="px-3 py-2 text-right font-medium">P/HR</th>
+              <th className="px-3 py-2 text-right font-medium">홀더수익/년</th>
+              <th className="px-3 py-2 text-right font-medium">P/S</th>
+              <th className="px-4 py-2 text-left font-medium">신호/리스크</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((c) => (
+              <tr key={c.slug} className="border-b border-[var(--color-border)]/50 hover:bg-[var(--color-panel-2)]">
+                <td className="px-4 py-2">
+                  <a href={coinUrl(c)} target="_blank" rel="noopener noreferrer" className="font-medium hover:text-[var(--color-accent)] hover:underline">
+                    {c.name}
+                  </a>
+                  {c.symbol && <span className="ml-1 text-xs text-[var(--color-muted)]">{c.symbol}</span>}
+                </td>
+                <td className={`px-3 py-2 text-right font-semibold tabular-nums ${captureClass(c.valueCapture.score)}`}>{c.valueCapture.score ?? "–"}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{c.valueCapture.holderRevenueShare === null ? "–" : fmtPct(c.valueCapture.holderRevenueShare * 100)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{fmtMult(c.multiples.phr)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{fmtUsd(c.holderRevenueAnnual)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{fmtMult(c.multiples.ps)}</td>
+                <td className="px-4 py-2 text-xs text-[var(--color-muted)]">
+                  {[...c.valueCapture.signals, ...c.valueCapture.risks.map((r) => `⚠ ${r}`)].slice(0, 3).join(" · ") || "–"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  );
+}
+
 export function CryptoDashboardClient({
   coins,
   categories,
@@ -299,6 +405,17 @@ export function CryptoDashboardClient({
         </button>
         <button
           type="button"
+          onClick={() => setTab("capture")}
+          className={`rounded-md px-4 py-2 text-sm transition-colors ${
+            tab === "capture"
+              ? "bg-[var(--color-accent)] text-white"
+              : "text-[var(--color-muted)] hover:text-[var(--color-text)]"
+          }`}
+        >
+          가치포획
+        </button>
+        <button
+          type="button"
           onClick={() => setTab("screener")}
           className={`rounded-md px-4 py-2 text-sm transition-colors ${
             tab === "screener"
@@ -312,6 +429,8 @@ export function CryptoDashboardClient({
 
       {tab === "dashboard" ? (
         <Dashboard coins={coins} updatedAt={updatedAt} fdvCoverage={fdvCoverage} onchain={onchain} />
+      ) : tab === "capture" ? (
+        <ValueCaptureView coins={coins} updatedAt={updatedAt} />
       ) : (
         <ScreenerClient
           coins={coins}

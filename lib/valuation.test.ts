@@ -264,4 +264,83 @@ describe("scoreCoins", () => {
     const [l] = scoreCoins([lonely, ...fillSector("Dexs", 6, 10)]);
     expect(l.valueScore).not.toBeNull();
   });
+
+  it("holder revenue가 실측되면 직접 가치포획 후보로 분류하고 간접 매출 코인보다 높은 포획 점수를 준다", () => {
+    const direct = make({
+      slug: "direct-capture",
+      category: "Dexs",
+      mcap: 1_000_000_000,
+      fdv: 1_000_000_000,
+      feesAnnual: 300_000_000,
+      fees30d: 20_000_000,
+      revenueAnnual: 100_000_000,
+      revenue30d: 8_000_000,
+      holderRevenueAnnual: 50_000_000,
+      holderRevenue30d: 4_000_000,
+      tvl: 500_000_000,
+    });
+    const indirect = make({
+      slug: "indirect-revenue",
+      category: "Dexs",
+      mcap: 1_000_000_000,
+      fdv: 1_000_000_000,
+      feesAnnual: 300_000_000,
+      fees30d: 20_000_000,
+      revenueAnnual: 100_000_000,
+      revenue30d: 8_000_000,
+      tvl: 500_000_000,
+    });
+
+    const result = scoreCoins([direct, indirect, ...fillSector("Dexs", 6, 10)]);
+    const d = result.find((x) => x.slug === "direct-capture")!;
+    const i = result.find((x) => x.slug === "indirect-revenue")!;
+
+    expect(d.valueCapture.label).toMatch(/가치포획/);
+    expect(d.valueCapture.holderRevenueShare).toBeCloseTo(0.5);
+    expect(d.valueCapture.signals).toContain("holder revenue 실측");
+    expect(i.valueCapture.label).toBe("간접 포획");
+    expect(i.valueCapture.risks).toContain("holder revenue 없음");
+    expect(d.valueCapture.score!).toBeGreaterThan(i.valueCapture.score!);
+  });
+
+  it("holder revenue share는 매출 대비 비율로 계산하되 100%를 넘으면 1로 클리핑한다", () => {
+    const overDistributed = make({
+      slug: "over-distributed",
+      category: "Dexs",
+      mcap: 1_000_000_000,
+      feesAnnual: 300_000_000,
+      fees30d: 20_000_000,
+      revenueAnnual: 100_000_000,
+      revenue30d: 8_000_000,
+      holderRevenueAnnual: 150_000_000,
+      holderRevenue30d: 12_000_000,
+      tvl: 500_000_000,
+    });
+
+    const [c] = scoreCoins([overDistributed, ...fillSector("Dexs", 6, 10)]);
+    expect(c.valueCapture.holderRevenueShare).toBe(1);
+  });
+
+  it("고희석 코인은 가치포획 리스크로 표시하고 포획 점수를 낮춘다", () => {
+    const base = {
+      category: "Dexs",
+      mcap: 1_000_000_000,
+      feesAnnual: 300_000_000,
+      fees30d: 20_000_000,
+      revenueAnnual: 100_000_000,
+      revenue30d: 8_000_000,
+      holderRevenueAnnual: 50_000_000,
+      holderRevenue30d: 4_000_000,
+      tvl: 500_000_000,
+    } satisfies Partial<CoinRaw>;
+    const full = make({ slug: "full-float", ...base, fdv: 1_000_000_000 });
+    const diluted = make({ slug: "diluted-capture", ...base, fdv: 10_000_000_000 });
+
+    const result = scoreCoins([full, diluted, ...fillSector("Dexs", 6, 10)]);
+    const f = result.find((x) => x.slug === "full-float")!;
+    const d = result.find((x) => x.slug === "diluted-capture")!;
+
+    expect(d.valueCapture.risks).toContain("고희석");
+    expect(d.valueCapture.score!).toBeLessThan(f.valueCapture.score!);
+  });
 });

@@ -33,6 +33,7 @@ function coinUrl(c: CoinScored): string {
 
 type SortKey =
   | "valueScore"
+  | "captureScore"
   | "name"
   | "category"
   | "ps"
@@ -57,6 +58,7 @@ interface Col {
 const COLS: Col[] = [
   { key: "category", label: "섹터", title: "카테고리" },
   { key: "valueScore", label: "점수", title: "종합 밸류 점수 (0~100, 높을수록 저평가)" },
+  { key: "captureScore", label: "포획", title: "토큰 홀더 가치포획 점수 — 매출이 토큰에 실제로 꽂히는지" },
   { key: "ps", label: "P/S", title: "시총 / 연매출 (낮을수록 쌈)" },
   { key: "phr", label: "P/HR", title: "시총 / 홀더귀속수익 — 크립토 PER (낮을수록 쌈)" },
   { key: "revenueAnnual", label: "매출/년", title: "연율화 프로토콜 매출" },
@@ -75,6 +77,7 @@ function sortValue(c: CoinScored, key: SortKey): number | string | null {
     case "name": return c.name.toLowerCase();
     case "category": return (c.category ?? "").toLowerCase();
     case "valueScore": return c.valueScore;
+    case "captureScore": return c.valueCapture.score;
     case "ps": return c.multiples.ps;
     case "phr": return c.multiples.phr;
     case "revenueAnnual": return c.revenueAnnual;
@@ -94,6 +97,13 @@ function changeClass(v: number | null): string {
   return v >= 0 ? "text-emerald-400" : "text-red-400";
 }
 
+function captureClass(score: number | null): string {
+  if (score === null) return "text-[var(--color-muted)]";
+  if (score >= 70) return "text-emerald-400";
+  if (score >= 45) return "text-amber-300";
+  return "text-[var(--color-muted)]";
+}
+
 // 셀 렌더 (코인 제외)
 function renderCell(c: CoinScored, key: SortKey) {
   switch (key) {
@@ -108,6 +118,18 @@ function renderCell(c: CoinScored, key: SortKey) {
       );
     case "valueScore":
       return <ScoreBadge score={c.valueScore} label={c.label} confidence={c.confidence} />;
+    case "captureScore":
+      return (
+        <span
+          title={[...c.valueCapture.signals, ...c.valueCapture.risks.map((r) => `위험: ${r}`)].join(" · ") || c.valueCapture.label}
+          className="inline-flex flex-col items-end gap-0.5 whitespace-nowrap"
+        >
+          <span className={`font-semibold tabular-nums ${captureClass(c.valueCapture.score)}`}>
+            {c.valueCapture.score ?? "–"}
+          </span>
+          <span className="text-[11px] text-[var(--color-muted)]">{c.valueCapture.label}</span>
+        </span>
+      );
     case "ps": return fmtMult(c.multiples.ps);
     case "phr": return fmtMult(c.multiples.phr);
     case "revenueAnnual": return fmtUsd(c.revenueAnnual);

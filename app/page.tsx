@@ -26,8 +26,9 @@ export default async function Home() {
       <header className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">크립토 밸류에이션 스크리너</h1>
         <p className="text-[var(--color-muted)] mt-1.5 text-sm leading-relaxed max-w-3xl">
-          가격이 아니라 <strong className="text-[var(--color-text)]">펀더멘털</strong>(수수료·매출·예치자산)로
-          코인의 저평가/고평가를 가늠합니다. 각 멀티플을{" "}
+          가격이 아니라 <strong className="text-[var(--color-text)]">펀더멘털</strong>(수수료·매출·예치자산)과{" "}
+          <strong className="text-[var(--color-text)]">토큰 가치포획</strong>(holder revenue·희석)을 함께 봅니다.
+          각 멀티플을{" "}
           <strong className="text-[var(--color-text)]">같은 섹터 안에서 백분위로 정규화</strong>한 뒤
           가중 평균해 <strong className="text-[var(--color-text)]">0~100 종합 점수</strong>(높을수록 저평가)로 표시합니다.
           데이터: DefiLlama · CoinGecko.
@@ -50,8 +51,9 @@ export default async function Home() {
 
       <footer className="mt-8 pt-5 border-t border-[var(--color-border)] text-xs text-[var(--color-muted)] leading-relaxed space-y-1.5">
         <p>
-          <strong className="text-[var(--color-text)]">방법론.</strong> P/F=시총/연수수료, P/S=시총/연매출,
-          Mcap/TVL=시총/예치자산. 연율화는 최근 1년 값(없으면 30일×12.17). 매출이 연 $100K 미만이면 P/F·P/S 비교에서
+          <strong className="text-[var(--color-text)]">방법론.</strong> P/HR=시총/홀더귀속수익, P/F=시총/연수수료, P/S=시총/연매출,
+          Mcap/TVL=시총/예치자산. 별도 가치포획 점수는 holder revenue 존재, 매출 대비 귀속 비중, P/HR 상대 매력,
+          희석 리스크를 함께 봅니다. 연율화는 최근 1년 값(없으면 30일×12.17). 매출이 연 $100K 미만이면 P/F·P/S 비교에서
           제외(좀비), 시총 $1M 미만은 점수 미산출. 섹터 표본이 5개 미만이면 전체 시장 분포로 보정.
         </p>
         <p>

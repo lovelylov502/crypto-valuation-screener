@@ -47,6 +47,14 @@ export interface CoinRaw {
 }
 
 // 밸류에이션 엔진이 덧붙이는 결과
+export interface ValueCapture {
+  score: number | null; // 0~100, 높을수록 토큰 홀더가 실제 가치를 잘 포획
+  label: ValueCaptureLabel;
+  holderRevenueShare: number | null; // holder revenue / protocol revenue(or fees), 0~1
+  signals: string[];
+  risks: string[];
+}
+
 export interface CoinScored extends CoinRaw {
   multiples: {
     pf: number | null; // P/F = mcap / feesAnnual
@@ -65,6 +73,7 @@ export interface CoinScored extends CoinRaw {
   };
   growthScore: number | null; // 성장성 점수 0~100
   valueScore: number | null; // 종합 점수 0~100 (높을수록 저평가)
+  valueCapture: ValueCapture; // 토큰 홀더 가치포획 품질/리스크
   label: ValueLabel;
   confidence: number; // 0~1
   lowActivity: boolean; // 좀비(매출 미미)/신선도 미달 여부
@@ -77,6 +86,13 @@ export type ValueLabel =
   | "적정"
   | "다소 고평가"
   | "고평가"
+  | "판단보류";
+
+export type ValueCaptureLabel =
+  | "강한 가치포획"
+  | "가치포획 후보"
+  | "간접 포획"
+  | "포획 불명확"
   | "판단보류";
 
 export interface ScreenerResponse {

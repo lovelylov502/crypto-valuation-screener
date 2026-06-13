@@ -1,4 +1,4 @@
-import type { CoinRaw, CoinScored, ValueLabel } from "./types";
+import type { CoinRaw, CoinScored, ValueCapture, ValueLabel } from "./types";
 
 // 좀비(매출 미미) 임계값: 연 매출/수수료 둘 다 이 값 미만이면 P/F·P/S 비교 신뢰 불가
 export const MIN_ACTIVITY_USD = 100_000;
@@ -119,6 +119,100 @@ function labelFor(score: number | null, hasValueMultiple: boolean): ValueLabel {
   return "고평가";
 }
 
+function computeHolderRevenueShare(c: CoinRaw): number | null {
+  const hr = c.holderRevenueAnnual;
+  if (hr === null || hr <= 0) return null;
+  const denominator =
+    c.revenueAnnual !== null && c.revenueAnnual > 0
+      ? c.revenueAnnual
+      : c.feesAnnual !== null && c.feesAnnual > 0
+        ? c.feesAnnual
+        : null;
+  if (denominator === null) return 1;
+  return clamp(hr / denominator, 0, 1);
+}
+
+function computeValueCapture({
+  coin,
+  pctPf,
+  pctPs,
+  pctPhr,
+  dilutionScore,
+  lowActivity,
+  insufficientScale,
+  highDilution,
+}: {
+  coin: CoinRaw;
+  pctPf: number | null;
+  pctPs: number | null;
+  pctPhr: number | null;
+  dilutionScore: number | null;
+  lowActivity: boolean;
+  insufficientScale: boolean;
+  highDilution: boolean;
+}): ValueCapture {
+  const holderRevenueShare = computeHolderRevenueShare(coin);
+  const holderRevenue = coin.holderRevenueAnnual ?? 0;
+  const hasFreshHolderRevenue = (coin.holderRevenue30d ?? 0) > 0;
+  const hasDirectCapture = holderRevenue >= MIN_ACTIVITY_USD && hasFreshHolderRevenue;
+  const hasRevenueOrFees =
+    (coin.revenueAnnual ?? 0) >= MIN_ACTIVITY_USD ||
+    (coin.feesAnnual ?? 0) >= MIN_ACTIVITY_USD;
+  const signals: string[] = [];
+  const risks: string[] = [];
+
+  if (insufficientScale) {
+    return {
+      score: null,
+      label: "판단보류",
+      holderRevenueShare,
+      signals,
+      risks: ["시총/토큰 데이터 부족"],
+    };
+  }
+
+  if (hasDirectCapture) signals.push("holder revenue 실측");
+  else if (hasRevenueOrFees) {
+    signals.push("매출/수수료 실측");
+    risks.push("holder revenue 없음");
+  } else {
+    risks.push("현금흐름 불명확");
+  }
+  if (pctPhr !== null && pctPhr >= 70) signals.push("P/HR 섹터 상위");
+  if (pctPs !== null && pctPs >= 70) signals.push("P/S 섹터 상위");
+  if (lowActivity) risks.push("저활동/신선도 낮음");
+  if (highDilution) risks.push("고희석");
+
+  const dilutionComponent = (dilutionScore ?? 50) / 100;
+  let rawScore: number | null = null;
+  let label: ValueCapture["label"] = "포획 불명확";
+
+  if (hasDirectCapture) {
+    rawScore =
+      35 +
+      (holderRevenueShare ?? 0.25) * 35 +
+      ((pctPhr ?? 50) / 100) * 20 +
+      dilutionComponent * 10;
+    if (lowActivity) rawScore -= 10;
+    label = rawScore >= 70 ? "강한 가치포획" : "가치포획 후보";
+  } else if (hasRevenueOrFees) {
+    rawScore =
+      20 +
+      ((pctPs ?? pctPf ?? 50) / 100) * 15 +
+      dilutionComponent * 10;
+    if (lowActivity) rawScore -= 10;
+    label = "간접 포획";
+  }
+
+  return {
+    score: rawScore === null ? null : Math.round(clamp(rawScore, 0, 100)),
+    label,
+    holderRevenueShare,
+    signals,
+    risks,
+  };
+}
+
 // 섹터별 멀티플 분포(유효·활동성 통과 코인만)에서 백분위 산출용 정렬 배열 빌드
 type Pool = { pf: number[]; ps: number[]; phr: number[]; mcapTvl: number[] };
 type SortedPools = {
@@ -225,6 +319,16 @@ export function scoreCoins(coins: CoinRaw[]): CoinScored[] {
         sectorPercentiles: { pf: null, ps: null, phr: null, mcapTvl: null },
         growthScore: null,
         valueScore: null,
+        valueCapture: computeValueCapture({
+          coin,
+          pctPf: null,
+          pctPs: null,
+          pctPhr: null,
+          dilutionScore: dilutionToScore(m.dilution),
+          lowActivity,
+          insufficientScale,
+          highDilution,
+        }),
         label: "판단보류",
         confidence: 0,
         lowActivity,
@@ -284,12 +388,24 @@ export function scoreCoins(coins: CoinRaw[]): CoinScored[] {
     if (lowActivity) confidence *= 0.5;
     confidence = clamp(confidence, 0, 1);
 
+    const valueCapture = computeValueCapture({
+      coin,
+      pctPf,
+      pctPs,
+      pctPhr,
+      dilutionScore,
+      lowActivity,
+      insufficientScale,
+      highDilution,
+    });
+
     return {
       ...coin,
       multiples: m,
       sectorPercentiles: { pf: pctPf, ps: pctPs, phr: pctPhr, mcapTvl: pctMcapTvl },
       growthScore,
       valueScore: valueScore === null ? null : Math.round(valueScore),
+      valueCapture,
       label: labelFor(valueScore, hasValueMultiple),
       confidence: Math.round(confidence * 100) / 100,
       lowActivity,
