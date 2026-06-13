@@ -1,7 +1,7 @@
 # CLAUDE.md — 크립토 밸류에이션 스크리너
 
-코인의 **저평가/고평가**를 펀더멘털(수수료·매출·holder revenue·TVL)로 판단하는 Next.js 스크리너.
-가격이 아니라 멀티플을 **섹터 내 백분위로 정규화**해 0~100 종합 점수로 보여준다.
+코인의 **토큰 가치포획**을 펀더멘털(수수료·매출·holder revenue·TVL)로 판단하는 Next.js 워크벤치.
+가격이 아니라 “프로토콜 가치가 토큰으로 실제 연결되는가”를 **판단 버킷 → 한줄 논지 → 근거 → 리스크 → 다음 질문**으로 보여준다.
 
 > 상세 문서는 [`docs/`](./docs) 참고 — 방법론·아키텍처·작업 이력.
 
@@ -59,17 +59,25 @@ npx vercel deploy --prod --yes --scope bodycation --token $tok
 
 ```
 app/
-  page.tsx              # 서버컴포넌트 → buildScreener() → 점수 있는 코인만 전달
+  page.tsx              # 서버컴포넌트 → buildScreener() → 워크벤치 후보 전달
+  layout.tsx            # 메타데이터
   api/screener/route.ts # 동일 데이터 JSON 엔드포인트
 lib/
   sources.ts            # 데이터 fetch + parent 집계 + 조인  ★데이터 정합성 핵심
   valuation.ts          # 멀티플·섹터백분위·종합점수 (순수함수)  ★점수 로직
   valuation.test.ts     # 엔진 단위 테스트
+  decision.ts           # 판단 버킷·논지·근거·리스크·다음 질문 엔진
+  decision.test.ts      # DecisionSummary 단위 테스트
   screener.ts           # sources + valuation 조립
   format.ts             # $1.2B / 12.3x / +5% 포맷
 components/
-  ScreenerClient.tsx    # 테이블 — 정렬·필터·코인열 고정 (클라이언트)
-  ScoreBadge.tsx        # 점수 색상 배지
+  CryptoDashboardClient.tsx # Workbench 탭 shell
+  DecisionBoard.tsx         # 기본 홈: 리서치 우선 후보와 질문
+  CandidateDrawer.tsx       # 후보 상세: 근거·리스크·질문
+  ValueCaptureMap.tsx       # 싸냐 vs 토큰에 꽂히냐 2x2
+  MethodologyScreen.tsx     # 사용법/방법론
+  ScreenerClient.tsx        # 원자료 테이블 — 정렬·필터·코인열 고정
+  ScoreBadge.tsx            # 점수 색상 배지
 ```
 
 ## 알아두면 좋은 것

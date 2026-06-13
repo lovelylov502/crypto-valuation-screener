@@ -57,3 +57,13 @@
 - ResearchBitcoin은 `X-API-Token` 필요. 현재 Vercel 환경변수에는 토큰이 없어 라이브에서는 `API 토큰 필요`로 표시.
 - 배포 완료: https://crypto-valuation-screener.vercel.app (`dpl_8QQ7AjJLZVsC4hg1mrxtGugmwv6T`)
 - 별도 인수인계 문서: `docs/HANDOFF.md`
+
+## 8. Token Value Capture Workbench 전환
+
+- 사용자 동의 후 기존 숫자표 중심 UX를 **Token Value Capture Workbench**로 전환.
+- `lib/decision.ts` 추가: 각 코인을 `research-priority`, `cheap-but-unclear-capture`, `dilution-risk`, `data-missing` 등 실제 리서치 상태로 분류하고 thesis/evidence/risks/unknowns/nextQuestions를 만든다.
+- `lib/decision.test.ts` 추가: 직접 holder revenue 후보, 포획 불명확 함정, 고희석, 데이터 부족 케이스를 TDD로 검증.
+- `CryptoDashboardClient`를 새 IA로 재작성: `의사결정`, `후보 큐`, `가치포획 맵`, `원자료`, `방법론`.
+- `DecisionBoard`, `CandidateDrawer`, `ValueCaptureMap`, `MethodologyScreen` 컴포넌트 추가.
+- 기존 `ScreenerClient`는 `원자료` 탭으로 보존해서 숫자 검산/필터링 용도로 유지.
+- 검증: `npm test` 18개 통과, `npx tsc --noEmit`, `npm run build`, 로컬 브라우저 스모크(탭/상세 drawer/콘솔 에러 0).

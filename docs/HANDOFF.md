@@ -1,18 +1,42 @@
 # Handoff
 
-마지막 작업 기준: 2026-06-09
+마지막 작업 기준: 2026-06-13
 
 ## 현재 상태
 
 - 라이브 URL: https://crypto-valuation-screener.vercel.app
-- 최신 배포: `dpl_8QQ7AjJLZVsC4hg1mrxtGugmwv6T`
 - Production alias 정상 연결 확인 완료.
+- 현재 작업 브랜치: `ux/value-capture-workbench`
 - 로컬 검증 완료:
+  - `npm test` (18개 통과)
   - `npx tsc --noEmit`
-  - `npm test` (11개 통과)
   - `npm run build`
+  - 로컬 브라우저 렌더: 의사결정/후보 큐/가치포획 맵/원자료/방법론 확인, 콘솔 에러 0
 
-## 이번에 추가된 기능
+## 현재 UX 방향
+
+기존 앱은 “밸류 스크리너”가 아니라 **Token Value Capture Workbench**로 재정의 중이다.
+
+새 IA:
+
+- `의사결정`: 기본 홈. 후보를 판단 버킷/논지/근거/리스크/다음 질문으로 보여준다.
+- `후보 큐`: Memo Cards식 후보 관리 화면.
+- `가치포획 맵`: 싸냐 vs 토큰에 꽂히냐 2x2 구조.
+- `원자료`: 기존 밸류 스크리너를 raw explorer로 보존.
+- `방법론`: 앱 사용법과 가치포획 프레임워크.
+
+핵심 구현 파일:
+
+- `lib/decision.ts`: DecisionSummary 엔진.
+- `lib/decision.test.ts`: decision bucket 테스트.
+- `components/CryptoDashboardClient.tsx`: 새 Workbench shell.
+- `components/DecisionBoard.tsx`: Research Desk 홈.
+- `components/CandidateDrawer.tsx`: 후보 상세 drawer.
+- `components/ValueCaptureMap.tsx`: 2x2 가치포획 맵.
+- `components/MethodologyScreen.tsx`: 방법론 화면.
+- `components/ScreenerClient.tsx`: 원자료 탐색 테이블.
+
+## 이전에 추가된 기능
 
 ### 1. 탭 구조
 
