@@ -8,13 +8,16 @@ import { CandidateDrawer, type CoinDecisionRow } from "./CandidateDrawer";
 import { DecisionBoard } from "./DecisionBoard";
 import { ValueCaptureMap } from "./ValueCaptureMap";
 import { MethodologyScreen } from "./MethodologyScreen";
+import { ResearchReportScreen } from "./ResearchReportScreen";
+import { PENDLE_REPORT } from "@/lib/researchReports";
 
-type Tab = "decision" | "queue" | "map" | "raw" | "methodology";
+type Tab = "decision" | "queue" | "map" | "pendle" | "raw" | "methodology";
 
 const NAV: { key: Tab; label: string; description: string }[] = [
   { key: "decision", label: "의사결정", description: "오늘 볼 후보" },
   { key: "queue", label: "후보 큐", description: "메모 카드" },
   { key: "map", label: "가치포획 맵", description: "싸냐 vs 꽂히냐" },
+  { key: "pendle", label: "Pendle", description: "커리티드 메모" },
   { key: "raw", label: "원자료", description: "기존 스크리너" },
   { key: "methodology", label: "방법론", description: "사용법" },
 ];
@@ -38,10 +41,17 @@ export function CryptoDashboardClient({
       .map((coin) => ({ coin, decision: summarizeDecision(coin) }))
       .sort((a, b) => b.decision.priority - a.decision.priority);
   }, [coins]);
+  const pendleRow = useMemo(() => {
+    return rows.find(({ coin }) =>
+      coin.geckoId === PENDLE_REPORT.protocol.geckoId ||
+      PENDLE_REPORT.protocol.slugMatchers.includes(coin.slug) ||
+      coin.symbol?.toUpperCase() === PENDLE_REPORT.protocol.symbol
+    );
+  }, [rows]);
 
   return (
     <div className="space-y-5">
-      <nav className="grid gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] p-2 sm:grid-cols-5">
+      <nav className="grid gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] p-2 sm:grid-cols-6">
         {NAV.map((item) => (
           <button
             key={item.key}
@@ -67,6 +77,13 @@ export function CryptoDashboardClient({
       )}
       {tab === "map" && (
         <ValueCaptureMap rows={rows} onSelect={setSelected} />
+      )}
+      {tab === "pendle" && (
+        <ResearchReportScreen
+          report={PENDLE_REPORT}
+          row={pendleRow}
+          onOpenCoin={pendleRow ? () => setSelected(pendleRow) : undefined}
+        />
       )}
       {tab === "raw" && (
         <div className="space-y-4">
