@@ -2,6 +2,7 @@ import type { DecisionBucket } from "./decision";
 
 export type ReportSeverity = "high" | "medium" | "low";
 export type ReportStrength = "strong" | "medium" | "weak";
+export type ResearchReportReviewStatus = "관찰 중" | "업데이트 필요" | "아카이브";
 
 export interface ResearchReportMetric {
   label: string;
@@ -70,6 +71,15 @@ export interface ResearchReport {
   };
   title: string;
   subtitle: string;
+  /** 조사자가 투자 판단을 작성/확정한 날짜. */
+  researchedAt: string;
+  /** 가격·시총·TVL·매출·언락 등 숫자 데이터의 기준 시각. */
+  dataAsOf: string;
+  /** 현재 리포트 사용 상태. */
+  reviewStatus: ResearchReportReviewStatus;
+  /** 다음에 다시 열어볼 조건이나 날짜. */
+  nextReviewAt?: string;
+  /** @deprecated use dataAsOf */
   asOf: string;
   fxNote: string;
   bucket: DecisionBucket;
@@ -98,6 +108,10 @@ export const PENDLE_REPORT: ResearchReport = {
   },
   title: "Pendle 리서치 메모",
   subtitle: "DeFi 수익률 토큰화 → 온체인 금리/펀딩레이트 시장으로 확장하는 팀인지 점검",
+  researchedAt: "2026-06-22",
+  dataAsOf: "2026-06-22 09:10 KST",
+  reviewStatus: "관찰 중",
+  nextReviewAt: "Boros 거래량/OI·holder revenue 30d run-rate 변곡 시",
   asOf: "2026-06-22 09:10 KST",
   fxNote: "USD/KRW 1,531.0원 기준. 가격 시나리오는 유통량 171.0M PENDLE 기준 단순 산식이며 투자 조언이 아닙니다.",
   bucket: "research-priority",
@@ -340,3 +354,11 @@ export const PENDLE_REPORT: ResearchReport = {
     { label: "Pendle $3.7M private round", url: "https://medium.com/pendle/pendle-raises-3-7m-to-create-the-next-layer-of-defi-yield-markets-3b059bfbaa1" },
   ],
 };
+
+export const RESEARCH_REPORTS: ResearchReport[] = [PENDLE_REPORT];
+
+export function recentResearchReports(limit = 3): ResearchReport[] {
+  return [...RESEARCH_REPORTS]
+    .sort((a, b) => b.researchedAt.localeCompare(a.researchedAt))
+    .slice(0, limit);
+}

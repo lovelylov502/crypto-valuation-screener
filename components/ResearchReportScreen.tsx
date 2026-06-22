@@ -41,7 +41,9 @@ export function ResearchReportScreen({
               <span className="rounded-full border border-emerald-500/35 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
                 {bucketLabel(report.bucket)}
               </span>
-              <span className="rounded-full border border-[var(--color-border)] px-3 py-1 text-xs text-[var(--color-muted)]">기준 {report.asOf}</span>
+              <MetaPill label="조사일" value={report.researchedAt} />
+              <MetaPill label="데이터 기준" value={report.dataAsOf} />
+              <MetaPill label="상태" value={report.reviewStatus} />
               {liveCoin && (
                 <button
                   type="button"
@@ -53,8 +55,14 @@ export function ResearchReportScreen({
               )}
             </div>
           </div>
-          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-3 text-xs leading-relaxed text-[var(--color-muted)] sm:max-w-xs">
-            {report.fxNote}
+          <div className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-3 text-xs leading-relaxed text-[var(--color-muted)] sm:max-w-xs">
+            <div className="grid grid-cols-[82px_1fr] gap-x-3 gap-y-1">
+              <span>조사일</span><strong className="font-medium text-[var(--color-text)]">{report.researchedAt}</strong>
+              <span>데이터 기준</span><strong className="font-medium text-[var(--color-text)]">{report.dataAsOf}</strong>
+              <span>업데이트</span><strong className="font-medium text-[var(--color-text)]">{report.reviewStatus}</strong>
+              {report.nextReviewAt && <><span>재검토</span><strong className="font-medium text-[var(--color-text)]">{report.nextReviewAt}</strong></>}
+            </div>
+            <p>{report.fxNote}</p>
           </div>
         </div>
       </section>
@@ -213,6 +221,14 @@ export function ResearchReportScreen({
         </Panel>
       </section>
     </div>
+  );
+}
+
+function MetaPill({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="rounded-full border border-[var(--color-border)] px-3 py-1 text-xs text-[var(--color-muted)]">
+      {label} <strong className="font-medium text-[var(--color-text)]">{value}</strong>
+    </span>
   );
 }
 

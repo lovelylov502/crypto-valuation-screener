@@ -9,15 +9,15 @@ import { DecisionBoard } from "./DecisionBoard";
 import { ValueCaptureMap } from "./ValueCaptureMap";
 import { MethodologyScreen } from "./MethodologyScreen";
 import { ResearchReportScreen } from "./ResearchReportScreen";
-import { PENDLE_REPORT } from "@/lib/researchReports";
+import { PENDLE_REPORT, RESEARCH_REPORTS, recentResearchReports, type ResearchReport } from "@/lib/researchReports";
 
-type Tab = "decision" | "queue" | "map" | "pendle" | "raw" | "methodology";
+type Tab = "research" | "decision" | "queue" | "map" | "raw" | "methodology";
 
 const NAV: { key: Tab; label: string; description: string }[] = [
+  { key: "research", label: "조사노트", description: "최근 3개" },
   { key: "decision", label: "의사결정", description: "오늘 볼 후보" },
   { key: "queue", label: "후보 큐", description: "메모 카드" },
   { key: "map", label: "가치포획 맵", description: "싸냐 vs 꽂히냐" },
-  { key: "pendle", label: "Pendle", description: "커리티드 메모" },
   { key: "raw", label: "원자료", description: "기존 스크리너" },
   { key: "methodology", label: "방법론", description: "사용법" },
 ];
@@ -34,20 +34,18 @@ export function CryptoDashboardClient({
   fdvCoverage: number;
   onchain: OnchainDashboard;
 }) {
-  const [tab, setTab] = useState<Tab>("decision");
+  const [tab, setTab] = useState<Tab>("research");
   const [selected, setSelected] = useState<CoinDecisionRow | null>(null);
+  const [selectedReportId, setSelectedReportId] = useState(PENDLE_REPORT.id);
   const rows = useMemo<CoinDecisionRow[]>(() => {
     return coins
       .map((coin) => ({ coin, decision: summarizeDecision(coin) }))
       .sort((a, b) => b.decision.priority - a.decision.priority);
   }, [coins]);
-  const pendleRow = useMemo(() => {
-    return rows.find(({ coin }) =>
-      coin.geckoId === PENDLE_REPORT.protocol.geckoId ||
-      PENDLE_REPORT.protocol.slugMatchers.includes(coin.slug) ||
-      coin.symbol?.toUpperCase() === PENDLE_REPORT.protocol.symbol
-    );
-  }, [rows]);
+  const activeReport = useMemo(() => {
+    return RESEARCH_REPORTS.find((report) => report.id === selectedReportId) ?? PENDLE_REPORT;
+  }, [selectedReportId]);
+  const activeReportRow = useMemo(() => findReportRow(activeReport, rows), [activeReport, rows]);
 
   return (
     <div className="space-y-5">
@@ -78,11 +76,13 @@ export function CryptoDashboardClient({
       {tab === "map" && (
         <ValueCaptureMap rows={rows} onSelect={setSelected} />
       )}
-      {tab === "pendle" && (
-        <ResearchReportScreen
-          report={PENDLE_REPORT}
-          row={pendleRow}
-          onOpenCoin={pendleRow ? () => setSelected(pendleRow) : undefined}
+      {tab === "research" && (
+        <ResearchDesk
+          reports={recentResearchReports(3)}
+          activeReport={activeReport}
+          activeRow={activeReportRow}
+          onSelectReport={(report) => setSelectedReportId(report.id)}
+          onOpenCoin={activeReportRow ? () => setSelected(activeReportRow) : undefined}
         />
       )}
       {tab === "raw" && (
@@ -100,6 +100,67 @@ export function CryptoDashboardClient({
       {tab === "methodology" && <MethodologyScreen />}
 
       <CandidateDrawer row={selected} onClose={() => setSelected(null)} />
+    </div>
+  );
+}
+
+function findReportRow(report: ResearchReport, rows: CoinDecisionRow[]): CoinDecisionRow | undefined {
+  return rows.find(({ coin }) =>
+    coin.geckoId === report.protocol.geckoId ||
+    report.protocol.slugMatchers.includes(coin.slug) ||
+    coin.symbol?.toUpperCase() === report.protocol.symbol
+  );
+}
+
+function ResearchDesk({
+  reports,
+  activeReport,
+  activeRow,
+  onSelectReport,
+  onOpenCoin,
+}: {
+  reports: ResearchReport[];
+  activeReport: ResearchReport;
+  activeRow?: CoinDecisionRow;
+  onSelectReport: (report: ResearchReport) => void;
+  onOpenCoin?: () => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] p-5">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--color-muted)]">Research notes</p>
+        <h2 className="mt-2 text-2xl font-bold tracking-tight">최근 조사노트</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--color-muted)]">
+          모든 주식·토큰 조사는 <strong className="text-[var(--color-text)]">조사일 · 데이터 기준일 · 업데이트 상태</strong>를 함께 보여줍니다.
+          숫자가 낡았는지 먼저 보고, 그 다음 논지와 시나리오를 봅니다.
+        </p>
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-3">
+        {reports.map((report) => (
+          <button
+            key={report.id}
+            type="button"
+            onClick={() => onSelectReport(report)}
+            className={`rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:border-[var(--color-accent)] ${
+              report.id === activeReport.id ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10" : "border-[var(--color-border)] bg-[var(--color-panel)]"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-sky-200">{report.protocol.symbol}</span>
+              <span className="rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[11px] text-[var(--color-muted)]">{report.reviewStatus}</span>
+            </div>
+            <h3 className="mt-2 line-clamp-2 text-base font-semibold">{report.title}</h3>
+            <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-[var(--color-muted)]">{report.subtitle}</p>
+            <div className="mt-3 grid gap-1 border-t border-[var(--color-border)] pt-3 text-xs text-[var(--color-muted)]">
+              <span>조사일 <strong className="font-medium text-[var(--color-text)]">{report.researchedAt}</strong></span>
+              <span>데이터 기준 <strong className="font-medium text-[var(--color-text)]">{report.dataAsOf}</strong></span>
+            </div>
+          </button>
+        ))}
+      </section>
+
+      <ResearchReportScreen report={activeReport} row={activeRow} onOpenCoin={onOpenCoin} />
     </div>
   );
 }

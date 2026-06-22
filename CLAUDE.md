@@ -34,7 +34,8 @@ npm run build    # 프로덕션 빌드 (타입체크 포함)
 2. **gecko_id가 있으면 symbol 폴백 금지.** gecko_id 없을 때만 symbol로 CoinGecko 시총을 붙이고, 그것도 **현금흐름(fees/매출/holder rev)이 있는 그룹에만** 적용한다. 안 그러면 같은 심볼의 무관한 엔트리(브릿지 등)에 시총이 잘못 붙는다.
 3. **게이트로 노이즈 제거** — `lib/valuation.ts`: 시총<$1M(판단보류) · 매출/수수료 둘 다<$100K(좀비) · 최근 30일 현금흐름 0(stale) · 멀티플>1000(글리치 클리핑) · 밸류 멀티플<2개(단일 신호 보류).
 4. **점수 로직은 `lib/valuation.ts` 순수 함수.** 바꾸면 `lib/valuation.test.ts`로 검증.
-5. **`bodycation`은 남의 팀이 아니라 사용자 개인 Vercel 계정의 slug다.** 배포는 `--scope bodycation`.
+5. **조사노트는 날짜 메타를 빼먹지 않는다.** 주식·토큰 정적 리포트는 `lib/researchReports.ts`에서 `researchedAt`(조사일), `dataAsOf`(가격/시총/TVL/매출/언락 기준), `reviewStatus`, `nextReviewAt`을 반드시 채운다. UI도 최근 조사 카드와 상세 상단에 이 값을 보여줘야 한다.
+6. **`bodycation`은 남의 팀이 아니라 사용자 개인 Vercel 계정의 slug다.** 배포는 `--scope bodycation`.
 
 ## 밸류에이션 점수 (요약)
 
