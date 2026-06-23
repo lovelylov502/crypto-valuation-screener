@@ -36,7 +36,7 @@ export function CryptoDashboardClient({
 }) {
   const [tab, setTab] = useState<Tab>("research");
   const [selected, setSelected] = useState<CoinDecisionRow | null>(null);
-  const [selectedReportId, setSelectedReportId] = useState(PENDLE_REPORT.id);
+  const [selectedReportId, setSelectedReportId] = useState(recentResearchReports(1)[0]?.id ?? PENDLE_REPORT.id);
   const rows = useMemo<CoinDecisionRow[]>(() => {
     return coins
       .map((coin) => ({ coin, decision: summarizeDecision(coin) }))
@@ -105,6 +105,7 @@ export function CryptoDashboardClient({
 }
 
 function findReportRow(report: ResearchReport, rows: CoinDecisionRow[]): CoinDecisionRow | undefined {
+  if (!report.protocol.defillamaSlug) return undefined;
   return rows.find(({ coin }) =>
     coin.geckoId === report.protocol.geckoId ||
     report.protocol.slugMatchers.includes(coin.slug) ||

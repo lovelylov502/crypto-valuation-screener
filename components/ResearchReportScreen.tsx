@@ -79,7 +79,7 @@ export function ResearchReportScreen({
           </div>
         </div>
 
-        <LiveSnapshot row={row} />
+        <LiveSnapshot row={row} report={report} />
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -232,13 +232,15 @@ function MetaPill({ label, value }: { label: string; value: string }) {
   );
 }
 
-function LiveSnapshot({ row }: { row?: CoinDecisionRow }) {
+function LiveSnapshot({ row, report }: { row?: CoinDecisionRow; report: ResearchReport }) {
   if (!row) {
     return (
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] p-5">
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--color-muted)]">Live screener</p>
-        <h3 className="mt-2 text-lg font-semibold">실시간 Pendle 행 없음</h3>
-        <p className="mt-2 text-sm leading-relaxed text-[var(--color-muted)]">정적 리포트는 표시되지만, 현재 빌드 데이터에서 Pendle 행을 찾지 못했습니다.</p>
+        <h3 className="mt-2 text-lg font-semibold">실시간 {report.protocol.symbol} 행 없음</h3>
+        <p className="mt-2 text-sm leading-relaxed text-[var(--color-muted)]">
+          정적 리포트는 표시되지만, 현재 빌드 데이터에서 {report.protocol.name} 행을 찾지 못했습니다. 주식·토큰 리포트는 출처별 정적 데이터 기준도 함께 봅니다.
+        </p>
       </div>
     );
   }
