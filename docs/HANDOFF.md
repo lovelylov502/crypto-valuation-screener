@@ -1,36 +1,38 @@
 # Handoff
 
-마지막 작업 기준: 2026-06-13
+마지막 작업 기준: 2026-07-15
 
 ## 현재 상태
 
+- 제품명: **크립토 밸류에이션 리서치** (`Crypto Valuation Research`)
 - 라이브 URL: https://crypto-valuation-screener.vercel.app
-- Production alias 정상 연결 확인 완료.
-- 현재 작업 브랜치: `ux/value-capture-workbench`
+- 기본 브랜치: `main`
+- 제품 범위: **크립토 전용**. 주식·일반 기업 리포트는 이 저장소에 넣지 않는다.
+- 기본 화면: `저·고평가 후보`. 섹터 상대가치로 싼 후보와 비싼 후보를 함께 보여주고 가치포획·희석·신선도로 검증한다.
 - 로컬 검증 완료:
-  - `npm test` (18개 통과)
+  - `npm test` (22개 통과)
   - `npx tsc --noEmit`
   - `npm run build`
-  - 로컬 브라우저 렌더: 의사결정/후보 큐/가치포획 맵/원자료/방법론 확인, 콘솔 에러 0
+  - 로컬 브라우저: 새 제품명·저/고평가 기본 화면·크립토 조사노트(Pendle만)·콘솔 에러 0
 
 ## 현재 UX 방향
 
-기존 앱은 “밸류 스크리너”가 아니라 **Token Value Capture Workbench**로 재정의 중이다.
-
 새 IA:
 
-- `의사결정`: 기본 홈. 후보를 판단 버킷/논지/근거/리스크/다음 질문으로 보여준다.
-- `후보 큐`: Memo Cards식 후보 관리 화면.
+- `저·고평가 후보`: 기본 홈. 저평가 검토·고평가 관찰·포획 함정·고희석·데이터 부족 후보를 보여준다.
+- `크립토 조사노트`: DefiLlama/CoinGecko로 식별 가능한 크립토 리포트만 보관한다.
+- `후보 큐`: 버킷별 후보 관리 화면.
 - `가치포획 맵`: 싸냐 vs 토큰에 꽂히냐 2x2 구조.
 - `원자료`: 기존 밸류 스크리너를 raw explorer로 보존.
-- `방법론`: 앱 사용법과 가치포획 프레임워크.
+- `방법론`: 상대가치 점수와 가치포획 검증 사용법.
 
 핵심 구현 파일:
 
+- `lib/valuation.ts`: 섹터 상대 밸류 점수 엔진.
 - `lib/decision.ts`: DecisionSummary 엔진.
-- `lib/decision.test.ts`: decision bucket 테스트.
-- `components/CryptoDashboardClient.tsx`: 새 Workbench shell.
-- `components/DecisionBoard.tsx`: Research Desk 홈.
+- `lib/researchReports.ts`: 크립토 전용 정적 조사노트.
+- `components/CryptoDashboardClient.tsx`: 화면 전환 shell.
+- `components/DecisionBoard.tsx`: 저·고평가 후보 홈.
 - `components/CandidateDrawer.tsx`: 후보 상세 drawer.
 - `components/ValueCaptureMap.tsx`: 2x2 가치포획 맵.
 - `components/MethodologyScreen.tsx`: 방법론 화면.
@@ -123,7 +125,7 @@ PowerShell:
 
 ```powershell
 $env:NODE_OPTIONS="--use-system-ca"
-$tok = (Get-Content "$HOME\.claude\settings.json" -Raw | ConvertFrom-Json).env.VERCEL_TOKEN
+$tok = (Get-Content "$HOME\.codex\env.json" -Raw | ConvertFrom-Json).env.VERCEL_TOKEN
 npx vercel deploy --prod --yes --scope bodycation --token $tok
 ```
 
@@ -131,7 +133,7 @@ ResearchBitcoin 토큰 추가가 필요하면:
 
 ```powershell
 $env:NODE_OPTIONS="--use-system-ca"
-$tok = (Get-Content "$HOME\.claude\settings.json" -Raw | ConvertFrom-Json).env.VERCEL_TOKEN
+$tok = (Get-Content "$HOME\.codex\env.json" -Raw | ConvertFrom-Json).env.VERCEL_TOKEN
 npx vercel env add RESEARCHBITCOIN_API_TOKEN production --scope bodycation --token $tok
 ```
 

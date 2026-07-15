@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { IREN_REPORT, PENDLE_REPORT, RESEARCH_REPORTS, recentResearchReports } from "./researchReports";
+import { PENDLE_REPORT, RESEARCH_REPORTS, recentResearchReports } from "./researchReports";
 
 describe("curated research reports", () => {
   it("keeps the curated Pendle memo wired to app lookup and source evidence", () => {
@@ -13,17 +13,16 @@ describe("curated research reports", () => {
     expect(PENDLE_REPORT.openQuestions.join(" ")).toContain("Boros");
   });
 
-  it("keeps the curated IREN memo wired to SEC/Nasdaq evidence", () => {
-    expect(IREN_REPORT.id).toBe("iren");
-    expect(IREN_REPORT.protocol.symbol).toBe("IREN");
-    expect(IREN_REPORT.metrics.map((metric) => metric.label)).toContain("계약/목표 ARR");
-    expect(IREN_REPORT.evidence.some((item) => item.detail.includes("Microsoft"))).toBe(true);
-    expect(IREN_REPORT.evidence.some((item) => item.detail.includes("NVIDIA"))).toBe(true);
-    expect(IREN_REPORT.sources.some((source) => source.url.includes("sec.gov"))).toBe(true);
-    expect(IREN_REPORT.sections.map((section) => section.title).join(" ")).toContain("피어 밸류");
+  it("keeps every curated report crypto-only and linked to DefiLlama", () => {
+    expect(RESEARCH_REPORTS.length).toBeGreaterThan(0);
+    for (const report of RESEARCH_REPORTS) {
+      expect(report.protocol.geckoId.length).toBeGreaterThan(0);
+      expect(report.protocol.defillamaSlug.length).toBeGreaterThan(0);
+      expect(report.protocol.slugMatchers.length).toBeGreaterThan(0);
+    }
   });
 
-  it("requires freshness metadata on every stock/token investigation", () => {
+  it("requires freshness metadata on every crypto investigation", () => {
     expect(RESEARCH_REPORTS.length).toBeGreaterThan(0);
     for (const report of RESEARCH_REPORTS) {
       expect(report.researchedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);

@@ -1,7 +1,7 @@
-# CLAUDE.md — 크립토 밸류에이션 스크리너
+# CLAUDE.md — 크립토 밸류에이션 리서치
 
-코인의 **토큰 가치포획**을 펀더멘털(수수료·매출·holder revenue·TVL)로 판단하는 Next.js 워크벤치.
-가격이 아니라 “프로토콜 가치가 토큰으로 실제 연결되는가”를 **판단 버킷 → 한줄 논지 → 근거 → 리스크 → 다음 질문**으로 보여준다.
+크립토의 **저평가·고평가 후보**를 펀더멘털(수수료·매출·holder revenue·TVL)로 찾는 Next.js 리서치 도구.
+이 프로젝트는 크립토 전용이다. 주식·일반 기업 리포트는 태규 투자노트로 보내고, 여기에는 추가하지 않는다.
 
 > 상세 문서는 [`docs/`](./docs) 참고 — 방법론·아키텍처·작업 이력.
 
@@ -34,7 +34,7 @@ npm run build    # 프로덕션 빌드 (타입체크 포함)
 2. **gecko_id가 있으면 symbol 폴백 금지.** gecko_id 없을 때만 symbol로 CoinGecko 시총을 붙이고, 그것도 **현금흐름(fees/매출/holder rev)이 있는 그룹에만** 적용한다. 안 그러면 같은 심볼의 무관한 엔트리(브릿지 등)에 시총이 잘못 붙는다.
 3. **게이트로 노이즈 제거** — `lib/valuation.ts`: 시총<$1M(판단보류) · 매출/수수료 둘 다<$100K(좀비) · 최근 30일 현금흐름 0(stale) · 멀티플>1000(글리치 클리핑) · 밸류 멀티플<2개(단일 신호 보류).
 4. **점수 로직은 `lib/valuation.ts` 순수 함수.** 바꾸면 `lib/valuation.test.ts`로 검증.
-5. **조사노트는 날짜 메타를 빼먹지 않는다.** 주식·토큰 정적 리포트는 `lib/researchReports.ts`에서 `researchedAt`(조사일), `dataAsOf`(가격/시총/TVL/매출/언락 기준), `reviewStatus`, `nextReviewAt`을 반드시 채운다. UI도 최근 조사 카드와 상세 상단에 이 값을 보여줘야 한다.
+5. **조사노트는 크립토만, 날짜 메타는 필수다.** `lib/researchReports.ts`에는 DefiLlama/CoinGecko로 식별 가능한 크립토만 넣고, `researchedAt`(조사일), `dataAsOf`(가격/시총/TVL/매출/언락 기준), `reviewStatus`, `nextReviewAt`을 반드시 채운다.
 6. **`bodycation`은 남의 팀이 아니라 사용자 개인 Vercel 계정의 slug다.** 배포는 `--scope bodycation`.
 
 ## 밸류에이션 점수 (요약)
@@ -51,7 +51,7 @@ Mcap/TVL은 TVL이 유효한 섹터(`MCAP_TVL_SECTORS` 화이트리스트)에서
 
 ```bash
 $env:NODE_OPTIONS="--use-system-ca"
-$tok = (Get-Content "$HOME\.claude\settings.json" -Raw | ConvertFrom-Json).env.VERCEL_TOKEN
+$tok = (Get-Content "$HOME\.codex\env.json" -Raw | ConvertFrom-Json).env.VERCEL_TOKEN
 npx vercel deploy --prod --yes --scope bodycation --token $tok
 ```
 라이브: https://crypto-valuation-screener.vercel.app · GitHub: lovelylov502/crypto-valuation-screener
@@ -69,6 +69,8 @@ lib/
   valuation.test.ts     # 엔진 단위 테스트
   decision.ts           # 판단 버킷·논지·근거·리스크·다음 질문 엔진
   decision.test.ts      # DecisionSummary 단위 테스트
+  researchReports.ts    # 크립토 전용 정적 조사노트
+  researchReports.test.ts # 크립토 전용 범위·신선도 검증
   screener.ts           # sources + valuation 조립
   format.ts             # $1.2B / 12.3x / +5% 포맷
 components/

@@ -14,8 +14,8 @@ import { PENDLE_REPORT, RESEARCH_REPORTS, recentResearchReports, type ResearchRe
 type Tab = "research" | "decision" | "queue" | "map" | "raw" | "methodology";
 
 const NAV: { key: Tab; label: string; description: string }[] = [
-  { key: "research", label: "조사노트", description: "최근 3개" },
-  { key: "decision", label: "의사결정", description: "오늘 볼 후보" },
+  { key: "decision", label: "저·고평가 후보", description: "오늘 볼 크립토" },
+  { key: "research", label: "크립토 조사노트", description: "검증 리포트" },
   { key: "queue", label: "후보 큐", description: "메모 카드" },
   { key: "map", label: "가치포획 맵", description: "싸냐 vs 꽂히냐" },
   { key: "raw", label: "원자료", description: "기존 스크리너" },
@@ -34,7 +34,7 @@ export function CryptoDashboardClient({
   fdvCoverage: number;
   onchain: OnchainDashboard;
 }) {
-  const [tab, setTab] = useState<Tab>("research");
+  const [tab, setTab] = useState<Tab>("decision");
   const [selected, setSelected] = useState<CoinDecisionRow | null>(null);
   const [selectedReportId, setSelectedReportId] = useState(recentResearchReports(1)[0]?.id ?? PENDLE_REPORT.id);
   const rows = useMemo<CoinDecisionRow[]>(() => {
@@ -132,7 +132,7 @@ function ResearchDesk({
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--color-muted)]">Research notes</p>
         <h2 className="mt-2 text-2xl font-bold tracking-tight">최근 조사노트</h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--color-muted)]">
-          모든 주식·토큰 조사는 <strong className="text-[var(--color-text)]">조사일 · 데이터 기준일 · 업데이트 상태</strong>를 함께 보여줍니다.
+          모든 크립토 조사는 <strong className="text-[var(--color-text)]">조사일 · 데이터 기준일 · 업데이트 상태</strong>를 함께 보여줍니다.
           숫자가 낡았는지 먼저 보고, 그 다음 논지와 시나리오를 봅니다.
         </p>
       </section>

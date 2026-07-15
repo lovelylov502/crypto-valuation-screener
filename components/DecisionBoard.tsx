@@ -29,6 +29,7 @@ export function DecisionBoard({
 }) {
   const byBucket = (bucket: DecisionBucket) => rows.filter((row) => row.decision.bucket === bucket);
   const priority = byBucket("research-priority").slice(0, 8);
+  const expensive = byBucket("clear-but-expensive").slice(0, 6);
   const traps = byBucket("cheap-but-unclear-capture").slice(0, 6);
   const dilution = byBucket("dilution-risk").slice(0, 6);
   const missing = byBucket("data-missing").slice(0, 6);
@@ -43,17 +44,18 @@ export function DecisionBoard({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--color-muted)]">Decision board</p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight">오늘 무엇을 리서치할까?</h2>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight">오늘의 저평가·고평가 후보</h2>
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--color-muted)]">
-              점수표가 아니라 <strong className="text-[var(--color-text)]">판단 버킷 → 한줄 논지 → 근거 → 리스크 → 다음 질문</strong> 순서로 봅니다.
+              섹터 상대 밸류를 먼저 보고 <strong className="text-[var(--color-text)]">가치포획 → 희석 → 근거 → 리스크 → 다음 질문</strong> 순서로 검증합니다.
             </p>
           </div>
           <span className="text-xs text-[var(--color-muted)]">갱신 {fmtKstMinute(updatedAt)}</span>
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <BucketCard label="검토 우선" count={byBucket("research-priority").length} tone="text-emerald-300" copy="직접 포획 + 밸류 매력" />
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <BucketCard label="저평가 검토" count={byBucket("research-priority").length} tone="text-emerald-300" copy="직접 포획 + 밸류 매력" />
+        <BucketCard label="고평가 관찰" count={byBucket("clear-but-expensive").length} tone="text-sky-200" copy="포획은 명확하지만 비쌈" />
         <BucketCard label="싸지만 포획 약함" count={byBucket("cheap-but-unclear-capture").length} tone="text-amber-200" copy="저평가처럼 보이는 함정" />
         <BucketCard label="고희석 주의" count={byBucket("dilution-risk").length} tone="text-red-200" copy="언락/FDV 먼저 확인" />
         <BucketCard label="데이터 부족" count={byBucket("data-missing").length} tone="text-slate-300" copy="모름을 질문으로 전환" />
@@ -62,7 +64,7 @@ export function DecisionBoard({
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_380px]">
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)]">
           <div className="border-b border-[var(--color-border)] px-4 py-3">
-            <h3 className="text-sm font-semibold">검토 우선 후보</h3>
+            <h3 className="text-sm font-semibold">저평가 검토 후보</h3>
             <p className="mt-1 text-xs text-[var(--color-muted)]">사는 후보가 아니라, 먼저 리서치할 가치가 있는 후보입니다.</p>
           </div>
           <div className="grid gap-3 p-4 md:grid-cols-2">
@@ -95,7 +97,8 @@ export function DecisionBoard({
         </aside>
       </section>
 
-      <section className="grid gap-3 lg:grid-cols-3">
+      <section className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+        <Lane title="고평가/비쌈" rows={expensive} onSelect={onSelect} />
         <Lane title="싸지만 포획 불명확" rows={traps} onSelect={onSelect} />
         <Lane title="고희석/언락 주의" rows={dilution} onSelect={onSelect} />
         <Lane title="데이터 부족" rows={missing} onSelect={onSelect} />

@@ -1,4 +1,4 @@
-# UX Sketches — Token Value Capture Workbench
+# UX Sketches — Crypto Valuation Research
 
 Three disposable UX directions for the from-scratch redesign.
 

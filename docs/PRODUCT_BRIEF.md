@@ -1,10 +1,10 @@
-# Token Value Capture Workbench — Product Brief
+# Crypto Valuation Research — Product Brief
 
 ## 1. Product thesis
 
-This project should no longer be framed as a generic crypto valuation screener.
+This is a **crypto-only valuation research tool**. Stocks and general company reports belong in 태규 투자노트, not in this project.
 
-It should become a **Token Value Capture Workbench**: a personal investment decision tool for deciding whether a protocol's economic value can plausibly accrue to its token, and what to research next.
+Its primary job is to find relatively undervalued and overvalued crypto assets within their sectors, then verify whether value capture, dilution, freshness, and token structure support that signal.
 
 ## 2. User
 
@@ -21,8 +21,8 @@ Profile:
 
 When opening the app, 태규 wants to answer:
 
-1. What is worth researching today?
-2. Why is it worth researching?
+1. Which crypto assets look relatively undervalued today?
+2. Which look overvalued despite clear value capture?
 3. Is the project actually capturing value into the token, or just generating protocol activity?
 4. What looks cheap but may be a value-capture trap?
 5. What exact question should I verify next?
@@ -39,20 +39,20 @@ This is not:
 
 ## 5. Product promise
 
-> Show which tokens deserve research priority, why the value might accrue to the token, what the main risks are, what remains unknown, and the next question to verify.
+> Find undervalued and overvalued crypto candidates, then show whether token value capture and risk evidence support that relative-valuation signal.
 
 ## 6. Core UX shift
 
 Old model:
 
 ```text
-Score → metrics → user interprets
+Score → table → user interprets
 ```
 
 New model:
 
 ```text
-Decision bucket → thesis → evidence → risks → unknowns → next action → metrics
+Relative valuation → value capture → dilution/freshness → evidence → risks → next question → raw metrics
 ```
 
 The raw data table stays available, but it is no longer the product's main surface.
@@ -131,12 +131,12 @@ Examples:
 Primary navigation:
 
 ```text
-의사결정 | 후보 큐 | 가치포획 맵 | 원자료 | 방법론
+저·고평가 후보 | 크립토 조사노트 | 후보 큐 | 가치포획 맵 | 원자료 | 방법론
 ```
 
-### 의사결정
+### 저·고평가 후보
 
-Default screen. Not a table. Shows research priorities, traps, high-risk candidates, and next questions.
+Default screen. Not a table. Shows undervalued candidates, overvalued candidates, traps, high-risk candidates, and next questions.
 
 ### 후보 큐
 
@@ -162,14 +162,15 @@ Human-readable explanation of how to use the workbench.
 4. Unknowns are visible and actionable.
 5. No buy/sell language.
 6. Korean readability comes before data density.
-7. The product should feel like an analyst workbench, not a crypto casino.
+7. Every curated report must be crypto-native and identifiable through crypto data sources.
+8. The product should feel like an analyst workbench, not a crypto casino.
 
 ## 10. Acceptance criteria
 
 The redesign succeeds when:
 
 - the user does not land on a giant table;
-- the first screen identifies specific candidates worth researching;
+- the first screen identifies both relatively undervalued and overvalued crypto candidates;
 - every candidate has a thesis and next question;
 - “cheap but unclear capture” is visible as a trap;
 - high dilution and data gaps are visible;

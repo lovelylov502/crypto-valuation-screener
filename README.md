@@ -1,38 +1,33 @@
-# 토큰 가치포획 워크벤치
+# 크립토 밸류에이션 리서치
 
-프로토콜이 돈을 벌 때 그 가치가 **토큰 가격으로 실제 연결되는지**를 판단하기 위한 투자 리서치 워크벤치.
-기존 밸류에이션 스크리너는 원자료 탐색 엔진으로 유지하되, 제품의 중심은 “싸냐?”가 아니라 **무엇을 리서치해야 하는가 / 왜 봐야 하는가 / 무엇이 아직 모르는가**로 이동한다.
+크립토의 **저평가·고평가 후보**를 펀더멘털로 찾고, 그 판단이 토큰 가치포획·희석·데이터 신선도까지 통과하는지 검증하는 크립토 전용 리서치 도구.
+주식·일반 기업 리서치는 다루지 않으며, 기존 밸류 스크리너는 원자료 탐색 엔진으로 유지한다.
 
 **🌐 라이브: https://crypto-valuation-screener.vercel.app**
-데이터: [DefiLlama](https://defillama.com) · [CoinGecko](https://coingecko.com) (무료 API, 키 불필요)
+데이터: [DefiLlama](https://defillama.com) · [CoinGecko](https://coingecko.com)
 
 ## 제품 방향
 
-- **의사결정 보드** — 검토 우선 후보, 함정 후보, 고희석 후보, 데이터 부족 후보를 한눈에 본다.
-- **가치포획 판단** — holder revenue, P/HR, 매출 대비 귀속 비중, 희석, unknown을 분리한다.
-- **리서치 질문** — 모르는 것을 점수 안에 숨기지 않고 다음 확인 질문으로 보여준다.
-- **조사 신선도** — 모든 주식·토큰 조사노트에 조사일, 데이터 기준일, 업데이트 상태, 재검토 조건을 함께 표시한다.
-- **원자료 탐색** — 기존 밸류 스크리너는 raw metrics 확인용으로 남긴다.
+- **저·고평가 후보** — 같은 섹터 안에서 멀티플을 비교해 상대적으로 싼 후보와 비싼 후보를 함께 보여준다.
+- **가치포획 검증** — holder revenue, P/HR, 매출 대비 귀속 비중으로 프로토콜 가치가 토큰에 연결되는지 확인한다.
+- **리스크 검증** — FDV/Mcap 희석, 활동성, 데이터 부족과 다음 리서치 질문을 분리한다.
+- **크립토 조사노트** — 조사일, 데이터 기준일, 업데이트 상태, 재검토 조건이 있는 크립토 리포트만 보관한다.
+- **원자료 탐색** — 시총·TVL·P/HR 범위와 섹터 필터로 직접 검산한다.
 
-- 제품 브리프: [`docs/PRODUCT_BRIEF.md`](./docs/PRODUCT_BRIEF.md)
-- UX 재설계 스펙: [`docs/UX_REDESIGN_SPEC.md`](./docs/UX_REDESIGN_SPEC.md)
-- 밸류 방법론: [`docs/METHODOLOGY.md`](./docs/METHODOLOGY.md)
+## 핵심 방법론
 
-## 핵심 지표
+- P/HR 40% · P/S 25% · Mcap/TVL 20% · P/F 15%
+- 같은 섹터 내 백분위로 정규화하며, 점수가 높을수록 상대적 저평가로 본다.
+- 성장·희석은 밸류 점수에 섞지 않고 각각 최대 ±5점만 보정한다.
+- 활동성 $100K, 시총 $1M, 최근 현금흐름, 극단 멀티플, 최소 2개 신호 게이트로 노이즈를 줄인다.
+- 낮은 멀티플만으로 매수 후보가 되지는 않는다. 가치포획·희석·지속성을 함께 확인한다.
 
-- **P/HR** (시총÷홀더귀속수익) — 크립토 PER, 점수 최고 가중. 토큰 홀더에게 실제 귀속되는 수익 대비 시총
-- **가치포획 점수** — holder revenue 존재, 매출 대비 귀속 비중, P/HR 상대 매력, 희석 리스크를 별도 평가
-- **P/S · P/F · Mcap/TVL** — 매출·수수료·자본효율 멀티플
-- 같은 섹터 내 백분위로 정규화 → 종합 점수 (P/HR 40% · P/S 25% · Mcap/TVL 20% · P/F 15%, 성장·희석은 각 ±5점 보정)
-- 활동성($100K)·규모($1M) 게이트로 좀비·마이크로캡 노이즈 제거
+자세한 문서:
 
-→ 자세한 방법론: [`docs/METHODOLOGY.md`](./docs/METHODOLOGY.md)
-
-## 스택
-
-- Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Vitest
-- 서버에서 DefiLlama 4종 + CoinGecko를 **parent 프로토콜 단위로 집계·조인** 후 점수화, 페이지 ISR 30분 캐시
-- → 기술 구조: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+- [제품 브리프](./docs/PRODUCT_BRIEF.md)
+- [UX 스펙](./docs/UX_REDESIGN_SPEC.md)
+- [밸류에이션 방법론](./docs/METHODOLOGY.md)
+- [아키텍처](./docs/ARCHITECTURE.md)
 
 ## 개발
 
@@ -40,13 +35,12 @@
 npm install
 # 사내/로컬 CA 환경에서 fetch SSL 오류 시 (PowerShell)
 $env:NODE_OPTIONS="--use-system-ca"
-npm run dev        # http://localhost:3000
-npm test           # 엔진 단위 테스트
-npm run build      # 프로덕션 빌드
+npm run dev
+npm test
+npx tsc --noEmit
+npm run build
 ```
 
-작업 지침은 [`CLAUDE.md`](./CLAUDE.md), 작업 이력은 [`docs/WORKLOG.md`](./docs/WORKLOG.md) 참고.
+## 면책
 
-## ⚠️ 면책
-
-투자 조언이 아닙니다. 본 점수는 온체인 펀더멘털 기반의 상대적 참고 지표이며, 토큰 이코노믹스·베스팅·내러티브·리스크를 반영하지 않습니다. CEX·체인·브릿지처럼 TVL이 가치와 직결되지 않는 섹터는 Mcap/TVL 신호를 신뢰하지 마세요.
+투자 조언이 아니다. 점수는 온체인 펀더멘털 기반의 상대가치 참고값이며, 토큰 이코노믹스·베스팅·법적 권리·내러티브·시장 수급은 별도 검증해야 한다.

@@ -67,3 +67,11 @@
 - `DecisionBoard`, `CandidateDrawer`, `ValueCaptureMap`, `MethodologyScreen` 컴포넌트 추가.
 - 기존 `ScreenerClient`는 `원자료` 탭으로 보존해서 숫자 검산/필터링 용도로 유지.
 - 검증: `npm test` 18개 통과, `npx tsc --noEmit`, `npm run build`, 로컬 브라우저 스모크(탭/상세 drawer/콘솔 에러 0).
+
+## 9. 크립토 밸류에이션 리서치로 범위 확정
+
+- 제품명을 **크립토 밸류에이션 리서치**로 변경.
+- 목적을 크립토의 저평가·고평가 후보 탐색과 근거 검증으로 명확화.
+- `저·고평가 후보`를 기본 화면으로 변경하고 고평가 후보를 별도 노출.
+- 주식 리포트 IREN을 제거하고, 조사노트가 DefiLlama/CoinGecko로 식별 가능한 크립토만 포함하도록 테스트 추가.
+- Google OAuth client secret 파일 패턴을 `.gitignore`에 추가.

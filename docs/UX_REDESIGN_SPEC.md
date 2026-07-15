@@ -1,8 +1,8 @@
-# UX Redesign Spec — Token Value Capture Workbench
+# UX Redesign Spec — Crypto Valuation Research
 
 ## 1. Design intent
 
-The product should feel like a serious crypto research desk for token value capture, not a market dashboard.
+The product should feel like a serious crypto-only research desk for finding relative undervaluation and overvaluation, then validating token value capture.
 
 Target feeling:
 
@@ -24,10 +24,10 @@ Avoid:
 Primary navigation:
 
 ```text
-의사결정 | 후보 큐 | 가치포획 맵 | 원자료 | 방법론
+저·고평가 후보 | 크립토 조사노트 | 후보 큐 | 가치포획 맵 | 원자료 | 방법론
 ```
 
-Default route/screen: `의사결정`.
+Default route/screen: `저·고평가 후보`.
 
 Navigation behavior:
 
@@ -35,11 +35,11 @@ Navigation behavior:
 - Mobile: top horizontal scroll nav.
 - Current section should be obvious with a calm accent, not neon.
 
-## 3. Screen: 의사결정
+## 3. Screen: 저·고평가 후보
 
 ### Purpose
 
-Answer: “오늘 무엇을 리서치해야 하고, 왜?”
+Answer: “오늘 어떤 크립토가 상대적으로 싸거나 비싸고, 그 판단을 무엇으로 검증해야 하는가?”
 
 ### Layout
 
@@ -47,10 +47,10 @@ Desktop wireframe:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│ Header: Token Value Capture Workbench                               │
-│ subtitle: 프로토콜 가치가 토큰으로 연결되는지 보는 투자 판단 보드       │
+│ Header: Crypto Valuation Research                                   │
+│ subtitle: 크립토 저평가·고평가 후보와 근거를 검증하는 리서치 보드       │
 ├─────────────────────────────────────────────────────────────────────┤
-│ KPI strip: [검토 우선] [싸지만 포획 약함] [고희석] [데이터 부족]       │
+│ KPI: [저평가 검토] [고평가 관찰] [싸지만 포획 약함] [고희석] [데이터 부족] │
 ├───────────────────────────────────────────┬─────────────────────────┤
 │ Main: Research Priority Candidate Cards   │ Side: Today's Questions │
 │ - Card                                   │ - question 1            │
@@ -75,10 +75,11 @@ Trap lanes
 
 Required cards:
 
-1. 검토 우선
-2. 싸지만 포획 약함
-3. 고희석
-4. 데이터 부족
+1. 저평가 검토
+2. 고평가 관찰
+3. 싸지만 포획 약함
+4. 고희석
+5. 데이터 부족
 
 Each card contains:
 
@@ -387,7 +388,8 @@ Do not build:
 
 Before production deployment, verify:
 
-- [ ] Default screen is not a table.
+- [ ] Default screen is not a table and shows both undervalued and overvalued crypto candidates.
+- [ ] Curated reports contain crypto only; no stocks or general company reports.
 - [ ] Candidate cards include thesis/evidence/risk/question.
 - [ ] Trap categories are visible.
 - [ ] Raw table remains accessible.
