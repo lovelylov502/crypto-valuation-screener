@@ -1,5 +1,5 @@
 import { buildScreener } from "@/lib/screener";
-import { CryptoDashboardClient } from "@/components/CryptoDashboardClient";
+import { ScreenerClient } from "@/components/ScreenerClient";
 import { MIN_MCAP_USD } from "@/lib/valuation";
 
 export const revalidate = 1800; // 30분
@@ -19,9 +19,8 @@ export default async function Home() {
     );
   }
 
-  // 워크벤치는 점수 산출 코인뿐 아니라 데이터 부족 후보도 보여줘야 한다.
-  // 단, 마이크로캡/토큰미발행 노이즈는 기본 화면에서 제외한다.
-  const workbenchCoins = data.coins.filter((c) => c.mcap !== null && c.mcap >= MIN_MCAP_USD);
+  // 마이크로캡/토큰미발행 노이즈만 제외하고, 나머지는 스크리너에서 직접 필터링한다.
+  const screenerCoins = data.coins.filter((c) => c.mcap !== null && c.mcap >= MIN_MCAP_USD);
 
   return (
     <main className="max-w-[1500px] mx-auto px-4 py-8 sm:px-6">
@@ -29,23 +28,22 @@ export default async function Home() {
         <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--color-muted)]">Crypto Valuation Research</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">크립토 밸류에이션 리서치</h1>
         <p className="text-[var(--color-muted)] mt-2 max-w-4xl text-sm leading-relaxed">
-          펀더멘털과 섹터 상대 멀티플로 <strong className="text-[var(--color-text)]">저평가·고평가된 크립토 후보</strong>를 찾습니다.
-          가격 판단 뒤에는 <strong className="text-[var(--color-text)]">가치포획 · 희석 · 데이터 신선도 · 다음 질문</strong>을 함께 확인합니다.
+          <strong className="text-[var(--color-text)]">저평가·고평가 프리셋</strong>으로 빠르게 후보를 나누거나,
+          점수·시총·TVL·P/HR·P/S 범위를 직접 좁혀 크립토를 비교합니다.
         </p>
       </header>
 
-      <CryptoDashboardClient
-        coins={workbenchCoins}
+      <ScreenerClient
+        coins={screenerCoins}
         categories={data.categories}
         updatedAt={data.updatedAt}
         fdvCoverage={data.fdvCoverage}
-        onchain={data.onchain}
       />
 
       <footer className="mt-8 pt-5 border-t border-[var(--color-border)] text-xs text-[var(--color-muted)] leading-relaxed space-y-1.5">
         <p>
-          <strong className="text-[var(--color-text)]">사용법.</strong> `저·고평가 후보`에서 후보와 질문을 먼저 보고,
-          필요할 때 `가치포획 맵`과 `원자료`로 내려가 멀티플을 확인합니다. 모르는 것은 감점이 아니라 리서치 질문으로 남깁니다.
+          <strong className="text-[var(--color-text)]">사용법.</strong> 저평가·고평가 프리셋으로 시작하거나,
+          점수·시총·TVL·P/HR 범위를 직접 좁힌 뒤 열 제목을 눌러 정렬합니다.
         </p>
         <p>
           <strong className="text-amber-400">투자 조언이 아닙니다.</strong> 본 도구는 크립토 온체인 펀더멘털 기반의

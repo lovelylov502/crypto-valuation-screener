@@ -100,29 +100,4 @@ export interface ScreenerResponse {
   categories: string[];
   updatedAt: string; // ISO
   fdvCoverage: number; // FDV 보강된 코인 수
-  onchain: OnchainDashboard;
-}
-
-export type OnchainMetricStatus = "ok" | "missing-token" | "unavailable";
-
-export interface OnchainMetricPoint {
-  time: string;
-  value: number;
-}
-
-export interface OnchainMetric {
-  key: "mvrv" | "sopr" | "realizedPrice";
-  label: string;
-  value: number | null;
-  previousValue: number | null;
-  change7d: number | null;
-  updatedAt: string | null;
-  status: OnchainMetricStatus;
-  points: OnchainMetricPoint[];
-}
-
-export interface OnchainDashboard {
-  source: "ResearchBitcoin";
-  status: OnchainMetricStatus;
-  metrics: OnchainMetric[];
 }

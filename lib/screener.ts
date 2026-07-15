@@ -1,14 +1,10 @@
-import { fetchOnchainDashboard } from "./onchain";
 import { fetchCoins } from "./sources";
 import { scoreCoins } from "./valuation";
 import type { ScreenerResponse } from "./types";
 
 // 데이터 수집 → 점수화 → 응답 페이로드 조립 (route와 page 서버컴포넌트가 공유)
 export async function buildScreener(): Promise<ScreenerResponse> {
-  const [raw, onchain] = await Promise.all([
-    fetchCoins(),
-    fetchOnchainDashboard(),
-  ]);
+  const raw = await fetchCoins();
   const coins = scoreCoins(raw);
 
   const categories = Array.from(
@@ -25,6 +21,5 @@ export async function buildScreener(): Promise<ScreenerResponse> {
     categories,
     updatedAt: new Date().toISOString(),
     fdvCoverage,
-    onchain,
   };
 }

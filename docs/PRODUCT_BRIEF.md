@@ -1,178 +1,63 @@
 # Crypto Valuation Research — Product Brief
 
-## 1. Product thesis
+## 제품 정의
 
-This is a **crypto-only valuation research tool**. Stocks and general company reports belong in 태규 투자노트, not in this project.
+크립토의 상대적 저평가·고평가 후보를 사용자가 직접 필터링하고 정렬하는 단일 화면 스크리너다.
+주식·일반 기업 조사, 정적 조사노트, 후보 관리 워크플로는 범위 밖이다.
 
-Its primary job is to find relatively undervalued and overvalued crypto assets within their sectors, then verify whether value capture, dilution, freshness, and token structure support that signal.
+## 사용자 목표
 
-## 2. User
+1. 점수가 높은 저평가 후보와 낮은 고평가 후보를 빠르게 나눈다.
+2. 시총·TVL·P/HR·P/S 범위를 직접 좁힌다.
+3. holder revenue와 가치포획 점수로 매출이 토큰에 연결되는지 본다.
+4. FDV와 고희석 경고로 공급 리스크를 거른다.
+5. 섹터 안에서 후보를 비교하고 원출처로 이동해 검증한다.
 
-Primary user: 태규.
+## 핵심 제품 약속
 
-Profile:
+> 복잡한 탭을 오가지 않고, 한 화면에서 저평가·고평가 크립토를 직접 탐색한다.
 
-- Crypto investor with long market experience.
-- Cares about hard linkage between protocol fundamentals and token price.
-- Skeptical of vague institutional/RWA/regulation narratives unless the value path to the token is clear.
-- Wants clear Korean reasoning, not just a table of numbers.
+## 정보 구조
 
-## 3. User job
-
-When opening the app, 태규 wants to answer:
-
-1. Which crypto assets look relatively undervalued today?
-2. Which look overvalued despite clear value capture?
-3. Is the project actually capturing value into the token, or just generating protocol activity?
-4. What looks cheap but may be a value-capture trap?
-5. What exact question should I verify next?
-
-## 4. Non-goals
-
-This is not:
-
-- a buy/sell recommendation tool;
-- a trading terminal;
-- a generic coin ranking site;
-- a prettier version of DefiLlama;
-- a table-first financial dashboard.
-
-## 5. Product promise
-
-> Find undervalued and overvalued crypto candidates, then show whether token value capture and risk evidence support that relative-valuation signal.
-
-## 6. Core UX shift
-
-Old model:
+별도 내비게이션이 없는 단일 페이지다.
 
 ```text
-Score → table → user interprets
+헤더
+→ 저평가/고평가 빠른 보기
+→ 검색·기본 제외 조건
+→ 점수·시총·TVL·P/HR·P/S 양손잡이 범위
+→ 섹터 필터
+→ 결과 수·갱신 시각
+→ 정렬 가능한 스크리너 표
 ```
 
-New model:
+## 필수 기능
 
-```text
-Relative valuation → value capture → dilution/freshness → evidence → risks → next question → raw metrics
-```
+- 저평가 80+ / 고평가 20 이하 / 점수 전체
+- 모든 필터 전체 초기화
+- 코인·심볼 검색
+- 좀비 숨김, 홀더수익만, 고희석 제외
+- 한 트랙 양손잡이 범위와 숫자 입력 동기화
+- 섹터 다중 선택
+- 열 정렬과 코인 열 고정
+- CoinGecko/DefiLlama 외부 링크
+- 현재 결과/전체 개수와 데이터 갱신 시각
 
-The raw data table stays available, but it is no longer the product's main surface.
+## UX 원칙
 
-## 7. Key concepts
+1. 탭을 추가하지 않는다.
+2. 사용자가 직접 숫자를 조작하는 흐름을 우선한다.
+3. 저평가와 고평가의 방향을 색과 정렬로 명확히 구분한다.
+4. 기본 화면은 좀비만 숨기고 나머지 판단은 사용자에게 맡긴다.
+5. 필터는 즉시 반응하고 초기화가 쉬워야 한다.
+6. 표의 데이터 밀도는 유지하되 필터 영역은 한눈에 이해돼야 한다.
+7. 매수·매도 추천 표현은 쓰지 않는다.
 
-### Decision bucket
+## 성공 조건
 
-Every token should be classified into a practical research state:
-
-- `research-priority`: direct/credible capture and attractive enough to inspect.
-- `clear-but-expensive`: value capture is real, but valuation is not attractive.
-- `cheap-but-unclear-capture`: looks cheap, but token capture is weak or unknown.
-- `dilution-risk`: capture may exist, but future supply pressure is severe.
-- `narrative-only`: narrative is strong, but token value path is not proven.
-- `data-missing`: cannot judge without more information.
-- `ignore`: low activity, stale, microcap noise, or otherwise not useful now.
-
-### Thesis
-
-One sentence explaining why the token is in the bucket.
-
-Example:
-
-```text
-holder revenue is measured and P/HR is cheap relative to sector, but revenue durability still needs verification.
-```
-
-### Evidence
-
-Facts that support the thesis.
-
-Examples:
-
-- holder revenue exists and is fresh;
-- P/HR is sector-attractive;
-- protocol revenue scale passes threshold;
-- FDV/Mcap is not extreme.
-
-### Risks
-
-Reasons not to over-trust the candidate.
-
-Examples:
-
-- holder revenue missing;
-- high FDV/Mcap;
-- low activity / stale data;
-- TVL not relevant to the sector;
-- revenue could be one-off or incentive-driven.
-
-### Unknowns
-
-What the app cannot know from current data.
-
-Important principle:
-
-```text
-Unknowns should not be hidden inside a score. Unknowns become research questions.
-```
-
-### Next questions
-
-Copyable research questions the user can answer with docs, protocol research, or further agent work.
-
-Examples:
-
-- Does the token legally/economically receive protocol revenue?
-- Is the fee switch currently active, or only governance-possible?
-- Is revenue distributed, burned, bought back, or retained by treasury?
-- Is token demand required for protocol usage/security/collateral?
-- Are current revenues sustainable or incentive-driven?
-
-## 8. Information architecture
-
-Primary navigation:
-
-```text
-저·고평가 후보 | 크립토 조사노트 | 후보 큐 | 가치포획 맵 | 원자료 | 방법론
-```
-
-### 저·고평가 후보
-
-Default screen. Not a table. Shows undervalued candidates, overvalued candidates, traps, high-risk candidates, and next questions.
-
-### 후보 큐
-
-Workflow surface for candidates by status: `New`, `Reviewing`, `Watch`, `Reject`, `Resolved`.
-
-### 가치포획 맵
-
-Matrix view separating valuation attractiveness from capture clarity.
-
-### 원자료
-
-Legacy valuation screener and raw metrics explorer.
-
-### 방법론
-
-Human-readable explanation of how to use the workbench.
-
-## 9. UX principles
-
-1. Table is not the product.
-2. Scores are secondary to reasoning.
-3. Separate “cheap” from “captures value.”
-4. Unknowns are visible and actionable.
-5. No buy/sell language.
-6. Korean readability comes before data density.
-7. Every curated report must be crypto-native and identifiable through crypto data sources.
-8. The product should feel like an analyst workbench, not a crypto casino.
-
-## 10. Acceptance criteria
-
-The redesign succeeds when:
-
-- the user does not land on a giant table;
-- the first screen identifies both relatively undervalued and overvalued crypto candidates;
-- every candidate has a thesis and next question;
-- “cheap but unclear capture” is visible as a trap;
-- high dilution and data gaps are visible;
-- the old screener remains accessible but secondary;
-- the app feels like a decision partner, not just a dashboard.
+- 탭 없이 바로 스크리너를 조작할 수 있다.
+- 저평가/고평가 프리셋이 한 번의 클릭으로 방향과 정렬을 바꾼다.
+- 각 범위가 한 트랙의 두 손잡이로 조절된다.
+- 점수·P/S·고희석까지 직접 필터링할 수 있다.
+- 검색, 범위, 섹터, 체크 필터를 한 번에 초기화할 수 있다.
+- 데스크톱과 모바일에서 가로 스크롤·고정 코인 열이 동작한다.

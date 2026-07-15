@@ -1,399 +1,87 @@
-# UX Redesign Spec — Crypto Valuation Research
+# Screener-first UX Spec — Crypto Valuation Research
 
-## 1. Design intent
+## 의도
 
-The product should feel like a serious crypto-only research desk for finding relative undervaluation and overvaluation, then validating token value capture.
+별도 리서치 탭을 제거하고, 사용자가 한 화면에서 조건을 바꿔가며 저평가·고평가 후보를 찾게 한다.
+분석 카드보다 빠른 조작, 결과 비교, 원자료 검산을 우선한다.
 
-Target feeling:
-
-```text
-calm analyst workbench + research memo system + enough data density for power use
-```
-
-Avoid:
-
-- casino/trading aesthetics;
-- table-first layout;
-- huge numeric scores as the hero;
-- overcolored badges;
-- buy/sell framing;
-- hiding uncertainty.
-
-## 2. Navigation
-
-Primary navigation:
+## 화면 구조
 
 ```text
-저·고평가 후보 | 크립토 조사노트 | 후보 큐 | 가치포획 맵 | 원자료 | 방법론
+┌──────────────────────────────────────────────────────┐
+│ 크립토 밸류에이션 리서치                              │
+│ 저평가·고평가 프리셋 또는 직접 범위 조절 설명          │
+├──────────────────────────────────────────────────────┤
+│ 빠른 보기: [저평가 80+] [고평가 20 이하] [점수 전체]   │
+│ 검색 | 좀비 숨김 | 홀더수익만 | 고희석 제외 | 초기화    │
+│ 점수 범위        | 시총 범위                          │
+│ TVL 범위         | P/HR 범위                         │
+│ P/S 범위         | 섹터 필터                         │
+├──────────────────────────────────────────────────────┤
+│ 결과 수 / 전체 수                         갱신 시각    │
+├──────────────────────────────────────────────────────┤
+│ 고정 코인 열 + 정렬 가능한 데이터 표                  │
+└──────────────────────────────────────────────────────┘
 ```
 
-Default route/screen: `저·고평가 후보`.
-
-Navigation behavior:
-
-- Desktop: left sidebar or top segmented nav.
-- Mobile: top horizontal scroll nav.
-- Current section should be obvious with a calm accent, not neon.
-
-## 3. Screen: 저·고평가 후보
-
-### Purpose
-
-Answer: “오늘 어떤 크립토가 상대적으로 싸거나 비싸고, 그 판단을 무엇으로 검증해야 하는가?”
-
-### Layout
-
-Desktop wireframe:
-
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│ Header: Crypto Valuation Research                                   │
-│ subtitle: 크립토 저평가·고평가 후보와 근거를 검증하는 리서치 보드       │
-├─────────────────────────────────────────────────────────────────────┤
-│ KPI: [저평가 검토] [고평가 관찰] [싸지만 포획 약함] [고희석] [데이터 부족] │
-├───────────────────────────────────────────┬─────────────────────────┤
-│ Main: Research Priority Candidate Cards   │ Side: Today's Questions │
-│ - Card                                   │ - question 1            │
-│ - Card                                   │ - question 2            │
-│ - Card                                   │ - question 3            │
-├───────────────────────────────────────────┴─────────────────────────┤
-│ Trap lanes: cheap but unclear / high dilution / narrative-only        │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-Mobile wireframe:
-
-```text
-Header
-KPI strip horizontal scroll
-Research priority cards
-Today's questions
-Trap lanes
-```
-
-### KPI cards
-
-Required cards:
-
-1. 저평가 검토
-2. 고평가 관찰
-3. 싸지만 포획 약함
-4. 고희석
-5. 데이터 부족
-
-Each card contains:
-
-- count;
-- short explanation;
-- click filter behavior later.
-
-### Candidate card anatomy
-
-Each candidate card should contain:
-
-```text
-[Decision bucket chip]
-Coin name / symbol / category
-One-line thesis
-Evidence chips (2~3)
-Risk chips (0~3)
-Core metrics: P/HR, holder revenue, FDV/Mcap or value score
-Next question
-Primary action: 자세히 보기
-```
-
-Example:
-
-```text
-검토 우선
-Gains Network / GNS
-holder revenue가 있고 P/HR이 섹터 대비 싸다.
-근거: P/HR 2.7x · holder revenue $5.3M · value 95
-리스크: revenue 지속성 확인 필요
-다음 질문: 수익이 어떤 방식으로 GNS 홀더에게 귀속되는가?
-```
-
-### Trap lanes
-
-Show compact horizontal groups:
-
-- 싸지만 포획 약함
-- 포획은 강하지만 비쌈
-- 고희석 주의
-- 데이터 부족
-
-These lanes are essential because they make the app better than a screener table.
-
-## 4. Screen: 후보 큐
-
-### Purpose
-
-Turn analysis into a research workflow.
-
-### Columns / statuses
-
-```text
-New | Reviewing | Watch | Reject | Resolved
-```
-
-v0 can be computed-only / non-persistent. Later versions may persist user state.
-
-### Card content
-
-Smaller than decision board cards:
-
-- coin;
-- bucket;
-- thesis;
-- next question;
-- updated time/source.
-
-### Empty state
-
-If no candidates in a column:
-
-```text
-아직 여기에 분류된 후보가 없습니다.
-```
-
-## 5. Screen: 가치포획 맵
-
-### Purpose
-
-Separate two dimensions:
-
-```text
-싸냐? vs 토큰이 가치를 포획하냐?
-```
-
-### v0 layout: 2x2 matrix
-
-```text
-                    포획 명확
-            ┌─────────────────────┬─────────────────────┐
-            │ 싸고 포획 명확       │ 비싸지만 포획 명확   │
-싸다        │ Research priority    │ Watch/pullback       │ 비싸다
-            ├─────────────────────┼─────────────────────┤
-            │ 싸지만 포획 불명확   │ 비싸고 포획 불명확   │
-            │ Trap / research gap  │ Low priority         │
-            └─────────────────────┴─────────────────────┘
-                    포획 불명확
-```
-
-Each quadrant:
-
-- top 5 candidates;
-- why they are there;
-- empty state if none.
-
-### Later v1
-
-Scatter plot:
-
-- x-axis: valuation attractiveness;
-- y-axis: capture clarity;
-- bubble size: market cap or holder revenue;
-- color: bucket.
-
-Do not build scatter before matrix proves useful.
-
-## 6. Screen: 원자료
-
-### Purpose
-
-Preserve the existing valuation screener as a data explorer.
-
-### Header copy
-
-```text
-원자료 탐색
-점수와 멀티플을 직접 확인하는 화면입니다. 투자 판단은 의사결정 보드에서 시작하세요.
-```
-
-### Required filters
-
-- decision bucket;
-- capture route / clarity;
-- has holder revenue;
-- exclude high dilution;
-- data missing only;
-- category;
-- market cap range;
-- P/HR range.
-
-### Existing functionality to preserve
-
-- sorting;
-- category filtering;
-- mcap/tvl/P-HR ranges;
-- external links;
-- high dilution warning.
-
-## 7. Screen: 방법론
-
-### Purpose
-
-Explain how to use the workbench in 2 minutes.
-
-### Sections
-
-1. 가치포획이란?
-2. 싸다 vs 토큰에 꽂힌다
-3. P/HR이 중요한 이유와 한계
-4. holder revenue 없음의 의미
-5. 모르는 것을 리서치 질문으로 바꾸는 방식
-6. 앱 사용 순서
-
-### Tone
-
-Plain Korean. No academic wall of text.
-
-## 8. Candidate detail drawer
-
-### Trigger
-
-Click `자세히 보기` on any candidate card or row.
-
-### Drawer layout
-
-```text
-Header: coin, symbol, category, bucket
-Thesis: one-line judgement
-Tabs: 판단 | 숫자 | 리스크 | 리서치 질문
-```
-
-### 판단 tab
-
-- capture route;
-- evidence list;
-- one-line conclusion.
-
-### 숫자 tab
-
-- P/HR;
-- P/S;
-- holder revenue;
-- protocol revenue;
-- fees;
-- FDV/Mcap;
-- market cap;
-- TVL where relevant.
-
-### 리스크 tab
-
-- risk chips;
-- severity;
-- explanation.
-
-### 리서치 질문 tab
-
-- copy-friendly questions;
-- optional later: send to wiki/Telegram.
-
-### Behavior
-
-- close button;
-- Escape closes;
-- overlay click closes;
-- keep scroll independent from page.
-
-## 9. Visual system
-
-### Color roles
-
-```text
-Green: direct/clear value capture
-Amber: indirect/needs verification
-Red: structural risk/high dilution
-Blue: research action/focus
-Gray: unknown/data missing
-```
-
-### Typography
-
-- Use system font or Inter.
-- Korean body text must be readable at 14~15px minimum.
-- Metrics can use tabular numbers.
-- Avoid tiny text in core reasoning.
-
-### Density
-
-Default should be medium density.
-
-- Home: spacious enough for reasoning.
-- Raw explorer: high density allowed.
-
-## 10. Loading, empty, and error states
-
-### Loading
-
-Use skeleton cards, not a blank table.
-
-### Empty bucket
-
-Show explanation:
-
-```text
-현재 조건에서 검토 우선 후보가 없습니다. 필터를 넓히거나 원자료를 확인하세요.
-```
-
-### API/data error
-
-Show:
-
-- data source affected;
-- last successful update if available later;
-- retry instruction.
-
-## 11. Responsive behavior
-
-### Desktop >= 1200px
-
-- sidebar or top nav;
-- two-column decision layout;
-- drawer width 480~560px.
-
-### Tablet
-
-- top nav;
-- candidate cards in 2 columns;
-- drawer full-height overlay.
-
-### Mobile
-
-- one-column cards;
-- metric chips wrap;
-- raw table horizontally scrolls;
-- drawer full-screen.
-
-## 12. Interaction priorities
-
-v0 interactions:
-
-- switch nav screens;
-- open/close candidate drawer;
-- filter raw explorer by bucket/capture status;
-- click candidate external link;
-- copy research question if easy.
-
-Do not build:
-
-- drag/drop queue persistence;
-- login;
-- personalized saved notes;
-- complex chart interactions;
-- watchlist database.
-
-## 13. Acceptance checklist
-
-Before production deployment, verify:
-
-- [ ] Default screen is not a table and shows both undervalued and overvalued crypto candidates.
-- [ ] Curated reports contain crypto only; no stocks or general company reports.
-- [ ] Candidate cards include thesis/evidence/risk/question.
-- [ ] Trap categories are visible.
-- [ ] Raw table remains accessible.
-- [ ] Drawer works with keyboard close.
-- [ ] Mobile layout is usable.
-- [ ] Console errors are zero.
-- [ ] `npm test`, `npx tsc --noEmit`, and `npm run build` pass.
+## 빠른 보기
+
+- `저평가 80+`: 점수 최소 80, 점수 내림차순.
+- `고평가 20 이하`: 점수 최대 20, 점수 오름차순.
+- `점수 전체`: 점수 범위 해제, 점수 내림차순.
+- 선택된 프리셋은 색과 `aria-pressed`로 표시한다.
+
+## 범위 필터
+
+각 범위는 숫자 입력 2개와 **한 트랙의 좌우 손잡이 2개**로 구성한다.
+
+- 점수: 0~100 선형.
+- 시총·TVL: $1M~$100B 로그.
+- P/HR·P/S: 0.1x~1000x 로그.
+- 최소 손잡이는 최대를 넘지 못하고, 최대 손잡이는 최소 아래로 내려가지 못한다.
+- 최대 손잡이가 우측 끝이면 상한 없음으로 처리한다.
+- 숫자 입력과 손잡이는 양방향 동기화한다.
+
+## 보조 필터
+
+- 검색: 코인명·심볼 부분 일치.
+- 좀비 숨김: 낮은 활동성/신선도 미달 제외, 기본 활성.
+- 홀더수익만: holder revenue 없는 자산 제외.
+- 고희석 제외: `MC/FDV < 0.3` 자산 제외.
+- 섹터: 접힌 다중 선택 목록.
+- 전체 초기화: 검색·범위·섹터·체크·정렬을 기본값으로 복구.
+
+## 표
+
+- 코인 열은 좌측 고정.
+- 모든 열 제목은 클릭 정렬.
+- 현재 정렬 방향은 화살표로 표시.
+- 점수는 0(고평가·빨강) → 100(저평가·초록).
+- 포획 점수는 별도 열로 유지해 싸다는 것과 토큰 귀속을 구분한다.
+- FDV 고희석 경고, 외부 원출처 링크를 유지한다.
+- 필터 중에는 `useDeferredValue`로 표 렌더를 지연해 드래그를 부드럽게 한다.
+
+## 반응형
+
+- 데스크톱: 범위 2~3열, 표 전체 폭.
+- 모바일: 범위 1열, 표 가로 스크롤, 코인 열 고정.
+- 필터 버튼과 체크박스는 줄바꿈을 허용한다.
+
+## 금지
+
+- 별도 조사노트, 후보 큐, 가치포획 맵, 방법론 탭
+- 대시보드와 원자료를 나누는 내비게이션
+- 로그인·저장형 워치리스트·매수/매도 추천
+
+## 검수 체크리스트
+
+- [ ] 내비게이션 탭이 없다.
+- [ ] 저평가/고평가 프리셋이 결과 범위와 정렬을 함께 바꾼다.
+- [ ] 각 범위가 한 트랙·두 손잡이로 보인다.
+- [ ] 숫자 입력과 손잡이가 서로 동기화된다.
+- [ ] P/S 범위와 고희석 제외가 동작한다.
+- [ ] 전체 초기화가 모든 필터를 복구한다.
+- [ ] 결과 수와 전체 수가 보인다.
+- [ ] 모바일 가로 스크롤과 코인 열 고정이 동작한다.
+- [ ] 브라우저 콘솔 에러가 없다.
+- [ ] 테스트·타입체크·프로덕션 빌드가 통과한다.

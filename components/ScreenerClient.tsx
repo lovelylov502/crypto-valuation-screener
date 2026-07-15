@@ -3,6 +3,7 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import type { CoinScored } from "@/lib/types";
 import { fmtKstMinute, fmtUsd, fmtMult, fmtPct } from "@/lib/format";
+import { clampRangePosition, matchesRange, scoreRangeForPreset, type ValuationPreset } from "@/lib/screenerFilters";
 import { ScoreBadge } from "./ScoreBadge";
 
 // 로그 슬라이더(0~100) <-> USD 양방향. 0이면 필터 없음, 100이면 $100B
@@ -163,6 +164,58 @@ function renderCell(c: CoinScored, key: SortKey) {
   }
 }
 
+function DualRangeSlider({
+  minPosition,
+  maxPosition,
+  onMinChange,
+  onMaxChange,
+  minLabel,
+  maxLabel,
+  step = 0.5,
+}: {
+  minPosition: number;
+  maxPosition: number;
+  onMinChange: (position: number) => void;
+  onMaxChange: (position: number) => void;
+  minLabel: string;
+  maxLabel: string;
+  step?: number;
+}) {
+  const changeMin = (next: number) => onMinChange(clampRangePosition("min", next, minPosition, maxPosition));
+  const changeMax = (next: number) => onMaxChange(clampRangePosition("max", next, minPosition, maxPosition));
+
+  return (
+    <div className="relative mt-3 h-6">
+      <div className="absolute left-0 right-0 top-2.5 h-1 rounded-full bg-[var(--color-border)]">
+        <div
+          className="absolute h-full rounded-full bg-[var(--color-accent)]"
+          style={{ left: `${minPosition}%`, right: `${100 - maxPosition}%` }}
+        />
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={step}
+        value={minPosition}
+        onChange={(event) => changeMin(Number(event.target.value))}
+        aria-label={minLabel}
+        className="dual-range-input z-20"
+      />
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={step}
+        value={maxPosition}
+        onChange={(event) => changeMax(Number(event.target.value))}
+        aria-label={maxLabel}
+        className="dual-range-input z-30"
+      />
+    </div>
+  );
+}
+
 function UsdRangeFilter({
   label, minUsd, maxUsd, onMinChange, onMaxChange,
 }: {
@@ -208,20 +261,14 @@ function UsdRangeFilter({
           <span>M</span>
         </label>
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <input
-          type="range" min={0} max={100} step={0.5}
-          value={usdToSlider(minUsd)}
-          onChange={(e) => setMin(sliderToUsd(Number(e.target.value)))}
-          className="w-full accent-[var(--color-accent)]"
-        />
-        <input
-          type="range" min={0} max={100} step={0.5}
-          value={maxUsd > 0 ? usdToSlider(maxUsd) : 100}
-          onChange={(e) => setMax(sliderToUsd(Number(e.target.value)))}
-          className="w-full accent-[var(--color-accent)]"
-        />
-      </div>
+      <DualRangeSlider
+        minPosition={usdToSlider(minUsd)}
+        maxPosition={maxUsd > 0 ? usdToSlider(maxUsd) : 100}
+        onMinChange={(position) => setMin(sliderToUsd(position))}
+        onMaxChange={(position) => setMax(position >= 100 ? 0 : sliderToUsd(position))}
+        minLabel={`${label} 최소`}
+        maxLabel={`${label} 최대`}
+      />
     </div>
   );
 }
@@ -271,20 +318,79 @@ function MultipleRangeFilter({
           <span>x</span>
         </label>
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <input
-          type="range" min={0} max={100} step={0.5}
-          value={multipleToSlider(min)}
-          onChange={(e) => setMin(sliderToMultiple(Number(e.target.value)))}
-          className="w-full accent-[var(--color-accent)]"
-        />
-        <input
-          type="range" min={0} max={100} step={0.5}
-          value={max > 0 ? multipleToSlider(max) : 100}
-          onChange={(e) => setMax(sliderToMultiple(Number(e.target.value)))}
-          className="w-full accent-[var(--color-accent)]"
-        />
+      <DualRangeSlider
+        minPosition={multipleToSlider(min)}
+        maxPosition={max > 0 ? multipleToSlider(max) : 100}
+        onMinChange={(position) => setMin(sliderToMultiple(position))}
+        onMaxChange={(position) => setMax(position >= 100 ? 0 : sliderToMultiple(position))}
+        minLabel={`${label} 최소`}
+        maxLabel={`${label} 최대`}
+      />
+    </div>
+  );
+}
+
+function ScoreRangeFilter({
+  min,
+  max,
+  onMinChange,
+  onMaxChange,
+}: {
+  min: number;
+  max: number;
+  onMinChange: (score: number) => void;
+  onMaxChange: (score: number) => void;
+}) {
+  const maxPosition = max > 0 ? max : 100;
+  const setMin = (score: number) => onMinChange(Math.min(Math.max(score, 0), maxPosition));
+  const setMax = (score: number) => onMaxChange(score >= 100 ? 0 : Math.max(score, min));
+
+  return (
+    <div className="min-w-[250px]">
+      <div className="mb-2 text-xs text-[var(--color-muted)]">밸류 점수 범위 <span className="opacity-70">(높을수록 저평가)</span></div>
+      <div className="grid grid-cols-2 gap-2 text-xs text-[var(--color-muted)]">
+        <label className="flex items-center gap-1">
+          <span>최소</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={1}
+            value={min > 0 ? min : ""}
+            onChange={(event) => {
+              const score = Number(event.target.value);
+              setMin(Number.isFinite(score) && score > 0 ? score : 0);
+            }}
+            placeholder="0"
+            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
+          />
+        </label>
+        <label className="flex items-center gap-1">
+          <span>최대</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={1}
+            value={max > 0 ? max : ""}
+            onChange={(event) => {
+              const score = Number(event.target.value);
+              setMax(Number.isFinite(score) && score > 0 ? score : 0);
+            }}
+            placeholder="100"
+            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
+          />
+        </label>
       </div>
+      <DualRangeSlider
+        minPosition={min}
+        maxPosition={maxPosition}
+        onMinChange={setMin}
+        onMaxChange={setMax}
+        minLabel="밸류 점수 최소"
+        maxLabel="밸류 점수 최대"
+        step={1}
+      />
     </div>
   );
 }
@@ -305,8 +411,13 @@ export function ScreenerClient({
   const [maxTvl, setMaxTvl] = useState(0);
   const [minPhr, setMinPhr] = useState(0);
   const [maxPhr, setMaxPhr] = useState(0);
+  const [minPs, setMinPs] = useState(0);
+  const [maxPs, setMaxPs] = useState(0);
+  const [minScore, setMinScore] = useState(0);
+  const [maxScore, setMaxScore] = useState(0);
   const [hideZombie, setHideZombie] = useState(true);
   const [holderOnly, setHolderOnly] = useState(false);
+  const [excludeHighDilution, setExcludeHighDilution] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("valueScore");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
@@ -322,18 +433,59 @@ export function ScreenerClient({
     else { setSortKey(key); setSortDir(key === "name" || key === "category" ? "asc" : "desc"); }
   };
 
+  const applyPreset = (preset: ValuationPreset) => {
+    const range = scoreRangeForPreset(preset);
+    setMinScore(range.min);
+    setMaxScore(range.max);
+    setSortKey("valueScore");
+    setSortDir(preset === "undervalued" ? "desc" : "asc");
+  };
+
+  const clearScoreRange = () => {
+    setMinScore(0);
+    setMaxScore(0);
+    setSortKey("valueScore");
+    setSortDir("desc");
+  };
+
+  const resetFilters = () => {
+    setSearch("");
+    setCats(new Set());
+    setMinMcap(0);
+    setMaxMcap(0);
+    setMinTvl(0);
+    setMaxTvl(0);
+    setMinPhr(0);
+    setMaxPhr(0);
+    setMinPs(0);
+    setMaxPs(0);
+    setMinScore(0);
+    setMaxScore(0);
+    setHideZombie(true);
+    setHolderOnly(false);
+    setExcludeHighDilution(false);
+    setSortKey("valueScore");
+    setSortDir("desc");
+  };
+
+  const activePreset = minScore === 80 && maxScore === 0
+    ? "undervalued"
+    : minScore === 0 && maxScore === 20
+      ? "overvalued"
+      : null;
+
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     const filtered = coins.filter((c) => {
       if (hideZombie && c.lowActivity) return false;
       if (holderOnly && c.holderRevenueAnnual == null) return false;
+      if (excludeHighDilution && c.highDilution) return false;
       if (cats.size > 0 && (!c.category || !cats.has(c.category))) return false;
-      if (minMcap > 0 && (c.mcap ?? 0) < minMcap) return false;
-      if (maxMcap > 0 && (c.mcap === null || c.mcap > maxMcap)) return false;
-      if (minTvl > 0 && (c.tvl ?? 0) < minTvl) return false;
-      if (maxTvl > 0 && (c.tvl === null || c.tvl > maxTvl)) return false;
-      if (minPhr > 0 && (c.multiples.phr === null || c.multiples.phr < minPhr)) return false;
-      if (maxPhr > 0 && (c.multiples.phr === null || c.multiples.phr > maxPhr)) return false;
+      if (!matchesRange(c.valueScore, minScore, maxScore)) return false;
+      if (!matchesRange(c.mcap, minMcap, maxMcap)) return false;
+      if (!matchesRange(c.tvl, minTvl, maxTvl)) return false;
+      if (!matchesRange(c.multiples.phr, minPhr, maxPhr)) return false;
+      if (!matchesRange(c.multiples.ps, minPs, maxPs)) return false;
       if (q) {
         const hay = `${c.name} ${c.symbol ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -351,7 +503,7 @@ export function ScreenerClient({
       return ((va as number) - (vb as number)) * dir;
     });
     return filtered;
-  }, [coins, search, cats, minMcap, maxMcap, minTvl, maxTvl, minPhr, maxPhr, hideZombie, holderOnly, sortKey, sortDir]);
+  }, [coins, search, cats, minScore, maxScore, minMcap, maxMcap, minTvl, maxTvl, minPhr, maxPhr, minPs, maxPs, hideZombie, holderOnly, excludeHighDilution, sortKey, sortDir]);
 
   // 입력은 즉시 반응시키고, 무거운 테이블 렌더는 지연 → 슬라이더 드래그 버벅임 완화
   const deferredRows = useDeferredValue(rows);
@@ -365,13 +517,64 @@ export function ScreenerClient({
   return (
     <div className="space-y-4">
       {/* 필터 바 */}
-      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4 space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4 space-y-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted)]">빠른 보기</div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => applyPreset("undervalued")}
+                aria-pressed={activePreset === "undervalued"}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  activePreset === "undervalued"
+                    ? "border-emerald-400 bg-emerald-400/15 text-emerald-300"
+                    : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"
+                }`}
+              >
+                저평가 80+
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPreset("overvalued")}
+                aria-pressed={activePreset === "overvalued"}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  activePreset === "overvalued"
+                    ? "border-red-400 bg-red-400/15 text-red-300"
+                    : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"
+                }`}
+              >
+                고평가 20 이하
+              </button>
+              <button
+                type="button"
+                onClick={clearScoreRange}
+                aria-pressed={activePreset === null && minScore === 0 && maxScore === 0}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  activePreset === null && minScore === 0 && maxScore === 0
+                    ? "border-[var(--color-accent)] bg-[var(--color-accent)]/15 text-blue-300"
+                    : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"
+                }`}
+              >
+                점수 전체
+              </button>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-muted)] hover:border-[var(--color-muted)] hover:text-[var(--color-text)]"
+          >
+            전체 초기화
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 border-t border-[var(--color-border)] pt-4">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="코인/심볼 검색…"
-            className="flex-1 min-w-[180px] rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
+            className="flex-1 min-w-[200px] rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
           />
           <label className="flex items-center gap-2 text-sm text-[var(--color-muted)] cursor-pointer select-none">
             <input type="checkbox" checked={hideZombie} onChange={(e) => setHideZombie(e.target.checked)} className="accent-[var(--color-accent)]" />
@@ -379,11 +582,16 @@ export function ScreenerClient({
           </label>
           <label className="flex items-center gap-2 text-sm text-[var(--color-muted)] cursor-pointer select-none">
             <input type="checkbox" checked={holderOnly} onChange={(e) => setHolderOnly(e.target.checked)} className="accent-[var(--color-accent)]" />
-            홀더수익 있는 것만
+            홀더수익만
+          </label>
+          <label className="flex items-center gap-2 text-sm text-[var(--color-muted)] cursor-pointer select-none">
+            <input type="checkbox" checked={excludeHighDilution} onChange={(e) => setExcludeHighDilution(e.target.checked)} className="accent-[var(--color-accent)]" />
+            고희석 제외
           </label>
         </div>
 
-        <div className="flex flex-wrap gap-x-8 gap-y-4">
+        <div className="grid gap-x-8 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
+          <ScoreRangeFilter min={minScore} max={maxScore} onMinChange={setMinScore} onMaxChange={setMaxScore} />
           <UsdRangeFilter
             label="시총 범위"
             minUsd={minMcap}
@@ -404,6 +612,13 @@ export function ScreenerClient({
             max={maxPhr}
             onMinChange={setMinPhr}
             onMaxChange={setMaxPhr}
+          />
+          <MultipleRangeFilter
+            label="P/S 범위"
+            min={minPs}
+            max={maxPs}
+            onMinChange={setMinPs}
+            onMaxChange={setMaxPs}
           />
         </div>
 
@@ -430,7 +645,7 @@ export function ScreenerClient({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--color-muted)] px-1">
-        <span>{deferredRows.length.toLocaleString()}개 표시</span>
+        <span><strong className="text-[var(--color-text)]">{deferredRows.length.toLocaleString()}개</strong> / 전체 {coins.length.toLocaleString()}개 표시</span>
         <span>FDV 보강 {fdvCoverage}개 · 갱신 {fmtKstMinute(updatedAt)}</span>
       </div>
 
