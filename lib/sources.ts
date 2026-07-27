@@ -149,6 +149,7 @@ export async function fetchCoins(): Promise<CoinRaw[]> {
     let tvl: number | null = null;
     let geckoId: string | null = null;
     let symbol: string | null = null;
+    let listedAt: number | null = null;
     for (const m of members) {
       const v = num(m.mcap);
       if (v !== null && v > 0 && (dlMcap === null || v > dlMcap)) dlMcap = v;
@@ -156,6 +157,8 @@ export async function fetchCoins(): Promise<CoinRaw[]> {
       if (t !== null) tvl = (tvl ?? 0) + t;
       if (!geckoId) geckoId = str(m.gecko_id);
       if (!symbol) { const s = str(m.symbol); if (s && s !== "-") symbol = s; }
+      const listed = num(m.listedAt);
+      if (listed !== null && listed > 0 && (listedAt === null || listed < listedAt)) listedAt = listed;
     }
     // 대표 멤버 (메타 표시용): gecko 있는 것 > mcap 있는 것 > TVL 최대 > 첫째
     const rep =
@@ -202,6 +205,7 @@ export async function fetchCoins(): Promise<CoinRaw[]> {
       chains: Array.isArray(rep.chains) ? (rep.chains as string[]) : [],
       geckoId,
       logo: str(rep.logo),
+      listedAt,
 
       mcap,
       tvl,

@@ -7,6 +7,7 @@ export interface CoinRaw {
   chains: string[];
   geckoId: string | null;
   logo: string | null;
+  listedAt: number | null; // DefiLlama 최초 등록 Unix timestamp
 
   // 시장 데이터 (DefiLlama /protocols)
   mcap: number | null; // 유통 시가총액

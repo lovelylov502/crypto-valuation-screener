@@ -1,10 +1,20 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { CoinScored } from "@/lib/types";
 import { fmtKstMinute, fmtUsd, fmtMult, fmtPct } from "@/lib/format";
-import { clampRangePosition, matchesRange, scoreRangeForPreset, type ValuationPreset } from "@/lib/screenerFilters";
+import {
+  clampRangePosition,
+  isNewCandidate,
+  matchesRange,
+  parseFavoriteSlugs,
+  scoreRangeForPreset,
+  serializeFavoriteSlugs,
+  type ValuationPreset,
+} from "@/lib/screenerFilters";
 import { ScoreBadge } from "./ScoreBadge";
+
+const FAVORITES_STORAGE_KEY = "crypto-valuation-favorites-v1";
 
 // 로그 슬라이더(0~100) <-> USD 양방향. 0이면 필터 없음, 100이면 $100B
 function sliderToUsd(s: number): number {
@@ -418,8 +428,41 @@ export function ScreenerClient({
   const [hideZombie, setHideZombie] = useState(true);
   const [holderOnly, setHolderOnly] = useState(false);
   const [excludeHighDilution, setExcludeHighDilution] = useState(false);
+  const [newOnly, setNewOnly] = useState(false);
+  const [favoriteOnly, setFavoriteOnly] = useState(false);
+  const [favoriteSlugs, setFavoriteSlugs] = useState<Set<string>>(new Set());
+  const [favoritesReady, setFavoritesReady] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("valueScore");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const newSlugs = useMemo(
+    () => new Set(coins.filter((coin) => isNewCandidate({
+      listedAt: coin.listedAt,
+      referenceIso: updatedAt,
+      feesChange7d: coin.feesChange7dover7d,
+      fees30d: coin.fees30d,
+      revenue30d: coin.revenue30d,
+      holderRevenue30d: coin.holderRevenue30d,
+    })).map((coin) => coin.slug)),
+    [coins, updatedAt],
+  );
+
+  useEffect(() => {
+    setFavoriteSlugs(parseFavoriteSlugs(window.localStorage.getItem(FAVORITES_STORAGE_KEY)));
+    setFavoritesReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!favoritesReady) return;
+    window.localStorage.setItem(FAVORITES_STORAGE_KEY, serializeFavoriteSlugs(favoriteSlugs));
+  }, [favoriteSlugs, favoritesReady]);
+
+  const toggleFavorite = (slug: string) =>
+    setFavoriteSlugs((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug); else next.add(slug);
+      return next;
+    });
 
   const toggleCat = (c: string) =>
     setCats((prev) => {
@@ -464,6 +507,8 @@ export function ScreenerClient({
     setHideZombie(true);
     setHolderOnly(false);
     setExcludeHighDilution(false);
+    setNewOnly(false);
+    setFavoriteOnly(false);
     setSortKey("valueScore");
     setSortDir("desc");
   };
@@ -480,6 +525,8 @@ export function ScreenerClient({
       if (hideZombie && c.lowActivity) return false;
       if (holderOnly && c.holderRevenueAnnual == null) return false;
       if (excludeHighDilution && c.highDilution) return false;
+      if (newOnly && !newSlugs.has(c.slug)) return false;
+      if (favoriteOnly && !favoriteSlugs.has(c.slug)) return false;
       if (cats.size > 0 && (!c.category || !cats.has(c.category))) return false;
       if (!matchesRange(c.valueScore, minScore, maxScore)) return false;
       if (!matchesRange(c.mcap, minMcap, maxMcap)) return false;
@@ -503,7 +550,7 @@ export function ScreenerClient({
       return ((va as number) - (vb as number)) * dir;
     });
     return filtered;
-  }, [coins, search, cats, minScore, maxScore, minMcap, maxMcap, minTvl, maxTvl, minPhr, maxPhr, minPs, maxPs, hideZombie, holderOnly, excludeHighDilution, sortKey, sortDir]);
+  }, [coins, search, cats, minScore, maxScore, minMcap, maxMcap, minTvl, maxTvl, minPhr, maxPhr, minPs, maxPs, hideZombie, holderOnly, excludeHighDilution, newOnly, newSlugs, favoriteOnly, favoriteSlugs, sortKey, sortDir]);
 
   // 입력은 즉시 반응시키고, 무거운 테이블 렌더는 지연 → 슬라이더 드래그 버벅임 완화
   const deferredRows = useDeferredValue(rows);
@@ -512,7 +559,7 @@ export function ScreenerClient({
   const sortArrow = (key: SortKey) => (key === sortKey ? (sortDir === "desc" ? " ↓" : " ↑") : "");
 
   // 고정 코인 셀 공통 클래스 (헤더/바디에서 배경만 다름)
-  const stickyBase = "sticky left-0 z-10 min-w-[190px] max-w-[230px]";
+  const stickyBase = "sticky left-0 z-10 min-w-[230px] max-w-[290px]";
 
   return (
     <div className="space-y-4">
@@ -587,6 +634,14 @@ export function ScreenerClient({
           <label className="flex items-center gap-2 text-sm text-[var(--color-muted)] cursor-pointer select-none">
             <input type="checkbox" checked={excludeHighDilution} onChange={(e) => setExcludeHighDilution(e.target.checked)} className="accent-[var(--color-accent)]" />
             고희석 제외
+          </label>
+          <label className="flex items-center gap-2 text-sm text-[var(--color-muted)] cursor-pointer select-none">
+            <input type="checkbox" checked={newOnly} onChange={(e) => setNewOnly(e.target.checked)} className="accent-[var(--color-accent)]" />
+            신규만 <span className="text-[11px] opacity-70">({newSlugs.size})</span>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-[var(--color-muted)] cursor-pointer select-none">
+            <input type="checkbox" checked={favoriteOnly} onChange={(e) => setFavoriteOnly(e.target.checked)} className="accent-amber-400" />
+            ★ 관심만 <span className="text-[11px] opacity-70">({favoriteSlugs.size})</span>
           </label>
         </div>
 
@@ -676,6 +731,16 @@ export function ScreenerClient({
                 <td className={`${stickyBase} bg-[var(--color-panel)] group-hover:bg-[var(--color-panel-2)] px-3 py-2.5`}>
                   <div className="flex items-center gap-2">
                     <span className="text-[var(--color-muted)] text-xs tabular-nums w-6 text-right shrink-0">{i + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleFavorite(c.slug)}
+                      aria-pressed={favoriteSlugs.has(c.slug)}
+                      aria-label={`${c.name} 관심종목 ${favoriteSlugs.has(c.slug) ? "해제" : "추가"}`}
+                      title={favoriteSlugs.has(c.slug) ? "관심종목 해제" : "관심종목 추가"}
+                      className={`shrink-0 text-lg leading-none transition-colors ${favoriteSlugs.has(c.slug) ? "text-amber-300" : "text-[var(--color-muted)] hover:text-amber-200"}`}
+                    >
+                      {favoriteSlugs.has(c.slug) ? "★" : "☆"}
+                    </button>
                     {c.logo ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={c.logo} alt="" width={20} height={20} className="rounded-full shrink-0" loading="lazy" />
@@ -692,6 +757,11 @@ export function ScreenerClient({
                       {c.name}
                     </a>
                     {c.symbol && <span className="text-[var(--color-muted)] text-xs shrink-0">{c.symbol}</span>}
+                    {newSlugs.has(c.slug) && (
+                      <span className="shrink-0 rounded-full bg-blue-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-blue-300" title="최근 30일 등록 또는 7일 수수료 50% 이상 급성장">
+                        신규 감지
+                      </span>
+                    )}
                   </div>
                 </td>
                 {COLS.map((col) => (
