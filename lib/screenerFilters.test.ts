@@ -5,8 +5,10 @@ import {
   isNewListing,
   matchesRange,
   parseFavoriteSlugs,
+  parseStoredSelection,
   scoreRangeForPreset,
   serializeFavoriteSlugs,
+  serializeStoredSelection,
 } from "./screenerFilters";
 
 describe("clampRangePosition", () => {
@@ -100,5 +102,24 @@ describe("favorite slug storage", () => {
 
   it("serializes favorites in stable order", () => {
     expect(serializeFavoriteSlugs(new Set(["zinc", "quick"]))).toBe('["quick","zinc"]');
+  });
+});
+
+describe("column selection storage", () => {
+  const valid = ["score", "mcap", "oneYear"] as const;
+  const fallback = ["score", "mcap"] as const;
+
+  it("keeps valid stored columns and drops unknown values", () => {
+    expect([...parseStoredSelection('["mcap","unknown","oneYear"]', valid, fallback)])
+      .toEqual(["mcap", "oneYear"]);
+  });
+
+  it("uses the fallback when storage is malformed or has no valid columns", () => {
+    expect([...parseStoredSelection("not-json", valid, fallback)]).toEqual(["score", "mcap"]);
+    expect([...parseStoredSelection('["unknown"]', valid, fallback)]).toEqual(["score", "mcap"]);
+  });
+
+  it("serializes selected columns in stable order", () => {
+    expect(serializeStoredSelection(new Set(["oneYear", "mcap"]))).toBe('["mcap","oneYear"]');
   });
 });

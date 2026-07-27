@@ -1,0 +1,10 @@
+.hermes
+sketches
+AGENTS.md
+CLAUDE.md
+README.md
+docs
+**/*.test.ts
+vitest.config.ts
+client_secret_*.json
+*.tsbuildinfo

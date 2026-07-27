@@ -61,6 +61,29 @@ export function serializeFavoriteSlugs(slugs: Set<string>): string {
   return JSON.stringify([...slugs].sort());
 }
 
+export function parseStoredSelection<T extends string>(
+  raw: string | null,
+  validKeys: readonly T[],
+  fallback: readonly T[],
+): Set<T> {
+  if (!raw) return new Set(fallback);
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set(fallback);
+    const valid = new Set<string>(validKeys);
+    const selected = parsed.filter(
+      (key): key is T => typeof key === "string" && valid.has(key),
+    );
+    return selected.length > 0 ? new Set(selected) : new Set(fallback);
+  } catch {
+    return new Set(fallback);
+  }
+}
+
+export function serializeStoredSelection<T extends string>(selection: Set<T>): string {
+  return JSON.stringify([...selection].sort());
+}
+
 export function clampRangePosition(
   handle: RangeHandle,
   next: number,

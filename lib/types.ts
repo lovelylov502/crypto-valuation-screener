@@ -20,6 +20,9 @@ export interface CoinRaw {
   priceChange7d: number | null;
   priceChange14d: number | null;
   priceChange30d: number | null;
+  priceChange1y: number | null;
+  athChangePercentage: number | null; // 현재가의 사상 최고가 대비 변화율
+  atlChangePercentage: number | null; // 현재가의 사상 최저가 대비 변화율
 
   // 수수료/매출 (DefiLlama /overview/fees)
   feesAnnual: number | null; // 연율화 수수료

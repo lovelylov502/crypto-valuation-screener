@@ -57,7 +57,7 @@ async function fetchGecko(): Promise<{ byId: Map<string, Json>; bySymbol: Map<st
   const byId = new Map<string, Json>();
   const bySymbol = new Map<string, Json>();
   for (let page = 1; page <= GECKO_PAGES; page++) {
-    const url = `${GECKO}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${page}&price_change_percentage=7d,14d,30d`;
+    const url = `${GECKO}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${page}&price_change_percentage=7d,14d,30d,1y`;
     try {
       const rows = await getJson<Json[]>(url, TTL_COINGECKO);
       for (const r of rows) {
@@ -217,6 +217,9 @@ export async function fetchCoins(): Promise<CoinRaw[]> {
       priceChange7d: g ? num(g.price_change_percentage_7d_in_currency) : num(rep.change_7d),
       priceChange14d: g ? num(g.price_change_percentage_14d_in_currency) : null,
       priceChange30d: g ? num(g.price_change_percentage_30d_in_currency) : null,
+      priceChange1y: g ? num(g.price_change_percentage_1y_in_currency) : null,
+      athChangePercentage: g ? num(g.ath_change_percentage) : null,
+      atlChangePercentage: g ? num(g.atl_change_percentage) : null,
 
       feesAnnual: fees && fees.annual > 0 ? fees.annual : null,
       fees7d: fees && fees.d7 > 0 ? fees.d7 : null,

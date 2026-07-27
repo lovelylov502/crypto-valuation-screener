@@ -17,14 +17,14 @@ export function ScoreBadge({
 }) {
   if (score === null) {
     return (
-      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs text-[var(--color-muted)] bg-[var(--color-panel-2)]">
+      <span className="inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-xs text-[var(--color-muted)] bg-[var(--color-panel-2)]">
         판단보류
       </span>
     );
   }
   const lowConf = confidence < 0.4;
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
       <span
         className="inline-flex items-center justify-center rounded-md px-2 py-0.5 text-sm font-bold text-white tabular-nums"
         style={{ backgroundColor: scoreColor(score) }}

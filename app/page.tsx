@@ -28,8 +28,8 @@ export default async function Home() {
         <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--color-muted)]">Crypto Valuation Research</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">크립토 밸류에이션 리서치</h1>
         <p className="text-[var(--color-muted)] mt-2 max-w-4xl text-sm leading-relaxed">
-          <strong className="text-[var(--color-text)]">저평가·고평가 프리셋</strong>으로 빠르게 후보를 나누거나,
-          점수·시총·TVL·P/HR·P/S 범위를 직접 좁혀 크립토를 비교합니다.
+          저평가 후보를 좁히고, 원하는 열만 골라 펀더멘털과
+          <strong className="text-[var(--color-text)]"> 7일·30일·1년·고점/저점 대비 성과</strong>를 함께 비교합니다.
         </p>
       </header>
 
@@ -43,7 +43,7 @@ export default async function Home() {
       <footer className="mt-8 pt-5 border-t border-[var(--color-border)] text-xs text-[var(--color-muted)] leading-relaxed space-y-1.5">
         <p>
           <strong className="text-[var(--color-text)]">사용법.</strong> 저평가·고평가 프리셋으로 시작하거나,
-          점수·시총·TVL·P/HR 범위를 직접 좁힌 뒤 열 제목을 눌러 정렬합니다.
+          상세 필터로 범위를 좁힌 뒤 열 설정에서 비교 지표를 고르고 열 제목을 눌러 정렬합니다.
         </p>
         <p>
           <strong className="text-amber-400">투자 조언이 아닙니다.</strong> 본 도구는 크립토 온체인 펀더멘털 기반의
