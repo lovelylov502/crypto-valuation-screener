@@ -10,6 +10,7 @@ function make(partial: Partial<CoinRaw> & { slug: string }): CoinRaw {
     chains: [],
     geckoId: null,
     logo: null,
+    listedAt: null,
     mcap: null,
     tvl: null,
     change1d: null,

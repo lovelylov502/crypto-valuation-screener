@@ -32,7 +32,7 @@ DefiLlama는 한 프로젝트를 **여러 child 엔트리로 쪼갠다**. 예: H
 1. overview(fees/revenue/holderRev/dexs)에서 `slug → parentProtocol` 매핑 수집.
 2. `groupKey(slug) = parentProtocol ?? slug` 로 모든 데이터를 그룹화.
 3. 그룹별로 fees·매출·holder revenue·거래량을 **합산** (직전 30일 `total60dto30d`까지 합산해 성장률 재계산).
-4. `/protocols`도 같은 groupKey로 묶어 그룹별 대표 메타(name·category·logo·symbol) 선정.
+4. `/protocols`도 같은 groupKey로 묶어 그룹별 대표 메타(name·category·logo·symbol)를 선정하고, `listedAt`은 그룹에서 가장 이른 등록 시각을 사용.
 
 ### 시총(mcap) 매칭 우선순위
 
@@ -57,6 +57,9 @@ DefiLlama는 한 프로젝트를 **여러 child 엔트리로 쪼갠다**. 예: H
 - 점수·시총·TVL·P/HR·P/S 범위는 한 트랙의 양손잡이 슬라이더 ↔ 숫자입력을 양방향 동기화.
 - `저평가 80+`와 `고평가 20 이하` 프리셋은 점수 범위와 정렬 방향을 함께 바꾼다.
 - 코인 이름 열은 `position: sticky; left: 0` 으로 가로 스크롤 시 고정.
+- `신규 감지`는 `updatedAt`을 기준 시각으로 계산한다. 최근 30일 이내 등록되었거나 최근 7일 수수료 성장률이 50% 이상이면서 30일 현금흐름이 $10K 이상인 자산이 대상이다.
+- 관심종목은 브라우저 `localStorage`에만 저장하며 저장소 접근이 막히면 현재 세션 상태로 계속 동작한다.
+- 신규 감지와 관심종목은 클라이언트 필터에만 쓰고 서버의 밸류 점수와 가치포획 계산에는 전달하지 않는다.
 
 ## 환경
 
