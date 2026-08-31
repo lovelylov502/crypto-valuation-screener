@@ -45,18 +45,23 @@
 
 ## 현재 배포·검증
 
-- 프로덕션 배포 ID: `dpl_BDFVzUPp6G48q8GdzSuV4NaaLqkA`
-- 고유 URL: https://crypto-valuation-screener-iq34mxvpb-bodycation.vercel.app
+- 배포 source commit: `81314f796f1830c094cc72fd11d52f8cfab0588b` (`main` = `origin/main`)
+- 잘못된 remote main `b6545b7a7c859707b6131b43f18858ce6fcf56bf`는 원격 `backup/wrong-main-b6545b7-2026-08-31`에 보존했다.
+- 프로덕션 배포 ID: `dpl_GHgHLwfUiY5CYD2bEeav4SgNCbJL`
+- 고유 URL: https://crypto-valuation-screener-fh3zzlq2x-bodycation.vercel.app
 - canonical alias: https://crypto-valuation-screener.vercel.app
-- `npm run verify:local`은 canonical preflight, 배포 안전 probe 5개, Vitest 122개(6 files), TypeScript, production build, `git diff --check`를 모두 통과했다.
-- Vercel API readback은 배포 상태 `READY`, target `production`, 예상 project/team, canonical alias를 확인했다.
-- canonical `/`: HTTP 200, `X-Vercel-Cache: HIT`, 2,200,011바이트. `발굴 후보`·`65+ 전체`·`데이터 보류`가 있고 `저평가 80+`·`고평가 20 이하`는 없다.
-- canonical `/api/screener`: HTTP 200, `X-Vercel-Cache: HIT`, 687행·1,802,734바이트, `scoreVersion=rediscovery-v3-holder-classifier`, `updatedAt=2026-08-31T02:27:58.197Z`였다.
+- 정상 배포 명령은 `npm run deploy:production`이다. 실행 당시 preflight가 canonical 실경로, 정확한 fetch/push 원격, `main`/`origin/main`, clean worktree, 동일한 `HEAD`/`origin/main`, 예상 Vercel link를 증명했다. authenticated remote project 확인, pinned CLI dry run, 전체 local gate, 배포, canonical readback도 한 명령 안에서 통과했다.
+- 배포 안전 probe 6개, Vitest 122개(6 files), `npx tsc --noEmit`, `NODE_OPTIONS=--use-system-ca npm run build`, `git diff --check`가 통과했다. 안전한 임시 noncanonical Git fixture는 같은 remote·Vercel link를 복제해도 `WRONG_WORKING_DIRECTORY`·`WRONG_GIT_ROOT`와 종료 코드 1로 실패했고 검사 뒤 제거했다.
+- 로컬 production UI는 1440×900과 390×844에서 고급 표식, 프리셋·검색·열 선택·페이지 이동·필터 패널, 문서 overflow 0, 표 내부 가로 스크롤, console error 0을 확인했다.
+- Vercel API readback은 배포 상태 `READY`, target `production`, 예상 project/team, Git SHA `81314f796f1830c094cc72fd11d52f8cfab0588b`, canonical alias를 확인했다.
+- canonical `/`: HTTP 200, `X-Vercel-Cache: HIT`, 2,194,351바이트. `발굴 후보`·`65+ 전체`·`데이터 보류`가 있고 `저평가 80+`·`고평가 20 이하`는 없다.
+- canonical `/api/screener`: HTTP 200, `X-Vercel-Cache: HIT`, 685행·1,797,606바이트, `scoreVersion=rediscovery-v3-holder-classifier`, 고급 row fields, `updatedAt=2026-08-31T02:49:16.805Z`를 확인했다.
+- 라이브 브라우저는 데스크톱에서 `데이터 보류`를 눌러 530개 결과와 pressed 상태를 확인했다. 모바일은 390×844에서 문서 overflow 0, 338px 컨테이너 안 1,087px 표의 내부 스크롤, 고급 표식 3개·구형 표식 0개·console error 0을 확인했다.
 - 배포 CLI 자식 출력은 토큰을 마스킹한다. 기존 노출 가능 토큰은 폐기했고 프로젝트 범위 교체 토큰의 예상 project/team 접근과 기존 토큰의 HTTP 403을 확인했다.
-- Aave: raw TTM $25,657,337, 적격 current 30d 0, P/HR 없음·stale 경고.
-- Canton: raw current 30d $50,700,736, `native_fee_burn`, P/HR 없음.
-- Aerodrome: raw current 30d $3,411,328, `ve_voter_locker_distribution`, P/HR 없음.
-- Hyperliquid: 적격 current 30d $29,016,112, run-rate $353,029,362.67, `market_buyback`, P/HR 약 42.00x.
+- Aave: raw TTM $23,864,457, 적격 current 30d 0, P/HR 없음·stale 경고.
+- Canton: raw current 30d $48,803,443, `native_fee_burn`, P/HR 없음.
+- Aerodrome: raw current 30d $4,504,082, `ve_voter_locker_distribution`, P/HR 없음.
+- Hyperliquid: 적격 current 30d $47,818,630, run-rate $581,793,331.67, `market_buyback`만 포함하고 불명확 component는 제외, P/HR 약 34.81x.
 - Jupiter는 명시적 buyback child $1,333,318.48만 적격 합산하고 불명확 perpetual child $500,247를 제외해 `mixed`다. Pump·EdgeX는 `market_buyback`, Pancake는 `buyback_and_burn`이며 모두 component 합계와 parent 합계가 일치했다.
 - Lido는 `market_buyback`이지만 current 30d 0·TTM $4,030,385라 P/HR 없음·stale이다. Yearn·Sushi·GMX·Tectonic·send.fun은 명시적 staker 직접분배로 분류되고, Sushi V3 부정형 current $11,965는 제외된다. Ramses CL·Aquarius는 voter/bribe 제한으로 제외되고 NEAR Intents는 `market_buyback`이다.
 - Venice는 `bought back and burned`를 `buyback_and_burn`으로 분류해 current 30d $625,749·run-rate $7,613,279.50·P/HR 약 76.30x다.

@@ -131,13 +131,23 @@
 
 ## 15. Wrong-source 프로덕션 롤백 방지
 
-- 2026-08-31, 폐기된 `C:\Users\TAE\Workspace\projects\taegyu\holder revenue` 체크아웃이 canonical과 같은 Vercel project/team에 연결된 채 배포돼 라이브가 구형 UI로 되돌아간 사실을 확인했다.
+- 2026-08-31, 폐기된 `C:\Users\TAE\Workspace\projects\taegyu\holder revenue` 체크아웃의 commit `b6545b7a7c859707b6131b43f18858ce6fcf56bf`가 canonical과 같은 Vercel project/team에 연결된 채 배포돼 라이브와 remote `main`이 구형 UI로 되돌아간 사실을 확인했다.
 - canonical `C:\Users\TAE\Workspace\projects\hermes\crypto-valuation-screener`의 `65ac2bc41917eb26f435d3d947ca151c9eed7698` 위에 있던 source/doc 변경은 초기 상태와 전체 diff를 확인한 뒤 그대로 보존했다.
 - `scripts/deploy-contract.mjs`에 canonical 실경로, Git fetch/push 원격, Vercel project/team/name, legacy 금지 경로를 고정했다. 경로를 복제하고 동일한 `.vercel/project.json`을 넣어도 root 검사를 통과할 수 없다.
 - `npm run deploy:production`은 preflight, 결정론적 양성·음성 probe, 전체 테스트, TypeScript, production build, `git diff --check`, Vercel 배포, canonical live readback을 순서대로 실행한다.
 - canonical `/`는 `발굴 후보`·`65+ 전체`·`데이터 보류`를 요구하고 구형 프리셋을 거부한다. `/api/screener`는 score version, 고급 행 필드, 4.5MB 미만 payload를 확인한다.
-- legacy 루트의 `.vercel/project.json`만 제거하고 루트 `AGENTS.md`와 `LEGACY_DEPLOYMENT_BLOCKED.md`를 추가했다. source와 `.git` 이력은 보존했다. 실제 legacy 루트에서 preflight를 실행해 `BLOCKED_LEGACY_ROOT`와 종료 코드 1을 확인했다.
-- canonical preflight는 `recovery-production`의 `65ac2bc41917eb26f435d3d947ca151c9eed7698`와 보존된 작업 트리에서 통과했다. 배포 안전 probe 5개, Vitest 122개(6 files), TypeScript, production build, `git diff --check`도 모두 통과했다.
-- production `dpl_BDFVzUPp6G48q8GdzSuV4NaaLqkA`(`https://crypto-valuation-screener-iq34mxvpb-bodycation.vercel.app`)을 배포했다. Vercel API에서 `READY`·production target·예상 project/team·canonical alias를 확인했다.
+- legacy 루트의 `.vercel/project.json`은 없는 상태를 확인하고 루트 `AGENTS.md`와 `LEGACY_DEPLOYMENT_BLOCKED.md`를 추가했다. source와 `.git` 이력은 보존했다. 초기 read-only identity probe 뒤 최종 음성 검증은 안전한 임시 noncanonical fixture에서 수행했으며, legacy에서는 application/build/test/deploy를 실행하지 않는 hard stop을 유지한다.
+- 초기 복구 배포 `dpl_BDFVzUPp6G48q8GdzSuV4NaaLqkA`(`https://crypto-valuation-screener-iq34mxvpb-bodycation.vercel.app`)이 고급 UI를 복원했다. clean·synchronized `main`까지 요구하는 최종 가드와 guarded main promotion 전의 중간 복구였으며 아래 최종 배포가 이를 대체한다.
 - canonical `/`는 HTTP 200·HIT·2,200,011바이트이며 고급 UI 표식 3개가 있고 구형 표식은 없다. `/api/screener`는 HTTP 200·HIT·687행·1,802,734바이트·`scoreVersion=rediscovery-v3-holder-classifier`·`updatedAt=2026-08-31T02:27:58.197Z`였다.
 - Windows 터미널 자식 출력에 기존 인증값이 나타날 수 있는 경로를 발견해 해당 토큰을 폐기하고 프로젝트 범위 토큰으로 교체했다. 기존 토큰은 HTTP 403, 교체 토큰은 예상 project/team HTTP 200이었다. 배포 래퍼는 CLI 출력을 캡처·마스킹하며 이 동작을 회귀 probe로 고정했다.
+
+## 16. Canonical main 복구와 guarded production 확정
+
+- remote `main`을 교체하기 전에 `backup/wrong-main-b6545b7-2026-08-31`을 만들고 원격 SHA가 `b6545b7a7c859707b6131b43f18858ce6fcf56bf`인지 확인했다. 그 뒤에만 같은 expected SHA를 lease로 지정한 `force-with-lease`를 사용했다. 잘못된 commit은 삭제하지 않았다.
+- 보존한 canonical source/doc 27개 변경과 배포 가드를 `c114db4d6d871e494a1e5b26adbbd64966377d68`에 커밋했다. pinned CLI dry-run 보완까지 포함한 배포 source는 `81314f796f1830c094cc72fd11d52f8cfab0588b`이며, 로컬 브랜치를 `main`으로 이름 바꾸고 `origin/main`과 동일하게 맞췄다.
+- `npm run deploy:preflight`는 canonical 실경로, 정확한 Git fetch/push 원격, `main`/`origin/main`, clean worktree, `HEAD == origin/main`, Vercel project `prj_zOmxeQWmBjp5MAUmmYFALM8AC6Cc`와 team `team_2dxBFycQaaHuXjESEf0kCkFG`를 출력하고 통과했다.
+- 같은 remote와 `.vercel/project.json`을 복제한 임시 fixture `C:\Users\TAE\AppData\Local\Temp\crypto-screener-preflight-fixture-20260831-1136`에서는 `WRONG_WORKING_DIRECTORY`·`WRONG_GIT_ROOT`와 종료 코드 1을 확인했다. fixture는 경로를 재확인한 뒤 제거했다.
+- 최종 검증은 배포 안전 probe 6개, Vitest 122개(6 files), `npx tsc --noEmit`, `NODE_OPTIONS=--use-system-ca npm run build`, `git diff --check`가 통과했다. 로컬 1440×900·390×844 UI에서 프리셋, 검색, 열 선택, 페이지 이동, 필터 패널, 문서 overflow 0, 표 내부 스크롤, console error 0을 확인했다.
+- `npm run deploy:production`이 preflight, authenticated remote project 확인, local gate, pinned Vercel CLI dry run, production deploy, canonical readback을 수행했다. 최종 배포는 `dpl_GHgHLwfUiY5CYD2bEeav4SgNCbJL`(`https://crypto-valuation-screener-fh3zzlq2x-bodycation.vercel.app`)이며 Vercel API에서 `READY`, production target, 예상 project/team, Git SHA `81314f796f1830c094cc72fd11d52f8cfab0588b`, canonical alias를 확인했다.
+- canonical `/`는 HTTP 200·HIT·2,194,351바이트, 고급 표식 3개, 구형 표식 0개다. `/api/screener`는 HTTP 200·HIT·685행·1,797,606바이트, `scoreVersion=rediscovery-v3-holder-classifier`, 고급 row fields, `updatedAt=2026-08-31T02:49:16.805Z`를 반환했다.
+- 라이브 브라우저 데스크톱에서 `데이터 보류` 프리셋을 눌러 530개 결과와 pressed 상태를 확인했다. 390×844에서는 문서 overflow 0, 338px 컨테이너 안 1,087px 표 내부 스크롤, 고급 표식 3개·구형 표식 0개·console error 0을 확인했다.
