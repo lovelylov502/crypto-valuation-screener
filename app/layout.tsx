@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "크립토 밸류에이션 리서치",
+  title: "크립토 재발견 스크리너",
   description:
-    "DefiLlama·CoinGecko 기반으로 크립토의 저평가·고평가 후보를 찾고 가치포획과 리스크를 검증하는 크립토 전용 리서치 도구",
+    "DefiLlama·CoinMarketCap 공개 데이터로 펀더멘털 개선이 가격보다 앞선 크립토 후보를 찾는 리서치 스크리너",
 };
 
 export default function RootLayout({

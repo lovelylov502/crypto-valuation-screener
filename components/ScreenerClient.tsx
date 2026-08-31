@@ -1,23 +1,30 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import type { CoinScored } from "@/lib/types";
+import type { CoinScored, MarketDataFreshness } from "@/lib/types";
 import { fmtKstMinute, fmtUsd, fmtMult, fmtPct } from "@/lib/format";
 import {
   clampRangePosition,
-  isNewCandidate,
+  hasEligibleCurrentHolderValue,
   matchesRange,
   parseFavoriteSlugs,
   parseStoredSelection,
-  scoreRangeForPreset,
   serializeFavoriteSlugs,
   serializeStoredSelection,
-  type ValuationPreset,
 } from "@/lib/screenerFilters";
+import { holderEconomicTypeLabel } from "@/lib/holderValue";
+import {
+  COLUMN_GROUP_LABELS,
+  COLUMN_PRESETS,
+  DEFAULT_VISIBLE_COLUMNS,
+  SCREENER_COLUMNS as COLS,
+  type ColumnGroup,
+  type SortKey,
+} from "@/lib/screenerColumns";
 import { ScoreBadge } from "./ScoreBadge";
 
 const FAVORITES_STORAGE_KEY = "crypto-valuation-favorites-v1";
-const COLUMNS_STORAGE_KEY = "crypto-valuation-columns-v1";
+const COLUMNS_STORAGE_KEY = "crypto-valuation-columns-v3";
 const PAGE_SIZE = 50;
 
 // 로그 슬라이더(0~100) <-> USD 양방향. 0이면 필터 없음, 100이면 $100B
@@ -40,111 +47,36 @@ function multipleToSlider(v: number): number {
   return Math.max(0, Math.min(100, ((Math.log10(v) + 1) / 4) * 100));
 }
 
-// 코인 외부 링크: CoinGecko 우선, 없으면 DefiLlama 폴백
+// 코인 외부 링크: canonical CMC 우선, 없으면 CoinGecko/DefiLlama 폴백
 function coinUrl(c: CoinScored): string {
+  if (c.cmcSlug) return `https://coinmarketcap.com/currencies/${c.cmcSlug}/`;
   if (c.geckoId) return `https://www.coingecko.com/en/coins/${c.geckoId}`;
   return `https://defillama.com/protocol/${c.slug.replace(/^parent#/, "")}`;
 }
-
-type SortKey =
-  | "valueScore"
-  | "captureScore"
-  | "name"
-  | "category"
-  | "ps"
-  | "phr"
-  | "revenueAnnual"
-  | "holderRevenueAnnual"
-  | "revenue30d"
-  | "mcap"
-  | "fdv"
-  | "tvl"
-  | "priceChange7d"
-  | "priceChange14d"
-  | "priceChange30d"
-  | "priceChange1y"
-  | "athChangePercentage"
-  | "atlChangePercentage"
-  | "feesChange7d";
-
-type ColumnGroup = "valuation" | "fundamentals" | "market" | "performance";
-
-interface Col {
-  key: SortKey;
-  label: string;
-  title: string;
-  group: ColumnGroup;
-}
-
-const COLUMN_GROUP_LABELS: Record<ColumnGroup, string> = {
-  valuation: "밸류에이션",
-  fundamentals: "펀더멘털",
-  market: "시장",
-  performance: "가격 성과",
-};
-
-// 코인(고정 열)을 제외한 나머지 컬럼 — 기본 화면에서 중요한 열이 먼저 온다.
-const COLS: Col[] = [
-  { key: "valueScore", label: "점수", title: "종합 밸류 점수 (0~100, 높을수록 저평가)", group: "valuation" },
-  { key: "phr", label: "P/HR", title: "시총 / 홀더귀속수익 — 크립토 PER (낮을수록 쌈)", group: "valuation" },
-  { key: "mcap", label: "시총", title: "유통 시가총액", group: "market" },
-  { key: "priceChange7d", label: "7일", title: "CoinGecko 7일 가격 변화율", group: "performance" },
-  { key: "priceChange30d", label: "30일", title: "CoinGecko 30일 가격 변화율", group: "performance" },
-  { key: "priceChange1y", label: "1년", title: "CoinGecko 1년 가격 변화율", group: "performance" },
-  { key: "athChangePercentage", label: "ATH 대비", title: "현재가의 사상 최고가 대비 변화율", group: "performance" },
-  { key: "atlChangePercentage", label: "ATL 대비", title: "현재가의 사상 최저가 대비 변화율", group: "performance" },
-  { key: "category", label: "섹터", title: "카테고리", group: "market" },
-  { key: "captureScore", label: "포획", title: "토큰 홀더 가치포획 점수 — 매출이 토큰에 실제로 꽂히는지", group: "valuation" },
-  { key: "ps", label: "P/S", title: "시총 / 연매출 (낮을수록 쌈)", group: "valuation" },
-  { key: "revenueAnnual", label: "매출/년", title: "연율화 프로토콜 매출", group: "fundamentals" },
-  { key: "holderRevenueAnnual", label: "홀더수익/년", title: "토큰 홀더에게 귀속되는 연간 수익 (실질 배당)", group: "fundamentals" },
-  { key: "revenue30d", label: "매출 30일", title: "최근 30일 매출 (원값)", group: "fundamentals" },
-  { key: "fdv", label: "FDV", title: "완전희석가치 (CoinGecko, 상위코인)", group: "market" },
-  { key: "tvl", label: "TVL", title: "예치자산", group: "market" },
-  { key: "priceChange14d", label: "14일", title: "CoinGecko 14일 가격 변화율", group: "performance" },
-  { key: "feesChange7d", label: "수수료 변화", title: "최근 7일 vs 직전 7일 수수료 변화 (30일 변화 보조 표시)", group: "fundamentals" },
-];
-
-const DEFAULT_VISIBLE_COLUMNS: SortKey[] = [
-  "valueScore",
-  "phr",
-  "mcap",
-  "priceChange7d",
-  "priceChange30d",
-  "priceChange1y",
-  "athChangePercentage",
-  "atlChangePercentage",
-];
-
-const COLUMN_PRESETS: { label: string; keys: SortKey[] }[] = [
-  { label: "핵심", keys: DEFAULT_VISIBLE_COLUMNS },
-  {
-    label: "가격 성과",
-    keys: ["mcap", "priceChange7d", "priceChange14d", "priceChange30d", "priceChange1y", "athChangePercentage", "atlChangePercentage"],
-  },
-  {
-    label: "가치 포획",
-    keys: ["valueScore", "captureScore", "phr", "ps", "holderRevenueAnnual", "revenueAnnual", "mcap"],
-  },
-];
 
 function sortValue(c: CoinScored, key: SortKey): number | string | null {
   switch (key) {
     case "name": return c.name.toLowerCase();
     case "category": return (c.category ?? "").toLowerCase();
     case "valueScore": return c.valueScore;
+    case "scoreAxes": return c.scoreAxes.discovery;
+    case "confidence": return c.confidence;
+    case "gateStatus": return c.gates.passed ? 1 : 0;
     case "captureScore": return c.valueCapture.score;
     case "ps": return c.multiples.ps;
     case "phr": return c.multiples.phr;
     case "revenueAnnual": return c.revenueAnnual;
-    case "holderRevenueAnnual": return c.holderRevenueAnnual;
+    case "holderValueRunRate": return c.holderValue.eligibleRunRate;
+    case "holderValueTtm": return c.holderValue.rawTtm;
     case "revenue30d": return c.revenue30d;
     case "mcap": return c.mcap;
+    case "totalVolume": return c.totalVolume;
     case "fdv": return c.fdv;
     case "tvl": return c.tvl;
     case "priceChange7d": return c.priceChange7d;
     case "priceChange14d": return c.priceChange14d;
     case "priceChange30d": return c.priceChange30d;
+    case "priceChange60d": return c.priceChange60d;
     case "priceChange1y": return c.priceChange1y;
     case "athChangePercentage": return c.athChangePercentage;
     case "atlChangePercentage": return c.atlChangePercentage;
@@ -172,6 +104,36 @@ function toggleButtonClass(active: boolean): string {
   }`;
 }
 
+function holderTypeSummary(c: CoinScored): string {
+  const labels = [
+    ...new Set(
+      c.holderValue.components.map((component) =>
+        holderEconomicTypeLabel(component.economicType),
+      ),
+    ),
+  ];
+  if (labels.length === 0) return "유형 없음";
+  if (labels.length <= 2) return labels.join("+");
+  return `${labels.slice(0, 2).join("+")} 외 ${labels.length - 2}`;
+}
+
+function holderValueDetail(c: CoinScored): string {
+  const componentDetail = c.holderValue.components.map((component) =>
+    `${component.name}: ${holderEconomicTypeLabel(component.economicType)} · ${component.eligible ? "P/HR 포함" : "제외"} · 30d ${fmtUsd(component.current30d)} · TTM ${fmtUsd(component.ttm)} · ${component.reason}`,
+  );
+  return [
+    "DefiLlama-derived 분류 (공식·온체인 검증 아님)",
+    c.holderValue.currentVsEligibleTtmRatio !== null
+      ? `현재 run-rate / 적격 TTM ${c.holderValue.currentVsEligibleTtmRatio.toFixed(2)}x`
+      : null,
+    c.holderValue.excludedDoublecountedCount > 0
+      ? `doublecounted ${c.holderValue.excludedDoublecountedCount}개 제외`
+      : null,
+    c.holderValue.warning,
+    ...componentDetail,
+  ].filter((value): value is string => !!value).join(" / ");
+}
+
 // 셀 렌더 (코인 제외)
 function renderCell(c: CoinScored, key: SortKey) {
   switch (key) {
@@ -185,7 +147,59 @@ function renderCell(c: CoinScored, key: SortKey) {
         </span>
       );
     case "valueScore":
-      return <ScoreBadge score={c.valueScore} label={c.label} confidence={c.confidence} />;
+      return (
+        <ScoreBadge
+          score={c.valueScore}
+          status={c.status}
+          confidenceGrade={c.confidenceGrade}
+          confidence={c.confidence}
+          reasons={c.gates.reasons}
+        />
+      );
+    case "scoreAxes":
+      return (
+        <span
+          title={c.scoreNotes.join(" · ") || "산출 근거 없음"}
+          className="inline-grid min-w-[165px] grid-cols-4 gap-1 text-center text-[10px]"
+        >
+          {[
+            ["가치", c.scoreAxes.value, 30],
+            ["개선", c.scoreAxes.improvement, 25],
+            ["미발견", c.scoreAxes.discovery, 25],
+            ["품질", c.scoreAxes.quality, 20],
+          ].map(([label, value, maximum]) => (
+            <span key={String(label)} className="rounded bg-[var(--color-panel-2)] px-1 py-1">
+              <span className="block text-[var(--color-muted)]">{label}</span>
+              <strong className="block text-xs text-[var(--color-text)]">
+                {value}/{maximum}
+              </strong>
+            </span>
+          ))}
+        </span>
+      );
+    case "confidence":
+      return (
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+          <strong>{c.confidenceGrade}</strong>
+          <span className="text-xs text-[var(--color-muted)]">
+            {Math.round(c.confidence * 100)}%
+          </span>
+        </span>
+      );
+    case "gateStatus":
+      return c.gates.passed ? (
+        <span className="text-emerald-400">통과</span>
+      ) : (
+        <span
+          title={c.gates.reasons.join(" · ")}
+          className="inline-flex max-w-[190px] flex-col items-end"
+        >
+          <strong className="text-amber-300">{c.gates.reasons.length}개 미통과</strong>
+          <span className="block max-w-[190px] truncate text-[10px] text-[var(--color-muted)]">
+            {c.gates.reasons[0]}
+          </span>
+        </span>
+      );
     case "captureScore":
       return (
         <span
@@ -199,11 +213,52 @@ function renderCell(c: CoinScored, key: SortKey) {
         </span>
       );
     case "ps": return fmtMult(c.multiples.ps);
-    case "phr": return fmtMult(c.multiples.phr);
+    case "phr":
+      return (
+        <span className="inline-flex min-w-[120px] flex-col items-end gap-0.5">
+          <strong>{fmtMult(c.multiples.phr)}</strong>
+          {c.multiples.phr === null &&
+            ((c.holderValue.rawTtm ?? 0) > 0 || c.holderValue.warning) && (
+              <span
+                className="block max-w-[160px] truncate text-[10px] text-amber-300"
+                title={holderValueDetail(c)}
+              >
+                {c.holderValue.phrUnavailableReason}
+              </span>
+            )}
+        </span>
+      );
     case "revenueAnnual": return fmtUsd(c.revenueAnnual);
-    case "holderRevenueAnnual": return fmtUsd(c.holderRevenueAnnual);
+    case "holderValueRunRate":
+      return (
+        <span
+          title={holderValueDetail(c)}
+          className="inline-flex min-w-[155px] flex-col items-end gap-0.5"
+        >
+          <strong className={c.holderValue.eligibleRunRate !== null ? "text-emerald-300" : "text-[var(--color-muted)]"}>
+            {fmtUsd(c.holderValue.eligibleRunRate)}
+            {c.holderValue.warning && <span className="ml-1 text-amber-300">⚠</span>}
+          </strong>
+          <span className="block max-w-[180px] truncate text-[10px] text-[var(--color-muted)]">
+            {holderTypeSummary(c)} · DL 파생
+          </span>
+        </span>
+      );
+    case "holderValueTtm":
+      return (
+        <span
+          title={holderValueDetail(c)}
+          className="inline-flex min-w-[120px] flex-col items-end gap-0.5"
+        >
+          <span>{fmtUsd(c.holderValue.rawTtm)}</span>
+          <span className="text-[10px] text-[var(--color-muted)]">
+            {(c.holderValue.excludedTtm ?? 0) > 0 ? "제외 유형 포함" : "raw TTM"}
+          </span>
+        </span>
+      );
     case "revenue30d": return fmtUsd(c.revenue30d);
     case "mcap": return fmtUsd(c.mcap);
+    case "totalVolume": return fmtUsd(c.totalVolume);
     case "fdv":
       return (
         <span className="whitespace-nowrap">
@@ -220,6 +275,8 @@ function renderCell(c: CoinScored, key: SortKey) {
       return <span className={changeClass(c.priceChange14d)}>{fmtPct(c.priceChange14d)}</span>;
     case "priceChange30d":
       return <span className={changeClass(c.priceChange30d)}>{fmtPct(c.priceChange30d)}</span>;
+    case "priceChange60d":
+      return <span className={changeClass(c.priceChange60d)}>{fmtPct(c.priceChange60d)}</span>;
     case "priceChange1y":
       return <span className={changeClass(c.priceChange1y)}>{fmtPct(c.priceChange1y)}</span>;
     case "athChangePercentage":
@@ -422,7 +479,7 @@ function ScoreRangeFilter({
 
   return (
     <div className="min-w-[250px]">
-      <div className="mb-2 text-xs text-[var(--color-muted)]">밸류 점수 범위 <span className="opacity-70">(높을수록 저평가)</span></div>
+      <div className="mb-2 text-xs text-[var(--color-muted)]">발견 점수 범위 <span className="opacity-70">(게이트 통과 자산만 산출)</span></div>
       <div className="grid grid-cols-2 gap-2 text-xs text-[var(--color-muted)]">
         <label className="flex items-center gap-1">
           <span>최소</span>
@@ -462,21 +519,36 @@ function ScoreRangeFilter({
         maxPosition={maxPosition}
         onMinChange={setMin}
         onMaxChange={setMax}
-        minLabel="밸류 점수 최소"
-        maxLabel="밸류 점수 최대"
+        minLabel="발견 점수 최소"
+        maxLabel="발견 점수 최대"
         step={1}
       />
     </div>
   );
 }
 
+type StatusMode = "candidate" | "watch" | "hold" | null;
+
 export function ScreenerClient({
-  coins, categories, updatedAt, fdvCoverage,
+  coins,
+  categories,
+  updatedAt,
+  marketDataFreshness,
+  fdvCoverage,
+  cmcCoverage,
+  verifiedIdentityCount,
+  discoveryCandidateCount,
+  scoreVersion,
 }: {
   coins: CoinScored[];
   categories: string[];
   updatedAt: string;
+  marketDataFreshness: MarketDataFreshness;
   fdvCoverage: number;
+  cmcCoverage: number;
+  verifiedIdentityCount: number;
+  discoveryCandidateCount: number;
+  scoreVersion: string;
 }) {
   const [search, setSearch] = useState("");
   const [cats, setCats] = useState<Set<string>>(new Set());
@@ -494,6 +566,8 @@ export function ScreenerClient({
   const [holderOnly, setHolderOnly] = useState(false);
   const [excludeHighDilution, setExcludeHighDilution] = useState(false);
   const [newOnly, setNewOnly] = useState(false);
+  const [highConfidenceOnly, setHighConfidenceOnly] = useState(false);
+  const [statusMode, setStatusMode] = useState<StatusMode>(null);
   const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [favoriteSlugs, setFavoriteSlugs] = useState<Set<string>>(new Set());
   const [favoritesReady, setFavoritesReady] = useState(false);
@@ -508,15 +582,20 @@ export function ScreenerClient({
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const newSlugs = useMemo(
-    () => new Set(coins.filter((coin) => isNewCandidate({
-      listedAt: coin.listedAt,
-      referenceIso: updatedAt,
-      feesChange7d: coin.feesChange7dover7d,
-      fees30d: coin.fees30d,
-      revenue30d: coin.revenue30d,
-      holderRevenue30d: coin.holderRevenue30d,
-    })).map((coin) => coin.slug)),
-    [coins, updatedAt],
+    () => new Set(
+      coins
+        .filter((coin) => coin.status === "신규 프로젝트")
+        .map((coin) => coin.slug),
+    ),
+    [coins],
+  );
+  const watchCount = useMemo(
+    () => coins.filter((coin) => (coin.valueScore ?? 0) >= 65).length,
+    [coins],
+  );
+  const dataHoldCount = useMemo(
+    () => coins.filter((coin) => coin.status === "데이터 보류").length,
+    [coins],
   );
 
   useEffect(() => {
@@ -592,15 +671,17 @@ export function ScreenerClient({
     else { setSortKey(key); setSortDir(key === "name" || key === "category" ? "asc" : "desc"); }
   };
 
-  const applyPreset = (preset: ValuationPreset) => {
-    const range = scoreRangeForPreset(preset);
-    setMinScore(range.min);
-    setMaxScore(range.max);
+  const applyPreset = (mode: Exclude<StatusMode, null>) => {
+    setStatusMode(mode);
+    setMinScore(mode === "watch" ? 65 : 0);
+    setMaxScore(0);
+    if (mode === "hold") setHideZombie(false);
     setSortKey("valueScore");
-    setSortDir(preset === "undervalued" ? "desc" : "asc");
+    setSortDir("desc");
   };
 
   const clearScoreRange = () => {
+    setStatusMode(null);
     setMinScore(0);
     setMaxScore(0);
     setSortKey("valueScore");
@@ -624,16 +705,12 @@ export function ScreenerClient({
     setHolderOnly(false);
     setExcludeHighDilution(false);
     setNewOnly(false);
+    setHighConfidenceOnly(false);
+    setStatusMode(null);
     setFavoriteOnly(false);
     setSortKey("valueScore");
     setSortDir("desc");
   };
-
-  const activePreset = minScore === 80 && maxScore === 0
-    ? "undervalued"
-    : minScore === 0 && maxScore === 20
-      ? "overvalued"
-      : null;
 
   const activeFilterCount = [
     search.trim().length > 0,
@@ -647,6 +724,8 @@ export function ScreenerClient({
     holderOnly,
     excludeHighDilution,
     newOnly,
+    highConfidenceOnly,
+    statusMode !== null,
     favoriteOnly,
   ].filter(Boolean).length;
 
@@ -659,9 +738,13 @@ export function ScreenerClient({
     const q = search.trim().toLowerCase();
     const filtered = coins.filter((c) => {
       if (hideZombie && c.lowActivity) return false;
-      if (holderOnly && c.holderRevenueAnnual == null) return false;
+      if (holderOnly && !hasEligibleCurrentHolderValue(c.holderValue)) return false;
       if (excludeHighDilution && c.highDilution) return false;
       if (newOnly && !newSlugs.has(c.slug)) return false;
+      if (highConfidenceOnly && c.confidenceGrade === "C") return false;
+      if (statusMode === "candidate" && c.status !== "발굴 후보") return false;
+      if (statusMode === "watch" && (c.valueScore ?? 0) < 65) return false;
+      if (statusMode === "hold" && c.status !== "데이터 보류") return false;
       if (favoriteOnly && !favoriteSlugs.has(c.slug)) return false;
       if (cats.size > 0 && (!c.category || !cats.has(c.category))) return false;
       if (!matchesRange(c.valueScore, minScore, maxScore)) return false;
@@ -686,7 +769,7 @@ export function ScreenerClient({
       return ((va as number) - (vb as number)) * dir;
     });
     return filtered;
-  }, [coins, search, cats, minScore, maxScore, minMcap, maxMcap, minTvl, maxTvl, minPhr, maxPhr, minPs, maxPs, hideZombie, holderOnly, excludeHighDilution, newOnly, newSlugs, favoriteOnly, favoriteSlugs, sortKey, sortDir]);
+  }, [coins, search, cats, minScore, maxScore, minMcap, maxMcap, minTvl, maxTvl, minPhr, maxPhr, minPs, maxPs, hideZombie, holderOnly, excludeHighDilution, newOnly, newSlugs, highConfidenceOnly, statusMode, favoriteOnly, favoriteSlugs, sortKey, sortDir]);
 
   // 입력은 즉시 반응시키고, 무거운 테이블 렌더는 지연 → 슬라이더 드래그 버벅임 완화
   const deferredRows = useDeferredValue(rows);
@@ -722,27 +805,35 @@ export function ScreenerClient({
           <div className="flex gap-2 overflow-x-auto pb-1 thin-scroll xl:pb-0">
             <button
               type="button"
-              onClick={() => applyPreset("undervalued")}
-              aria-pressed={activePreset === "undervalued"}
-              className={toggleButtonClass(activePreset === "undervalued")}
+              onClick={() => applyPreset("candidate")}
+              aria-pressed={statusMode === "candidate"}
+              className={toggleButtonClass(statusMode === "candidate")}
             >
-              저평가 80+
+              발굴 후보 {discoveryCandidateCount}
             </button>
             <button
               type="button"
-              onClick={() => applyPreset("overvalued")}
-              aria-pressed={activePreset === "overvalued"}
-              className={toggleButtonClass(activePreset === "overvalued")}
+              onClick={() => applyPreset("watch")}
+              aria-pressed={statusMode === "watch"}
+              className={toggleButtonClass(statusMode === "watch")}
             >
-              고평가 20 이하
+              65+ 전체 {watchCount}
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset("hold")}
+              aria-pressed={statusMode === "hold"}
+              className={toggleButtonClass(statusMode === "hold")}
+            >
+              데이터 보류 {dataHoldCount}
             </button>
             <button
               type="button"
               onClick={clearScoreRange}
-              aria-pressed={activePreset === null && minScore === 0 && maxScore === 0}
-              className={toggleButtonClass(activePreset === null && minScore === 0 && maxScore === 0)}
+              aria-pressed={statusMode === null && minScore === 0 && maxScore === 0}
+              className={toggleButtonClass(statusMode === null && minScore === 0 && maxScore === 0)}
             >
-              점수 전체
+              전체
             </button>
           </div>
 
@@ -781,13 +872,16 @@ export function ScreenerClient({
             좀비 숨김
           </button>
           <button type="button" aria-pressed={holderOnly} onClick={() => setHolderOnly((value) => !value)} className={toggleButtonClass(holderOnly)}>
-            홀더수익만
+            현재 홀더가치만
           </button>
           <button type="button" aria-pressed={excludeHighDilution} onClick={() => setExcludeHighDilution((value) => !value)} className={toggleButtonClass(excludeHighDilution)}>
             고희석 제외
           </button>
+          <button type="button" aria-pressed={highConfidenceOnly} onClick={() => setHighConfidenceOnly((value) => !value)} className={toggleButtonClass(highConfidenceOnly)}>
+            신뢰도 B+
+          </button>
           <button type="button" aria-pressed={newOnly} onClick={() => setNewOnly((value) => !value)} className={toggleButtonClass(newOnly)}>
-            신규만 {newSlugs.size}
+            신규 트랙 {newSlugs.size}
           </button>
           <button type="button" aria-pressed={favoriteOnly} onClick={() => setFavoriteOnly((value) => !value)} className={toggleButtonClass(favoriteOnly)}>
             관심만 {favoriteSlugs.size}
@@ -904,14 +998,6 @@ export function ScreenerClient({
                       {col.label}
                     </button>
                   ))}
-                  {group === "performance" && (
-                    <span
-                      title="CoinGecko 벌크 API가 60일 가격 변화율을 제공하지 않습니다."
-                      className="inline-flex items-center rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-muted)] opacity-70"
-                    >
-                      60일 · 원천 미지원
-                    </span>
-                  )}
                 </div>
               </fieldset>
             ))}
@@ -924,7 +1010,15 @@ export function ScreenerClient({
           <strong className="text-[var(--color-text)]">{deferredRows.length.toLocaleString()}개</strong>
           {" "}/ 전체 {coins.length.toLocaleString()}개 · 현재 {visibleStart.toLocaleString()}–{visibleEnd.toLocaleString()}
         </span>
-        <span>FDV 보강 {fdvCoverage}개 · 갱신 {fmtKstMinute(updatedAt)}</span>
+        <span>
+          {scoreVersion} · CMC {cmcCoverage} · 정체성 확인 {verifiedIdentityCount} · FDV {fdvCoverage}
+          {" · "}계산 {fmtKstMinute(updatedAt)}
+          {marketDataFreshness.oldestAt && marketDataFreshness.newestAt && (
+            <span title={`${marketDataFreshness.source} 원천 시각 범위 · ${marketDataFreshness.timestampedCoinCount}개`}>
+              {" · "}CMC 원천 {fmtKstMinute(marketDataFreshness.oldestAt)}–{fmtKstMinute(marketDataFreshness.newestAt)}
+            </span>
+          )}
+        </span>
       </div>
 
       <div
@@ -987,15 +1081,15 @@ export function ScreenerClient({
                       href={coinUrl(coin)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      title={coin.geckoId ? "CoinGecko에서 열기" : "DefiLlama에서 열기"}
+                      title={coin.cmcSlug ? "CoinMarketCap에서 열기" : coin.geckoId ? "CoinGecko에서 열기" : "DefiLlama에서 열기"}
                       className="truncate font-medium hover:text-[var(--color-accent)] hover:underline"
                     >
                       {coin.name}
                     </a>
                     {coin.symbol && <span className="shrink-0 text-xs text-[var(--color-muted)]">{coin.symbol}</span>}
                     {newSlugs.has(coin.slug) && (
-                      <span className="shrink-0 rounded-full bg-blue-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-blue-300" title="최근 30일 등록 또는 7일 수수료 50% 이상 급성장">
-                        신규 감지
+                      <span className="shrink-0 rounded-full bg-cyan-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-300" title="CMC 상장 90일 미만 — 기존 후보 점수와 분리">
+                        신규
                       </span>
                     )}
                   </div>

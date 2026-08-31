@@ -7,7 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "test:deploy-preflight": "node --test scripts/deploy-contract.test.mjs",
+    "deploy:preflight": "node scripts/deploy-preflight.mjs",
+    "verify:local": "npm run deploy:preflight && npm run test:deploy-preflight && npm test && npm run typecheck && npm run build && git diff --check",
+    "verify:production": "node scripts/verify-production.mjs",
+    "deploy:production": "node scripts/deploy-production.mjs"
   },
   "dependencies": {
     "next": "^16.2.12",

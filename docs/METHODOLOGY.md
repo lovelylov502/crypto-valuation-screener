@@ -1,84 +1,121 @@
-# 밸류에이션 방법론
+# 재발견 후보 점수 방법론
 
-코인이 **싼가/비싼가**를, 가격이 아니라 프로토콜이 벌어들이는 현금흐름 대비 시가총액으로 판단한다.
-핵심 철학: **절대 멀티플 비교는 무의미하다.** DEX의 P/F와 Liquid Staking의 P/F는 구조가 달라 직접 비교할 수 없다. 그래서 모든 멀티플을 **같은 섹터(category) 안에서 백분위로 정규화**한 뒤 합산한다.
+목표는 단순히 멀티플이 낮은 코인이 아니라 **토큰에 귀속되는 펀더멘털은 개선되지만 가격에는 아직 충분히 반영되지 않은 프로젝트**를 찾는 것이다.
 
-## 1. 멀티플 (낮을수록 쌈)
+현재 점수 버전은 `rediscovery-v3-holder-classifier`다.
 
-연율화는 최근 1년 값(`total1y`) 우선, 없으면 `30일 × 365/30`.
+## Holder value 정규화와 적격성
 
-| 멀티플 | 정의 | 의미 |
-|---|---|---|
-| **P/HR** | 시총 ÷ 홀더귀속수익 | **크립토 PER.** 토큰 홀더에게 실제 귀속되는 수익(바이백·분배 포함) 대비 시총. 가장 직접적 |
-| P/F | 시총 ÷ 연수수료 | 프로토콜이 창출하는 전체 수수료 대비 |
-| P/S | 시총 ÷ 연매출 | 프로토콜 금고로 가는 매출 대비 |
-| Mcap/TVL | 시총 ÷ 예치자산 | 자본 효율. 데이터가 가장 풍부 |
-| FDV/TVL, FDV/Mcap | — | 완전희석 기준 / 희석 위험(미래 공급 압력) |
+DefiLlama `dailyHoldersRevenue`는 직접 현금 분배만 뜻하지 않는다. 각 child protocol의 `methodology.HoldersRevenue`를 다음 경제유형으로 보수적으로 분류한다.
 
-> **왜 P/HR이 핵심인가**: P/F·P/S는 supply-side(LP 등)로 새는 몫을 포함하지만, holder revenue는 **토큰 보유자에게 실제 귀속되는 몫**이다. 주식의 순이익(EPS)에 가장 가깝다. Token Terminal·Messari가 강조하는 "P/E" 개념.
+| 경제유형 | 일반 P/HR | 처리 |
+|---|---:|---|
+| 직접 홀더·스테이커 분배 | 포함 | 분배·지급·보상 방식이 구체적으로 명시된 경우 |
+| 시장매입 | 포함 | `buy back`·`bought back`·`by back`·open-market 매입처럼 실제 토큰 매입이 명시된 경우 |
+| 시장매입 후 소각 | 포함 | 매입한 토큰의 소각이 문법적으로 연결되거나 burn address 전송이 명시된 경우 |
+| 수수료·네이티브 토큰 소각 | 제외 | 시장매입 없이 프로토콜 수수료가 소각되는 경우 |
+| ve/voter/locker 한정 분배 | 제외 | ordinary token holder 전체가 아닌 제한된 수익권 |
+| 불명확·기타 | 제외 | `Money going to governance token holders` 같은 귀속 방식 미상 문구 또는 방법론 누락 |
 
-## 2. 게이트 (노이즈 제거)
+분류는 DefiLlama 설명에서 파생한 `defillama-derived` 상태다. 공식 검증·온체인 검증으로 부르지 않는다.
 
-- **활동성 게이트** (`MIN_ACTIVITY_USD = $100K`): 연 매출·수수료가 둘 다 이 미만이면 P/F·P/S·P/HR 비교에서 제외하고 `lowActivity` 플래그. (좀비 프로토콜이 분포를 왜곡하는 것 방지)
-- **신선도 게이트**: 연율값은 있어도 **최근 30일 현금흐름(fees·revenue·holderRev)이 전부 0/null**이면 멈춘(stale) 프로토콜으로 보고 `lowActivity` 처리. (죽은 프로토콜이 "싸 보이는" 가짜 신호 제거)
-- **규모 게이트** (`MIN_MCAP_USD = $1M`): 시총이 이 미만이면 점수 미산출(`판단보류`). 토큰 미발행/마이크로캡이 Mcap/TVL≈0으로 "초저평가"처럼 보이는 가짜 신호 제거.
-- **극단 멀티플 클리핑** (`MULTIPLE_CAP = 1000`): P/F·P/S·P/HR이 이 값을 넘으면(holder revenue가 일시적으로 거의 0이 되는 데이터 글리치 등) 섹터 분포에서 제외한다. 본인은 최저 백분위로 처리돼 점수엔 반영되지만 분포 꼬리를 왜곡하지 않는다.
-- **밸류 멀티플 ≥2 게이트** (`MIN_VALUE_MULTIPLES = 2`): 산출된 밸류 멀티플이 1개뿐이면 단일 신호 과신 위험으로 `판단보류`. (예: Mcap/TVL 하나로 "저평가" 단정 방지)
+분류 경계는 다음과 같이 보수적으로 적용한다.
 
-## 3. 섹터 정규화 (백분위)
+- `goes to TOKEN stakers`, `paid out to people who stake TOKEN`처럼 수익자와 지급 동작이 함께 명시된 흐름은 직접 분배다. `goes to holders`만 있는 문장은 일반화하지 않는다.
+- `vote/voted/voting`, vote-escrow, bribe, gauge, voter, locker로 수익권이 제한되면 `ve/voter/locker`로 제외한다.
+- holder/staker 지급 문장 안의 부정·중단을 긍정 분류보다 먼저 적용한다. `is/are/was/were not distributed/paid/allocated/shared`, `holders do not/did not/no longer receive/get/earn`, `no fees/revenue/rewards go to`, `does/did not go to`, 지급·분배·revenue sharing의 `ended/ceased/stopped/suspended/disabled`와 자연스러운 축약형도 불명확으로 제외한다. 긍정·부정 문장이 섞여 금액을 분리할 수 없는 component도 보수적으로 제외한다.
+- `not burned`는 시장매입으로 남긴다. `buyback (sourced from onchain burns...)`처럼 burn이 조달·주변 문맥일 뿐이면 매입+소각으로 올리지 않는다.
+- 일반 홀더·스테이커와 LP·referrer·trader·raffle·protocol-owned-liquidity 같은 수익자가 한 component에 섞여 금액을 나눌 수 없으면 불명확으로 제외한다.
 
-각 멀티플을 **같은 category 내 분포**에서 백분위로 변환한다(낮은 멀티플 → 높은 "싼 정도" 점수, 0~100).
-섹터 표본이 5개 미만이면 전체 시장 분포로 fallback.
-백분위는 fat-tail·고왜도인 크립토 멀티플에 z-score보다 robust하다(z-score는 비정규 분포에서 왜곡). 단 비등간격(ordinal)이라 "점수 5점 차 = 펀더 5% 차"가 아님에 유의.
+2026-08-17 live `dailyHoldersRevenue` 재감사에서는 원본 1,002행 중 금액이 있고 `doublecounted`가 아닌 422행을 전수 분류했다. eligible 178행에서 holder-flow 부정, vote/bribe/gauge/locker, LP/referrer/trader/raffle/PoL 위험 표식은 각각 0행이었다. 별도 부정·중단 adversarial corpus 34개도 모두 제외됐다. 이 개수는 DefiLlama 원천 변화에 따라 달라지는 시점 스냅샷이다.
 
-### Mcap/TVL 섹터 화이트리스트
+- 현재 적격 holder value = parent 안의 적격 child `total30d` 합계.
+- 현재 holder-value run-rate = `적격 30일 합계 × 365/30`.
+- P/HR = `시총 / 현재 holder-value run-rate`.
+- raw TTM = `doublecounted`가 아닌 전체 child `total1y` 합계. 경제유형별 component와 제외 합계를 함께 보존하며 P/HR 분모로 쓰지 않는다.
+- 최근·직전 30일 추세는 같은 적격 component 집합의 `total30d`와 `total60dto30d` 합계끼리 비교한다.
+- 적격 최근 30일이 0/누락인데 적격 TTM이 양수면 현재 P/HR을 비우고 중단·불연속 경고를 표시한다.
+- fees·revenue·holder revenue·volume overview에서 `doublecounted === true`인 row는 parent 합계에서 제외한다.
 
-Mcap/TVL은 **TVL이 사업 규모·매출의 선행지표인 섹터에서만** 점수에 반영한다(`MCAP_TVL_SECTORS`): Dexs·Lending·Yield·Derivatives·Liquid Staking·Farm·CDP·Yield Aggregator·Algo-Stables·Staking Pool·Liquidity Manager·Synthetics·Options(Vault)·Leveraged Farming·Liquid Restaking·Restaking·Insurance·NFT Lending·RWA Lending·Basis Trading·Reserve Currency·Risk Curators·Uncollateralized Lending.
-체인(L1/L2)·브릿지·CEX·런치패드·게임 등 **TVL이 가치와 무관한 섹터에서는 Mcap/TVL을 점수에서 제외**한다(그 가중은 P/HR·P/S·P/F로 재분배). 화이트리스트(블랙리스트 아님)라 새 카테고리는 보수적으로 자동 제외된다.
+## 1. 점수보다 먼저 적용하는 필수 게이트
 
-## 4. 보조 축 (밸류 점수에 ±보정, 혼합 아님)
+다음 조건 중 하나라도 실패하면 발견 점수를 산출하지 않고 `데이터 보류`로 분류한다.
 
-성장·희석은 **밸류 팩터가 아니므로** 가중 평균에 섞지 않는다(팩터 오염 방지). 밸류 점수를 먼저 낸 뒤 **각 최대 ±5점(`MAX_ADJ`)**으로만 약하게 보정한다. 중립 50 기준 `(score−50)/50 × 5`.
+1. **토큰 정체성**: 프로젝트/parent 현금흐름과 canonical 시장 토큰의 연결이 확인돼야 한다.
+2. **시장 데이터**: 12시간 이내 CMC 가격·시총·60일 변화·24시간 거래량이 있어야 한다.
+3. **펀더멘털 이력**: 적격 holder value·매출·수수료 중 하나 이상에서 최근 30일과 직전 30일 값이 있어야 한다.
+4. **유동성**: `24h 거래량 ≥ max($100K, min($5M, 시총×0.5%))`.
+5. **희석**: FDV가 있어야 하며 `FDV/Mcap > 3.33`이면 언락 정보를 확보하기 전까지 보류한다.
+6. **상장기간**: CMC 상장 90일 미만은 기존 점수 대신 `신규 프로젝트` 트랙으로 보낸다.
+7. **활동성과 규모**: 연 수수료·매출·현재 적격 holder-value run-rate가 모두 $100K 미만이거나 최근 현금흐름이 없으면 보류한다. 시총 $1M 미만도 보류한다.
 
-- **성장성(GARP)**: fees 30일 모멘텀(`change_30dover30d`)을 0~100으로. 0%=50(중립), +100%→100. → 보정 +5 ~ −5.
-- **희석**: FDV/Mcap. 1배(완전유통)=100, 클수록 미래 공급 압력으로 감점. 2.5배=50(중립). → 보정 +5 ~ −5.
-- **고희석 태그**: FDV/Mcap > 3.33 (= MC/FDV < 0.3, 유통량 30% 미만)이면 `highDilution` 플래그로 ⚠ 경고만 표시(점수는 막지 않음).
+## 2. 발견 점수 100점
 
-## 5. 종합 Value Score (0~100, 높을수록 저평가)
+결측값은 0점으로 남기며, 남은 지표의 가중치를 재정규화하지 않는다.
 
-순수 **밸류 멀티플** 가중 평균 (결측 지표는 가중치 재정규화) + 보조 축 ±보정:
+### 펀더멘털 가치 30
 
-```
-밸류 점수 = (P/HR 40% · P/S 25% · Mcap/TVL 20% · P/F 15%)   ← 밸류만 합 100
-최종 점수 = clamp(밸류 점수 + 성장보정(±5) + 희석보정(±5), 0, 100)
-```
+| 항목 | 점수 |
+|---|---:|
+| 섹터 P/HR 백분위 | 15 |
+| 섹터 P/S 백분위 | 5 |
+| 섹터 P/F 백분위 | 3 |
+| Mcap/TVL 백분위(화이트리스트 섹터만) | 2 |
+| 현재 적격 holder-value yield | 5 |
 
-- holder revenue(크립토 P/E)를 최우선. fees는 supply-side(LP·검증자) 몫까지 포함하는 가장 거친 지표라 최저 가중(Token Terminal·Artemis 수익 위계 기준).
-- P/F·Mcap/TVL은 **화면 열에선 숨기지만** 데이터가 풍부해(holder revenue는 일부만 커버) 나머지 토큰의 점수를 받친다.
-- 밸류 멀티플이 2개 미만이면 → `판단보류`.
+P/S와 P/F는 P/HR과 현금흐름이 겹치므로 보조 지표로만 쓴다. 섹터별 유효 표본이 8개 미만이면 글로벌 시장으로 fallback하지 않는다.
 
-**라벨**: 80+ 저평가 / 60~ 다소 저평가 / 40~ 적정 / 20~ 다소 고평가 / ~20 고평가
-**신뢰도(confidence)**: 산출된 밸류 멀티플 수(/4) × 활동성. 낮으면 ⚠ 표시.
+### 펀더멘털 개선 25
 
-## 6. 가치포획 점수 (별도 렌즈)
+| 항목 | 점수 |
+|---|---:|
+| 적격 holder value 최근 30일 vs 직전 30일 | 10 |
+| 매출 최근 30일 vs 직전 30일 | 7 |
+| 수수료 최근 30일 vs 직전 30일 | 3 |
+| 최근 30일 vs 1년 월평균 지속성 | 5 |
 
-밸류 점수와 별도로 “프로토콜이 돈을 버는가?”보다 **그 돈이 토큰 홀더에게 실제로 꽂히는가?**를 본다.
+변화율은 ±100%에서 클리핑해 일시적 폭증이 점수를 지배하지 못하게 한다.
 
-- **직접 가치포획**: `holderRevenueAnnual >= $100K`이고 최근 30일 holder revenue가 있다.
-- **간접 포획**: 매출/수수료는 있으나 holder revenue가 없다. 이 경우 `holder revenue 없음` 리스크를 붙인다.
-- **포획 불명확**: 의미 있는 현금흐름이 없다.
-- **고희석 리스크**: FDV/Mcap > 3.33이면 가치포획 점수에서도 `고희석` 리스크로 표시한다.
+### 가격 미발견 25
 
-가치포획 점수는 다음 요소를 약식 합성한다.
+| 항목 | 점수 |
+|---|---:|
+| 60일 가격 수익률의 섹터 중앙값 대비 지연 | 10 |
+| 펀더멘털 성장과 60일 가격의 괴리 | 8 |
+| 30일·1년 가격 재평가 여부 | 4 |
+| CMC 시총 순위와 현금흐름 순위의 괴리 | 3 |
 
-```text
-직접 포획: holder revenue 존재 + 매출 대비 귀속 비중 + P/HR 상대 매력 + 희석 리스크
-간접 포획: 매출/수수료 존재 + P/S/P/F 상대 매력 + 희석 리스크, 단 holder revenue 없음 표시
-```
+가격 하락 자체에는 점수를 주지 않는다. 펀더멘털 변화가 양수일 때만 성장-가격 괴리와 가격 맥락 점수를 부여한다.
 
-이 점수는 “싼가/비싼가”보다 **토큰이 실제로 경제 가치를 받는 구조인가**를 보기 위한 보조 렌즈다. 법안/RWA/기관 내러티브가 강해도 이 렌즈에서 낮으면 토큰 가격 연결성은 약하게 본다.
+### 토큰·시장 품질 20
 
-## 채택하지 않은 지표 (검토 후 제외)
+| 항목 | 점수 |
+|---|---:|
+| 현재 적격 holder value 기반 가치포획 | 8 |
+| FDV/Mcap 희석 | 5 |
+| 24시간 거래 유동성 | 4 |
+| 데이터 완성도·신선도 | 3 |
 
-- **NVT** (시총÷거래량): "크립토 PER"이라 불리지만 거래량이 없는 섹터(Lending 등)엔 무의미.
-- **Real Yield** (홀더수익÷시총, %): P/HR의 역수라 정보 중복.
+적격 holder-value run-rate의 매출/수수료 분모가 없으면 귀속 비율을 100%로 가정하지 않고 결측으로 둔다. 적격 현재 흐름이 없는 fee burn·ve/voter/locker·불명확 row에는 holder-value 점수를 주지 않는다.
+
+## 3. 상태와 신뢰도
+
+- `발굴 후보`: 80점 이상, 모든 게이트 통과, 각 축 50% 이상, 신뢰도 B 이상.
+- `관찰`: 65점 이상.
+- `근거 부족`: 50~64점.
+- `제외`: 50점 미만.
+- `가치 함정`: 가치 축은 높지만 개선 축이 약함.
+- `재평가 진행 중`: 펀더멘털은 개선되지만 30/60일 가격이 이미 크게 상승.
+- `데이터 보류`: 필수 게이트 실패.
+- `신규 프로젝트`: CMC 상장 90일 미만.
+
+신뢰도 A/B/C는 점수와 분리한다. canonical CMC 연결, 시장 데이터, FDV, 섹터 백분위, 각 현금흐름 변화, 60일 섹터 표본, 1년 가격 데이터의 가용 비율로 산출한다.
+
+## 4. 데이터 소스
+
+- DefiLlama: fees, revenue, holders revenue, `HoldersRevenue` 방법론, `doublecounted`, TVL, 프로젝트/parent 구조
+- CoinMarketCap Keyless Public API: canonical ID, 가격, 시총, FDV, 24시간 거래량, 7/30/60/90일 변화
+- CoinGecko: 명시적 `gecko_id`가 있는 자산의 1년·ATH·ATL 보조값
+
+ATH·ATL은 참고 열이며 점수에는 사용하지 않는다.
+`updatedAt`은 수집과 점수 계산이 끝난 시각이다. 시장 데이터 신선도 판정과 화면 표시는 CMC가 제공한 행별 `last_updated` 및 그 범위를 사용한다. DefiLlama 집계 응답에는 모든 행에 공통으로 적용할 수 있는 원천 갱신 시각이 없으므로 계산 시각을 DefiLlama 원천 시각으로 해석하지 않는다.

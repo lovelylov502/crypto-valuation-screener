@@ -1,15 +1,27 @@
 import { describe, expect, it } from "vitest";
 import {
   clampRangePosition,
-  isNewCandidate,
-  isNewListing,
+  hasEligibleCurrentHolderValue,
   matchesRange,
   parseFavoriteSlugs,
   parseStoredSelection,
-  scoreRangeForPreset,
   serializeFavoriteSlugs,
   serializeStoredSelection,
 } from "./screenerFilters";
+
+describe("hasEligibleCurrentHolderValue", () => {
+  it("requires a positive eligible current run-rate and ignores positive raw TTM", () => {
+    expect(
+      hasEligibleCurrentHolderValue({ eligibleRunRate: null, rawTtm: 25_657_324 }),
+    ).toBe(false);
+    expect(
+      hasEligibleCurrentHolderValue({ eligibleRunRate: 0, rawTtm: 554_426_081 }),
+    ).toBe(false);
+    expect(
+      hasEligibleCurrentHolderValue({ eligibleRunRate: 12_166_667, rawTtm: 1_000_000 }),
+    ).toBe(true);
+  });
+});
 
 describe("clampRangePosition", () => {
   it("prevents the minimum handle from crossing the maximum handle", () => {
@@ -21,73 +33,11 @@ describe("clampRangePosition", () => {
   });
 });
 
-describe("scoreRangeForPreset", () => {
-  it("sets the undervalued preset to scores of 80 and above", () => {
-    expect(scoreRangeForPreset("undervalued")).toEqual({ min: 80, max: 0 });
-  });
-
-  it("sets the overvalued preset to scores of 20 and below", () => {
-    expect(scoreRangeForPreset("overvalued")).toEqual({ min: 0, max: 20 });
-  });
-});
-
 describe("matchesRange", () => {
   it("applies optional bounds and rejects missing values when a bound is active", () => {
     expect(matchesRange(null, 80, 0)).toBe(false);
     expect(matchesRange(85, 80, 0)).toBe(true);
     expect(matchesRange(21, 0, 20)).toBe(false);
-  });
-});
-
-describe("isNewListing", () => {
-  const reference = "2026-07-15T12:00:00.000Z";
-
-  it("marks listings from the last 30 days as new", () => {
-    const listedAt = Date.parse("2026-07-01T00:00:00.000Z") / 1000;
-    expect(isNewListing(listedAt, reference)).toBe(true);
-  });
-
-  it("rejects old, missing, and future listing timestamps", () => {
-    expect(isNewListing(Date.parse("2026-05-01T00:00:00.000Z") / 1000, reference)).toBe(false);
-    expect(isNewListing(null, reference)).toBe(false);
-    expect(isNewListing(Date.parse("2026-07-16T00:00:00.000Z") / 1000, reference)).toBe(false);
-  });
-});
-
-describe("isNewCandidate", () => {
-  const referenceIso = "2026-07-15T12:00:00.000Z";
-
-  it("detects a recently listed project", () => {
-    expect(isNewCandidate({
-      listedAt: Date.parse("2026-07-01T00:00:00.000Z") / 1000,
-      referenceIso,
-      feesChange7d: null,
-      fees30d: null,
-      revenue30d: null,
-      holderRevenue30d: null,
-    })).toBe(true);
-  });
-
-  it("detects an active project with at least 50 percent weekly fee growth", () => {
-    expect(isNewCandidate({
-      listedAt: null,
-      referenceIso,
-      feesChange7d: 50,
-      fees30d: 12_000,
-      revenue30d: null,
-      holderRevenue30d: null,
-    })).toBe(true);
-  });
-
-  it("rejects old projects whose activity is too small", () => {
-    expect(isNewCandidate({
-      listedAt: null,
-      referenceIso,
-      feesChange7d: 200,
-      fees30d: 9_999,
-      revenue30d: null,
-      holderRevenue30d: null,
-    })).toBe(false);
   });
 });
 

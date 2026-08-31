@@ -92,3 +92,52 @@
 - 별표는 브라우저 `localStorage`에 저장하고 `★ 관심만` 체크 필터를 추가.
 - DefiLlama 최근 30일 등록 또는 7일 수수료 50% 이상 성장·30일 현금흐름 $10K 이상을 `신규 감지`로 표시.
 - `신규만` 체크 필터를 추가하고 신규 판정·관심종목 직렬화 로직을 순수 함수 테스트로 검증.
+
+## 12. Holder value 30일 정규화·경제유형 분리
+
+- 사용자 피드백으로 DefiLlama `dailyHoldersRevenue`의 `total1y` 우선 사용과 모든 child 무차별 합산이 비교 불가능한 P/HR을 만든다는 점을 확인했다.
+- `lib/holderValue.ts`를 추가해 child 방법론을 직접 분배·시장매입·매입+소각·수수료 소각·ve/voter/locker·불명확으로 분류했다. 분류는 `defillama-derived`이며 공식·온체인 검증으로 표시하지 않는다.
+- 일반 P/HR과 holder-value 점수는 직접 분배·시장매입·매입+소각의 최근 30일 합계만 `×365/30`으로 연환산한다. raw TTM과 제외 합계·component는 별도 보존한다.
+- 적격 최근 30일이 0/누락인데 TTM이 양수면 P/HR을 만들지 않고 중단·불연속 경고를 남긴다. 적격 추세도 최근/직전 30일의 같은 component 집합끼리 비교한다.
+- fees·revenue·holder revenue·volume parent 합산에서 `doublecounted === true` row를 제외했다.
+- UI에 `현재 홀더가치/년` 기본 열, `원천 HR TTM` 선택 열, 경제유형·DL 파생·경고, 적격 current 기준의 `현재 홀더가치만` 필터를 연결했다.
+- 점수 버전을 `rediscovery-v2-holder-value`로 올렸다. 이전 작업 이력의 `홀더수익/년`·과거 P/HR 수치는 당시 구현 기록이며 현재 의미가 아니다.
+- TDD RED는 미구현 분류 모듈, `doublecounted` 미제외, raw TTM 기반 P/HR, fee-burn 포획점수, raw 추세, holder-only 필터, UI 열 계약, 표시명, metadata rename·TTM 비교비율에서 각각 확인했다. GREEN 후 전체 44개 테스트가 통과했다.
+- 실데이터 변환은 666행·약 1.72MB였고, canonical API readback은 666행·1,902,074바이트였다.
+- 프로덕션 배포 `dpl_CYQd1JspKrpYAJeS4N4hrrttumKy`, 고유 URL `https://crypto-valuation-screener-6u4zczrzk-bodycation.vercel.app`, canonical alias `https://crypto-valuation-screener.vercel.app`를 확인했다.
+- 로컬·canonical 데스크톱/390×844 모바일에서 열·tooltip·Aave/Canton/Aerodrome 경고·내부 표 스크롤·문서 overflow·console error를 확인했다.
+
+## 13. Holder-value classifier 독립 감사 후 경계 강화
+
+- 첫 배포 `dpl_CYQd1JspKrpYAJeS4N4hrrttumKy`는 독립 read-only 감사에서 매입·직접분배 false negative와 voter 제한 false positive가 확인돼 최종 승인하지 않았다.
+- strict TDD로 Lido·Kodiak V3의 `bought back`/open-market buy 문법, Yearn·Sushi·GMX·Tectonic·send.fun의 명시적 staker 분배, Ramses·Aquarius의 `holders who vote/voted`, NEAR의 `not burned`, Pump의 incidental burn, 부정·vague·혼합 수익자 문구를 회귀 고정했다.
+- 첫 classifier RED는 34개 중 13개 실패, live 전수검사에서 찾은 혼합 수익자·명시적 매입토큰 소각 회귀의 두 번째 RED는 52개 중 18개 실패였다. 이후 live 전후 차이 감사에서 찾은 과잉 제외 6개를 대표하는 세 번째 RED는 56개 중 4개 실패였다. 수정 후 holder-value 테스트 56개가 통과했다.
+- live `dailyHoldersRevenue` 1,002행 중 금액이 있고 `doublecounted`가 아닌 422행을 모두 검사했다. 최종 분류는 eligible 178행(직접분배 61·시장매입 66·매입+소각 51), 제외 244행(ve/voter/locker 66·수수료 소각 46·불명확 132)이었다. eligible의 부정/제한 표식과 LP/referrer/trader/raffle/PoL 표식은 모두 0행이었다.
+- 점수 대상 집합이 바뀌어 버전을 `rediscovery-v3-holder-classifier`로 올렸다. 전체 85개 테스트·typecheck·production build 후 `dpl_CWm85spvnfYJocqyoYyLcvj138kA`를 배포했다.
+- canonical API는 664행·1,741,502바이트·PRERENDER였고 scoreVersion과 대표 parent/component 합계, Venice 과잉 제외 복구를 확인했다. 고유 URL은 Deployment Protection으로 보호돼 token 기반 `vercel curl`로 같은 readback을 확인했다.
+- canonical 1440×900/390×844 브라우저 스모크에서 열·TTM 선택·tooltip·대표 경고·holder-only 필터·내부 표 스크롤·문서 overflow·console error를 확인했다.
+
+## 14. Holder-flow 부정·중단 P0 보완
+
+- 두 번째 독립 read-only 감사에서 배포 `dpl_CWm85spvnfYJocqyoYyLcvj138kA`가 `Fees are not distributed to holders`, `holders do not receive fees`, `no fees go to stakers`, `distributions have ended` 같은 문장을 직접분배로 오분류하는 P0를 확인해 승인하지 않았다.
+- strict TDD 기준선은 holder-value 56개 통과였다. production 변경 전 첫 test-only RED는 85개 중 11개가 실제 `direct_distribution` false positive로 실패했고, 전용 제외 사유까지 고정하자 18개가 실패했다. 첫 수정 후 85개가 통과했다.
+- adversarial probe에서 축약형, `no longer go`, `stopped paying`, `fee sharing ... ceased` 8개 경계를 추가로 찾았다. 두 번째 test-only RED는 93개 중 8개 실패였고, 최종 holder-value GREEN은 93개 통과다.
+- holder/staker 지급 문장 안의 부정·중단만 문장 경계로 검사한다. unrelated burn negation은 건드리지 않아 NEAR Intents는 `market_buyback`, Pump의 onchain burn 조달 문구도 `market_buyback`으로 보존한다.
+- 부정·중단 adversarial corpus 34개와 NEAR·Hyperliquid·Lido·Kodiak·Yearn·Sushi·Ramses·Aquarius·Pump·Pancake·Venice 보존 corpus 11개가 모두 통과했다.
+- live `dailyHoldersRevenue` 1,002행 중 금액이 있고 비중복인 422행을 다시 검사했다. eligible 178행(직접분배 61·시장매입 66·매입+소각 51)의 holder-flow 부정, vote/bribe/gauge/locker, LP/referrer/trader/raffle/PoL 위험 표식은 각각 0행이었다.
+- 전체 검증은 6 files·122 tests, typecheck, production build가 통과했다. 점수 공식·대상 의미를 바꾸지 않은 classifier bugfix라 `rediscovery-v3-holder-classifier`를 유지한다.
+- production `dpl_9EejUd7cfdMGahBKPZ42U8aWrgUL`(`https://crypto-valuation-screener-cpifn4tgh-bodycation.vercel.app`)을 배포하고 canonical alias의 `/`·`/api/screener` HTTP 200, Ready, 664행·1,741,573 raw bytes·새 `updatedAt`, protected deployment의 token readback을 확인했다.
+- canonical 1440×900/390×844 smoke는 문서 overflow 0, 표 내부 스크롤, holder/TTM label·tooltip, Aave/Canton/Aerodrome 경고, console error 0을 확인했다. HANDOFF의 favicon·외부 DefiLlama 아이콘 비차단 404 구분은 유지한다.
+
+## 15. Wrong-source 프로덕션 롤백 방지
+
+- 2026-08-31, 폐기된 `C:\Users\TAE\Workspace\projects\taegyu\holder revenue` 체크아웃이 canonical과 같은 Vercel project/team에 연결된 채 배포돼 라이브가 구형 UI로 되돌아간 사실을 확인했다.
+- canonical `C:\Users\TAE\Workspace\projects\hermes\crypto-valuation-screener`의 `65ac2bc41917eb26f435d3d947ca151c9eed7698` 위에 있던 source/doc 변경은 초기 상태와 전체 diff를 확인한 뒤 그대로 보존했다.
+- `scripts/deploy-contract.mjs`에 canonical 실경로, Git fetch/push 원격, Vercel project/team/name, legacy 금지 경로를 고정했다. 경로를 복제하고 동일한 `.vercel/project.json`을 넣어도 root 검사를 통과할 수 없다.
+- `npm run deploy:production`은 preflight, 결정론적 양성·음성 probe, 전체 테스트, TypeScript, production build, `git diff --check`, Vercel 배포, canonical live readback을 순서대로 실행한다.
+- canonical `/`는 `발굴 후보`·`65+ 전체`·`데이터 보류`를 요구하고 구형 프리셋을 거부한다. `/api/screener`는 score version, 고급 행 필드, 4.5MB 미만 payload를 확인한다.
+- legacy 루트의 `.vercel/project.json`만 제거하고 루트 `AGENTS.md`와 `LEGACY_DEPLOYMENT_BLOCKED.md`를 추가했다. source와 `.git` 이력은 보존했다. 실제 legacy 루트에서 preflight를 실행해 `BLOCKED_LEGACY_ROOT`와 종료 코드 1을 확인했다.
+- canonical preflight는 `recovery-production`의 `65ac2bc41917eb26f435d3d947ca151c9eed7698`와 보존된 작업 트리에서 통과했다. 배포 안전 probe 5개, Vitest 122개(6 files), TypeScript, production build, `git diff --check`도 모두 통과했다.
+- production `dpl_BDFVzUPp6G48q8GdzSuV4NaaLqkA`(`https://crypto-valuation-screener-iq34mxvpb-bodycation.vercel.app`)을 배포했다. Vercel API에서 `READY`·production target·예상 project/team·canonical alias를 확인했다.
+- canonical `/`는 HTTP 200·HIT·2,200,011바이트이며 고급 UI 표식 3개가 있고 구형 표식은 없다. `/api/screener`는 HTTP 200·HIT·687행·1,802,734바이트·`scoreVersion=rediscovery-v3-holder-classifier`·`updatedAt=2026-08-31T02:27:58.197Z`였다.
+- Windows 터미널 자식 출력에 기존 인증값이 나타날 수 있는 경로를 발견해 해당 토큰을 폐기하고 프로젝트 범위 토큰으로 교체했다. 기존 토큰은 HTTP 403, 교체 토큰은 예상 project/team HTTP 200이었다. 배포 래퍼는 CLI 출력을 캡처·마스킹하며 이 동작을 회귀 probe로 고정했다.
