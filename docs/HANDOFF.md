@@ -54,6 +54,7 @@
 - 배포 안전 probe 6개, Vitest 122개(6 files), `npx tsc --noEmit`, `NODE_OPTIONS=--use-system-ca npm run build`, `git diff --check`가 통과했다. 안전한 임시 noncanonical Git fixture는 같은 remote·Vercel link를 복제해도 `WRONG_WORKING_DIRECTORY`·`WRONG_GIT_ROOT`와 종료 코드 1로 실패했고 검사 뒤 제거했다.
 - 로컬 production UI는 1440×900과 390×844에서 고급 표식, 프리셋·검색·열 선택·페이지 이동·필터 패널, 문서 overflow 0, 표 내부 가로 스크롤, console error 0을 확인했다.
 - Vercel API readback은 배포 상태 `READY`, target `production`, 예상 project/team, Git SHA `81314f796f1830c094cc72fd11d52f8cfab0588b`, canonical alias를 확인했다.
+- 고유 배포 URL은 Vercel Login 보호 화면을 반환한다. 공개 검증 경로는 canonical alias이며, 고유 배포의 상태·identity·alias는 authenticated Vercel API와 배포 CLI로 확인했다.
 - canonical `/`: HTTP 200, `X-Vercel-Cache: HIT`, 2,194,351바이트. `발굴 후보`·`65+ 전체`·`데이터 보류`가 있고 `저평가 80+`·`고평가 20 이하`는 없다.
 - canonical `/api/screener`: HTTP 200, `X-Vercel-Cache: HIT`, 685행·1,797,606바이트, `scoreVersion=rediscovery-v3-holder-classifier`, 고급 row fields, `updatedAt=2026-08-31T02:49:16.805Z`를 확인했다.
 - 라이브 브라우저는 데스크톱에서 `데이터 보류`를 눌러 530개 결과와 pressed 상태를 확인했다. 모바일은 390×844에서 문서 overflow 0, 338px 컨테이너 안 1,087px 표의 내부 스크롤, 고급 표식 3개·구형 표식 0개·console error 0을 확인했다.
