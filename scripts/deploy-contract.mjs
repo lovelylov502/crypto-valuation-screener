@@ -10,7 +10,6 @@ export const DEPLOY_CONTRACT = Object.freeze({
     projectId: "prj_zOmxeQWmBjp5MAUmmYFALM8AC6Cc",
     orgId: "team_2dxBFycQaaHuXjESEf0kCkFG",
     projectName: "crypto-valuation-screener",
-    scope: "bodycation",
   }),
   liveBaseUrl: "https://crypto-valuation-screener.vercel.app",
   scoreVersion: "rediscovery-v3-holder-classifier",

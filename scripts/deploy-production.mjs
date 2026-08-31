@@ -18,7 +18,14 @@ function run(label, executable, args, env) {
   }
 }
 
-function runWithRedactedOutput(label, executable, args, env, sensitiveValues) {
+function runWithRedactedOutput(
+  label,
+  executable,
+  args,
+  env,
+  sensitiveValues,
+  { printOnSuccess = true } = {},
+) {
   console.log(`[deploy-production] ${label}`);
   const result = spawnSync(executable, args, {
     cwd: DEPLOY_CONTRACT.canonicalRoot,
@@ -26,11 +33,13 @@ function runWithRedactedOutput(label, executable, args, env, sensitiveValues) {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
-  if (result.stdout) {
-    process.stdout.write(redactSensitiveOutput(result.stdout, sensitiveValues));
-  }
-  if (result.stderr) {
-    process.stderr.write(redactSensitiveOutput(result.stderr, sensitiveValues));
+  if (printOnSuccess || result.status !== 0 || result.error) {
+    if (result.stdout) {
+      process.stdout.write(redactSensitiveOutput(result.stdout, sensitiveValues));
+    }
+    if (result.stderr) {
+      process.stderr.write(redactSensitiveOutput(result.stderr, sensitiveValues));
+    }
   }
   if (result.error) throw result.error;
   if (result.status !== 0) {
@@ -90,23 +99,30 @@ const env = {
 try {
   await assertRemoteVercelProject(token);
   run("local gates", process.execPath, [npmCli, "run", "verify:local"], env);
+  const vercelDeployArgs = [
+    npmCli,
+    "exec",
+    "--yes",
+    "--package",
+    VERCEL_CLI_PACKAGE,
+    "--",
+    "vercel",
+    "deploy",
+    "--prod",
+    "--yes",
+  ];
+  runWithRedactedOutput(
+    "Vercel CLI dry run",
+    process.execPath,
+    [...vercelDeployArgs, "--dry"],
+    env,
+    [token],
+    { printOnSuccess: false },
+  );
   runWithRedactedOutput(
     "Vercel production deploy",
     process.execPath,
-    [
-      npmCli,
-      "exec",
-      "--yes",
-      "--package",
-      VERCEL_CLI_PACKAGE,
-      "--",
-      "vercel",
-      "deploy",
-      "--prod",
-      "--yes",
-      "--scope",
-      DEPLOY_CONTRACT.vercel.scope,
-    ],
+    vercelDeployArgs,
     env,
     [token],
   );

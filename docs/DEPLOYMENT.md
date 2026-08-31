@@ -23,7 +23,7 @@ This is the only documented normal production command. It runs, in order:
 1. resolved root, Git fetch/push remote, local Vercel linkage, clean synchronized `main`, and authenticated remote project/team preflight;
 2. deterministic pass, duplicate-root, legacy-root, branch/worktree/sync, remote-drift, Vercel-drift, and credential-output-redaction probes;
 3. all Vitest tests, TypeScript, production build, and `git diff --check`;
-4. a pinned Vercel CLI production deploy to scope `bodycation`;
+4. an authenticated pinned-CLI `--dry` check followed by production deployment through the verified local project/team link;
 5. independent readback of the canonical `/` and `/api/screener` URLs.
 
 The wrapper captures and redacts Vercel CLI child output. Do not replace that subprocess with inherited terminal output or print command arguments containing credentials.
