@@ -1,0 +1,36 @@
+name: Daily screener observations
+
+on:
+  schedule:
+    - cron: "17 0 * * *" # Daily at 09:17 KST.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screener-observations
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --no-audit --no-fund
+      - run: npm run snapshot:capture
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: screener-${{ github.run_id }}-${{ github.run_attempt }}
+          path: snapshot-output/
+          retention-days: 60
+          if-no-files-found: error
+      - name: Warm the existing website cache
+        run: node scripts/warm-screener.mjs

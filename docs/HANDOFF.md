@@ -1,5 +1,9 @@
 # Handoff
 
+## 2026-09-09 daily collection activation
+
+The user authorized adding the GitHub CLI `workflow` scope and selected one run per day. The restored workflow now schedules collection and website cache warming at 00:17 UTC / 09:17 KST. It keeps 60 days of observation artifacts on a standard Ubuntu runner with read-only repository permission. GitHub account reauthentication, workflow publication and a hosted manual-run verification are pending at this preparation step. The website application build remains the deployed v4 release below.
+
 ## 2026-09-09 production deployment — v4
 
 V4 is deployed at https://crypto-valuation-screener.vercel.app. The user explicitly authorized publication. Source commit: `bc9f614a35443da6dfe8ecaef0e27c7053a90285`; deployment ID: `dpl_4CxPS1VCdBrZykwNEBUT1guhZd19`; unique URL: https://crypto-valuation-screener-2ir0bkdnw-bodycation.vercel.app. The authenticated Vercel API confirms `READY`, production, the expected project/team, this source commit and the canonical alias. This receipt is a later documentation-only change, not a different application build.
@@ -8,7 +12,7 @@ V4 is deployed at https://crypto-valuation-screener.vercel.app. The user explici
 
 Live browser verification covered the three signal cards, the transition filter (3/696), Lido's same-period detail, Escape close and restored unfiltered results. Browser error/warning logs were empty. The public website is open for user feedback. Deployment logs, selected authenticated identity fields, readback data and the public-site screenshot are retained outside the repository in `C:\Users\TAE\Documents\Codex\2026-09-08\crypto-screener-overhaul` (`deployment-2026-09-09.log`, `deployment-receipt-2026-09-09.json`, `12-deployed-public-site.png`).
 
-Unattended twice-daily collection is **not active**. GitHub rejected the workflow push because the active OAuth credential lacks `workflow` scope. The complete `.github/workflows/daily-snapshot.yml` is preserved in local branch `codex/screener-signal-ux-overhaul` at `ad6afc1722e1d768ad88755f7e9efbcfcfe75b89`. After the user authorizes the additional credential scope, restore only that workflow file from the preserved commit, review/commit/push it to `main`, then manually dispatch it and verify capture, artifact upload and website warming. Website request-based refresh and manual refresh are already deployed.
+At the initial website deployment, unattended collection was not active: GitHub rejected the workflow push because the OAuth credential lacked `workflow` scope. The original twice-daily workflow was preserved at `ad6afc1722e1d768ad88755f7e9efbcfcfe75b89` on local branch `codex/screener-signal-ux-overhaul`. The newer daily-collection section above supersedes that initial plan. Website request-based refresh and manual refresh were included in the v4 deployment.
 
 ## 2026-09-08 implementation handoff — v4
 

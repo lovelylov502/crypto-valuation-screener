@@ -13,7 +13,7 @@
 - Automatic and manual refresh, visible source status, bounded ISR retry, and last-good-table retention on failure.
 - A compact responsive table, searchable filters, persistent favorites and column choices, and an accessible coin detail panel for conditions and calculation evidence.
 - Previous-view comparisons and up to 60 days of browser observations, with JSON export.
-- Twice-daily GitHub observation artifacts and website cache warming, active once merged into the default branch. No new paid data service.
+- Daily GitHub observation artifacts and website cache warming at 09:17 KST, active once the workflow reaches the default branch. No new paid data service.
 
 The current rule version is `research-v4-same-window`. Scores are experimental and holder-centric; they are not the eligibility rule for the independent signal views. Field completeness is not a return probability. Conditional ve/voter flows remain outside general P/HR but can be discovered separately.
 
