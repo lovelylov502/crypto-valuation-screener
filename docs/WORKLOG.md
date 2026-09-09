@@ -1,5 +1,11 @@
 # 작업 이력
 
+## 2026-09-09 — v4 production publication
+
+Published commit `bc9f614` through `npm run deploy:production`; deployment `dpl_4CxPS1VCdBrZykwNEBUT1guhZd19` is READY at the canonical public URL. All local gates and public page/API readback passed (696 rows, 2,213,583 API bytes). Live browser filtering and same-period detail passed with no console errors or warnings. Full deployment identity and evidence locations are in HANDOFF.md.
+
+GitHub rejected publication of the new workflow because the active credential lacks `workflow` scope. Preserved the complete workflow at local branch `codex/screener-signal-ux-overhaul`, commit `ad6afc1`, and published the web application separately. Twice-daily unattended collection remains pending user authorization of the additional credential scope; request-based and manual website refresh are live.
+
 ## 2026-09-08 — signal and UX overhaul
 
 Implemented the agreed broader discovery scope and refreshed the single-table experience. Added explicit source/refresh states, independent business/holder/transition observations, conservative zero/missing aggregation, same-window cashflow multiples and measured holder ratios, conditional-holder visibility, previous-view history and immutable daily collection receipts. Revised the production readback contract to v4 markers without changing source/deployment identity safeguards.

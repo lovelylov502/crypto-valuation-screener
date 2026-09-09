@@ -1,8 +1,14 @@
 # Handoff
 
-## 2026-09-09 publication preparation
+## 2026-09-09 production deployment — v4
 
-The user explicitly authorized production deployment. GitHub rejected the first push because the active OAuth credential lacks `workflow` scope. The complete implementation, including `.github/workflows/daily-snapshot.yml`, is preserved in local branch `codex/screener-signal-ux-overhaul` at `ad6afc1722e1d768ad88755f7e9efbcfcfe75b89`. The web application and capture scripts are being published from `main`; the workflow is deferred until credential authorization is available. Unattended collection is not active. The canonical deployment wrapper and live readback remain required before reporting publication success.
+V4 is deployed at https://crypto-valuation-screener.vercel.app. The user explicitly authorized publication. Source commit: `bc9f614a35443da6dfe8ecaef0e27c7053a90285`; deployment ID: `dpl_4CxPS1VCdBrZykwNEBUT1guhZd19`; unique URL: https://crypto-valuation-screener-2ir0bkdnw-bodycation.vercel.app. The authenticated Vercel API confirms `READY`, production, the expected project/team, this source commit and the canonical alias. This receipt is a later documentation-only change, not a different application build.
+
+`npm run deploy:production` passed the clean synchronized canonical `main` proof, remote Vercel identity, 138 application tests, six deployment-contract tests, TypeScript, production build, pinned CLI dry run, deployment and canonical readback. The page returned HTTP 200, 2,539,479 bytes and all five v4 markers. The API returned HTTP 200, `research-v4-same-window`, 696 rows and 2,213,583 bytes, with `updatedAt=2026-09-09T00:57:07.224Z`. All ten source observations succeeded; CMC quote timestamps ranged from 00:55 to 00:56 UTC.
+
+Live browser verification covered the three signal cards, the transition filter (3/696), Lido's same-period detail, Escape close and restored unfiltered results. Browser error/warning logs were empty. The public website is open for user feedback. Deployment logs, selected authenticated identity fields, readback data and the public-site screenshot are retained outside the repository in `C:\Users\TAE\Documents\Codex\2026-09-08\crypto-screener-overhaul` (`deployment-2026-09-09.log`, `deployment-receipt-2026-09-09.json`, `12-deployed-public-site.png`).
+
+Unattended twice-daily collection is **not active**. GitHub rejected the workflow push because the active OAuth credential lacks `workflow` scope. The complete `.github/workflows/daily-snapshot.yml` is preserved in local branch `codex/screener-signal-ux-overhaul` at `ad6afc1722e1d768ad88755f7e9efbcfcfe75b89`. After the user authorizes the additional credential scope, restore only that workflow file from the preserved commit, review/commit/push it to `main`, then manually dispatch it and verify capture, artifact upload and website warming. Website request-based refresh and manual refresh are already deployed.
 
 ## 2026-09-08 implementation handoff — v4
 
