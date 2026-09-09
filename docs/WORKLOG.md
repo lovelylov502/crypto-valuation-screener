@@ -1,5 +1,9 @@
 # 작업 이력
 
+## 2026-09-09 — daily collection enabled
+
+Added the user-authorized GitHub CLI `workflow` scope after account reauthentication, restored the workflow and changed the schedule to one daily run at 09:17 KST. Published workflow commit `422829b`; GitHub workflow `353641950` is active on `main`. The hosted manual run `34303173744` passed collection (697 rows, zero source failures), upload and website warming. Downloaded artifact payload hashes and exact Git rule hashes passed; canonical page/API verification also passed. Evidence and artifact retention are recorded in HANDOFF.md. Application code and its production deployment were unchanged in this step.
+
 ## 2026-09-09 — v4 production publication
 
 Published commit `bc9f614` through `npm run deploy:production`; deployment `dpl_4CxPS1VCdBrZykwNEBUT1guhZd19` is READY at the canonical public URL. All local gates and public page/API readback passed (696 rows, 2,213,583 API bytes). Live browser filtering and same-period detail passed with no console errors or warnings. Full deployment identity and evidence locations are in HANDOFF.md.

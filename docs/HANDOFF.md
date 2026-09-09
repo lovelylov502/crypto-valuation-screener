@@ -2,7 +2,11 @@
 
 ## 2026-09-09 daily collection activation
 
-The user authorized adding the GitHub CLI `workflow` scope and selected one run per day. The restored workflow now schedules collection and website cache warming at 00:17 UTC / 09:17 KST. It keeps 60 days of observation artifacts on a standard Ubuntu runner with read-only repository permission. GitHub account reauthentication, workflow publication and a hosted manual-run verification are pending at this preparation step. The website application build remains the deployed v4 release below.
+Daily collection is active. The user authorized adding the GitHub CLI `workflow` scope, completed GitHub account reauthentication and selected one run per day. `gh auth status` confirmed the added scope; the workflow was pushed to default branch `main` at `422829b047c16b19647633d29baa454c4aec9eba`. GitHub reports workflow `353641950` as `active`, with one schedule at 00:17 UTC / 09:17 KST. It keeps 60 days of observation artifacts on a standard Ubuntu runner with read-only repository permission. The website application build remains the deployed v4 release below.
+
+The first hosted manual run [34303173744](https://github.com/lovelylov502/crypto-valuation-screener/actions/runs/34303173744) completed successfully on 2026-09-09 at 02:26:24 UTC. Dependency installation, collection, artifact upload and website cache warming all passed. Collection produced 697 screenable rows with zero source failures. Artifact `10085670774` (`screener-34303173744-1`) is 1,155,527 bytes and expires on 2026-11-08. After download, all three payload hashes matched the manifest; all six rule-file hashes matched the exact Git source and `worktreeDirty` was false.
+
+`npm run verify:production` also passed: both canonical endpoints returned HTTP 200, the page retained all five v4 markers, and the API returned 697 rows in 2,216,880 bytes with `research-v4-same-window`. The web snapshot and the scheduled archive have independent collection timestamps; the warming job confirms a matching-version API snapshot less than 30 minutes old. Logs, downloaded artifacts and `artifact-verification.json` are retained outside the repository at `C:\Users\TAE\Documents\Codex\2026-09-09\crypto-screener-daily-run-34303173744`. The daily cron is configured; this receipt proves the manual hosted run, not a future scheduled run.
 
 ## 2026-09-09 production deployment — v4
 
