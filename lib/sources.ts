@@ -1,4 +1,4 @@
-import type { CoinRaw, IdentityStatus } from "./types";
+import type { CoinRaw, IdentityStatus, SourceObservation } from "./types";
 import {
   aggregateHolderValueByGroup,
   emptyHolderValueSummary,
@@ -24,20 +24,29 @@ const GECKO_PAGES = 4; // 상위 ~1000개
 
 type Json = Record<string, unknown>;
 
-async function getJson<T>(url: string, revalidate: number): Promise<T> {
+async function getJson<T>(url: string, revalidate: number, observations: SourceObservation[]): Promise<T> {
+  try {
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch(url, {
       next: { revalidate },
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(30_000),
     });
-    if (res.ok) return (await res.json()) as T;
+    if (res.ok) {
+      const result = (await res.json()) as T;
+      observations.push({ url, observedAt: new Date().toISOString(), status: "ok" });
+      return result;
+    }
     if (res.status !== 429 || attempt === 2) {
       throw new Error(`fetch ${url} -> ${res.status}`);
     }
     await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
   }
   throw new Error(`fetch ${url} failed`);
+  } catch (error) {
+    observations.push({ url, observedAt: new Date().toISOString(), status: "error" });
+    throw error;
+  }
 }
 
 const num = (v: unknown): number | null =>
@@ -46,16 +55,6 @@ const str = (v: unknown): string | null =>
   typeof v === "string" && v.length > 0 ? v : null;
 const normalize = (v: string): string =>
   v.toLowerCase().replace(/[^a-z0-9]/g, "");
-
-// fees/revenue/volume용: total1y 우선, 없으면 30일 연율화.
-// holder value는 이 함수를 쓰지 않고 lib/holderValue.ts에서 적격 30일만 연환산한다.
-function annualize(p: Json): number | null {
-  const y = num(p.total1y);
-  if (y !== null && y > 0) return y;
-  const m = num(p.total30d);
-  if (m !== null && m > 0) return (m * 365) / 30;
-  return null;
-}
 
 // "parent#hyperliquid" → "Hyperliquid"
 function prettyParent(key: string): string {
@@ -67,24 +66,32 @@ function prettyParent(key: string): string {
 }
 
 // DefiLlama overview 응답을 raw 배열로 (parentProtocol 필드 접근 위해)
-async function fetchOverviewList(path: string): Promise<Json[]> {
+async function fetchOverviewList(path: string, observations: SourceObservation[]): Promise<Json[]> {
   const url = `${LLAMA}${path}${path.includes("?") ? "&" : "?"}excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true`;
-  const data = await getJson<{ protocols?: Json[] }>(url, TTL_DEFILLAMA);
-  return data.protocols ?? [];
+  const data = await getJson<{ protocols?: Json[] }>(url, TTL_DEFILLAMA, observations);
+  if (!Array.isArray(data.protocols) || data.protocols.length === 0) {
+    const observation = observations.find(s => s.url === url);
+    if (observation) observation.status = "error";
+    throw new Error("DefiLlama overview is empty");
+  }
+  return data.protocols;
 }
 
 // CoinGecko 상위 코인: 명시적 gecko_id 보강용
-async function fetchGecko(): Promise<{ byId: Map<string, Json> }> {
+async function fetchGecko(observations: SourceObservation[]): Promise<{ byId: Map<string, Json> }> {
   const byId = new Map<string, Json>();
   for (let page = 1; page <= GECKO_PAGES; page++) {
     const url = `${GECKO}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${page}&price_change_percentage=7d,14d,30d,1y`;
     try {
-      const rows = await getJson<Json[]>(url, TTL_COINGECKO);
+      const rows = await getJson<Json[]>(url, TTL_COINGECKO, observations);
+      if (!Array.isArray(rows) || rows.length === 0) throw new Error("CoinGecko response is empty");
       for (const r of rows) {
         const id = str(r.id);
         if (id) byId.set(id, r);
       }
     } catch {
+      const observation = observations.find(s => s.url === url);
+      if (observation) observation.status = "error";
       break; // 레이트리밋/실패 시 부분 보강 — FDV는 옵셔널
     }
   }
@@ -97,7 +104,8 @@ interface CmcIndex {
   bySymbol: Map<string, Json[]>;
 }
 
-async function fetchCmc(): Promise<CmcIndex> {
+async function fetchCmc(observations: SourceObservation[]): Promise<CmcIndex> {
+  const url = `${CMC}/v3/cryptocurrency/listings/latest?start=1&limit=5000&convert=USD`;
   const empty = (): CmcIndex => ({
     bySlug: new Map(),
     byNameSymbol: new Map(),
@@ -105,9 +113,11 @@ async function fetchCmc(): Promise<CmcIndex> {
   });
   try {
     const response = await getJson<{ data?: Json[] }>(
-      `${CMC}/v3/cryptocurrency/listings/latest?start=1&limit=5000&convert=USD`,
+      url,
       TTL_CMC,
+      observations,
     );
+    if (!Array.isArray(response.data) || response.data.length === 0) throw new Error("CMC response is empty");
     const index = empty();
     for (const row of response.data ?? []) {
       const slug = str(row.slug)?.toLowerCase();
@@ -128,6 +138,8 @@ async function fetchCmc(): Promise<CmcIndex> {
     }
     return index;
   } catch {
+    const observation = observations.find(s => s.url === url);
+    if (observation) observation.status = "error";
     return empty();
   }
 }
@@ -195,12 +207,12 @@ function findCmc({
 
 // 한 그룹의 overview 집계 (연율화·30일·직전30일 합산)
 interface Agg {
-  annual: number;
-  y1: number;
-  d7: number;
-  prev7: number;
-  d30: number;
-  prev30: number;
+  annual: number | null;
+  y1: number | null;
+  d7: number | null;
+  prev7: number | null;
+  d30: number | null;
+  prev30: number | null;
   hit: boolean;
 }
 
@@ -219,12 +231,13 @@ export function aggregateOverviewByGroup(
       a = { annual: 0, y1: 0, d7: 0, prev7: 0, d30: 0, prev30: 0, hit: false };
       m.set(k, a);
     }
-    const an = annualize(p); if (an) a.annual += an;
-    const y1 = num(p.total1y); if (y1 && y1 > 0) a.y1 += y1;
-    const d7 = num(p.total7d); if (d7 && d7 > 0) a.d7 += d7;
-    const p7 = num(p.total14dto7d); if (p7 && p7 > 0) a.prev7 += p7;
-    const d30 = num(p.total30d); if (d30 && d30 > 0) a.d30 += d30;
-    const pv = num(p.total60dto30d); if (pv && pv > 0) a.prev30 += pv;
+    const fields = { y1: "total1y", d7: "total7d", prev7: "total14dto7d", d30: "total30d", prev30: "total60dto30d" } as const;
+    for (const key of Object.keys(fields) as (keyof typeof fields)[]) {
+      const value = num(p[fields[key]]);
+      // A partial parent sum is not a complete period. Preserve reported zeros.
+      a[key] = a[key] !== null && value !== null && value >= 0 ? a[key]! + value : null;
+    }
+    a.annual = a.y1 !== null && a.y1 > 0 ? a.y1 : a.d30 !== null ? a.d30 * 365 / 30 : null;
     a.hit = true;
   }
   return m;
@@ -234,15 +247,15 @@ export function aggregateOverviewByGroup(
  * DefiLlama 4종 + CMC + CoinGecko를 조인하되, **parent protocol 단위로 묶어** 집계한다.
  * holder revenue는 child 경제유형을 보존해 적격 최근 30일과 raw TTM을 따로 합산한다.
  */
-export async function fetchCoins(): Promise<CoinRaw[]> {
+export async function fetchCoins(observations: SourceObservation[] = []): Promise<CoinRaw[]> {
   const [protocols, feesL, revL, hrL, dexsL, gecko, cmc] = await Promise.all([
-    getJson<Json[]>(`${LLAMA}/protocols`, TTL_DEFILLAMA),
-    fetchOverviewList("/overview/fees"),
-    fetchOverviewList("/overview/fees?dataType=dailyRevenue"),
-    fetchOverviewList("/overview/fees?dataType=dailyHoldersRevenue"),
-    fetchOverviewList("/overview/dexs"),
-    fetchGecko(),
-    fetchCmc(),
+    getJson<Json[]>(`${LLAMA}/protocols`, TTL_DEFILLAMA, observations),
+    fetchOverviewList("/overview/fees", observations),
+    fetchOverviewList("/overview/fees?dataType=dailyRevenue", observations),
+    fetchOverviewList("/overview/fees?dataType=dailyHoldersRevenue", observations),
+    fetchOverviewList("/overview/dexs", observations),
+    fetchGecko(observations),
+    fetchCmc(observations),
   ]);
 
   // slug → parentProtocol 매핑 (overview에서만 제공됨)
@@ -350,9 +363,9 @@ export async function fetchCoins(): Promise<CoinRaw[]> {
     if (Number.isFinite(cmcListedAt)) listedAt = cmcListedAt / 1000;
 
     const feesChange7 =
-      fees && fees.prev7 > 0 ? ((fees.d7 - fees.prev7) / fees.prev7) * 100 : null;
+      fees && fees.prev7 !== null && fees.prev7 > 0 && fees.d7 !== null ? ((fees.d7 - fees.prev7) / fees.prev7) * 100 : null;
     const feesChange =
-      fees && fees.prev30 > 0 ? ((fees.d30 - fees.prev30) / fees.prev30) * 100 : null;
+      fees && fees.prev30 !== null && fees.prev30 > 0 && fees.d30 !== null ? ((fees.d30 - fees.prev30) / fees.prev30) * 100 : null;
 
     coins.push({
       slug: k,
@@ -387,23 +400,23 @@ export async function fetchCoins(): Promise<CoinRaw[]> {
       athChangePercentage: g ? num(g.ath_change_percentage) : null,
       atlChangePercentage: g ? num(g.atl_change_percentage) : null,
 
-      feesAnnual: fees && fees.annual > 0 ? fees.annual : null,
-      fees1y: fees && fees.y1 > 0 ? fees.y1 : null,
-      fees7d: fees && fees.d7 > 0 ? fees.d7 : null,
-      fees30d: fees && fees.d30 > 0 ? fees.d30 : null,
-      feesPrev30d: fees && fees.prev30 > 0 ? fees.prev30 : null,
+      feesAnnual: fees?.annual ?? null,
+      fees1y: fees?.y1 ?? null,
+      fees7d: fees?.d7 ?? null,
+      fees30d: fees?.d30 ?? null,
+      feesPrev30d: fees?.prev30 ?? null,
       feesChange7dover7d: feesChange7,
       feesChange30dover30d: feesChange,
 
-      revenueAnnual: rev && rev.annual > 0 ? rev.annual : null,
-      revenue1y: rev && rev.y1 > 0 ? rev.y1 : null,
-      revenue30d: rev && rev.d30 > 0 ? rev.d30 : null,
-      revenuePrev30d: rev && rev.prev30 > 0 ? rev.prev30 : null,
+      revenueAnnual: rev?.annual ?? null,
+      revenue1y: rev?.y1 ?? null,
+      revenue30d: rev?.d30 ?? null,
+      revenuePrev30d: rev?.prev30 ?? null,
 
       holderValue,
 
-      volumeAnnual: vol && vol.annual > 0 ? vol.annual : null,
-      volume30d: vol && vol.d30 > 0 ? vol.d30 : null,
+      volumeAnnual: vol?.annual ?? null,
+      volume30d: vol?.d30 ?? null,
 
       fdv: quote ? num(quote.fully_diluted_market_cap) : g ? num(g.fully_diluted_valuation) : null,
       circulatingSupply: cmcRow ? num(cmcRow.circulating_supply) : g ? num(g.circulating_supply) : null,

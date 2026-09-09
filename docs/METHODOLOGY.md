@@ -1,5 +1,7 @@
 # 재발견 후보 점수 방법론
 
+> Current v4 contract (2026-09-08): [SCREENER_V4.md](./SCREENER_V4.md). The sections below preserve the v3 baseline. For the current independent discovery signals, same-period accounting, refresh, history and UI, follow the v4 contract.
+
 목표는 단순히 멀티플이 낮은 코인이 아니라 **토큰에 귀속되는 펀더멘털은 개선되지만 가격에는 아직 충분히 반영되지 않은 프로젝트**를 찾는 것이다.
 
 현재 점수 버전은 `rediscovery-v3-holder-classifier`다.

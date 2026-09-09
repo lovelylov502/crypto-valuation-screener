@@ -7,12 +7,13 @@ import type {
   ScoreGates,
   ValueCapture,
 } from "./types";
+import { compareFlow, deriveOpportunities } from "./signals";
 
 export const MIN_ACTIVITY_USD = 100_000;
 export const MIN_MCAP_USD = 1_000_000;
 export const MIN_SECTOR_SAMPLE = 8;
 export const NEW_PROJECT_DAYS = 90;
-export const SCORE_VERSION = "rediscovery-v3-holder-classifier";
+export const SCORE_VERSION = "research-v4-same-window";
 
 const MULTIPLE_CAP = 1000;
 const DILUTION_WARN = 1 / 0.3;
@@ -57,8 +58,7 @@ const isMcapTvlSector = (category: string | null): boolean =>
   category !== null && MCAP_TVL_SECTORS.has(category);
 
 function percentChange(current: number | null, previous: number | null): number | null {
-  if (!isPositive(current) || !isPositive(previous)) return null;
-  return ((current - previous) / previous) * 100;
+  return compareFlow(current, previous).changePct;
 }
 
 // 변화율을 이상치에 덜 민감한 0~100 점수로 변환한다. 0%=50, ±100%=0/100.
@@ -91,8 +91,8 @@ function median(values: number[]): number | null {
 
 function computeMultiples(c: CoinRaw): CoinScored["multiples"] {
   const mcap = isPositive(c.mcap) ? c.mcap : null;
-  const fees = isPositive(c.feesAnnual) ? c.feesAnnual : null;
-  const revenue = isPositive(c.revenueAnnual) ? c.revenueAnnual : null;
+  const fees = isPositive(c.fees30d) ? c.fees30d * 365 / 30 : null;
+  const revenue = isPositive(c.revenue30d) ? c.revenue30d * 365 / 30 : null;
   const holderValue = isPositive(c.holderValue.eligibleRunRate)
     ? c.holderValue.eligibleRunRate
     : null;
@@ -110,14 +110,14 @@ function computeMultiples(c: CoinRaw): CoinScored["multiples"] {
 }
 
 function computeEligibleHolderValueShare(c: CoinRaw): number | null {
-  if (!isPositive(c.holderValue.eligibleRunRate)) return null;
-  const denominator = isPositive(c.revenueAnnual)
-    ? c.revenueAnnual
-    : isPositive(c.feesAnnual)
-      ? c.feesAnnual
+  if (c.holderValue.eligibleCurrent30d === null) return null;
+  const denominator = isPositive(c.revenue30d)
+    ? c.revenue30d
+    : isPositive(c.fees30d)
+      ? c.fees30d
       : null;
   if (denominator === null) return null;
-  return clamp(c.holderValue.eligibleRunRate / denominator, 0, 1);
+  return c.holderValue.eligibleCurrent30d / denominator;
 }
 
 function computeValueCapture({
@@ -142,6 +142,7 @@ function computeValueCapture({
     (coin.feesAnnual ?? 0) >= MIN_ACTIVITY_USD;
   const signals: string[] = [];
   const risks: string[] = [];
+  if ((eligibleHolderValueShare ?? 0) > 1) risks.push("30일 홀더 금액이 분모를 초과 · 재원·집계 범위·시차 확인 필요");
 
   if (coin.identityStatus !== "verified") risks.push(coin.identityReason);
   if (hasEligibleCapture) signals.push("적격 holder value 실측");
@@ -168,7 +169,7 @@ function computeValueCapture({
   if (hasEligibleCapture) {
     score = Math.round(clamp(
       35 +
-        (eligibleHolderValueShare ?? 0) * 35 +
+        clamp(eligibleHolderValueShare ?? 0, 0, 1) * 35 +
         ((pctPhr ?? 0) / 100) * 20 +
         (dilutionComponent / 100) * 10,
       0,
@@ -177,7 +178,7 @@ function computeValueCapture({
     label = score >= 70 ? "강한 가치포획" : "가치포획 후보";
   }
 
-  return { score, label, eligibleHolderValueShare, signals, risks };
+  return { score, label, eligibleHolderValueShare, shareBasis: isPositive(coin.revenue30d) ? "revenue30d" : isPositive(coin.fees30d) ? "fees30d" : null, signals, risks };
 }
 
 interface Staged {
@@ -596,6 +597,8 @@ export function scoreCoins(
 
     return {
       ...coin,
+      opportunities: deriveOpportunities(coin, gates),
+      peerCounts: { phr: pool?.phr.length ?? 0, ps: pool?.ps.length ?? 0, pf: pool?.pf.length ?? 0 },
       multiples,
       sectorPercentiles: {
         pf: pctPf,

@@ -2,6 +2,18 @@ import { describe, expect, it } from "vitest";
 import { aggregateOverviewByGroup } from "./sources";
 
 describe("aggregateOverviewByGroup", () => {
+  it("preserves zeros but marks incomplete parent periods as unknown", () => {
+    const result = aggregateOverviewByGroup([{slug:"a",total30d:100,total60dto30d:0},{slug:"b",total30d:100}],()=>"parent").get("parent")!;
+    expect(result.d30).toBe(200);
+    expect(result.prev30).toBeNull();
+    const zero = aggregateOverviewByGroup([{slug:"a",total30d:0,total60dto30d:0}],s=>s).get("a")!;
+    expect(zero.d30).toBe(0); expect(zero.prev30).toBe(0);
+  });
+  it("uses a single common annual window instead of mixing TTM and run-rate components", () => {
+    const result = aggregateOverviewByGroup([{slug:"a",total1y:5000,total30d:100},{slug:"b",total30d:100}],()=>"parent").get("parent")!;
+    expect(result.y1).toBeNull();
+    expect(result.annual).toBeCloseTo(200*365/30);
+  });
   it("excludes DefiLlama overview rows marked doublecounted from parent sums", () => {
     const rows = [
       {

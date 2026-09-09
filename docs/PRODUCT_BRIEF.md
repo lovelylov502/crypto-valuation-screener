@@ -1,5 +1,7 @@
 # Crypto Rediscovery Screener — Product Brief
 
+> Current v4 contract (2026-09-08): [SCREENER_V4.md](./SCREENER_V4.md). The sections below preserve the v3 baseline. For the current independent discovery signals, same-period accounting, refresh, history and UI, follow the v4 contract.
+
 ## 제품 정의
 
 토큰에 귀속되는 펀더멘털은 개선되지만 가격에는 아직 충분히 반영되지 않은 **재발견 전 후보**를 사용자가 직접 필터링하고 검산하는 단일 화면 스크리너다.

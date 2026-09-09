@@ -1,5 +1,12 @@
 # 작업 이력
 
+## 2026-09-08 — signal and UX overhaul
+
+Implemented the agreed broader discovery scope and refreshed the single-table experience. Added explicit source/refresh states, independent business/holder/transition observations, conservative zero/missing aggregation, same-window cashflow multiples and measured holder ratios, conditional-holder visibility, previous-view history and immutable daily collection receipts. Revised the production readback contract to v4 markers without changing source/deployment identity safeguards.
+
+Added regression coverage for accounting, signal independence, history and refresh recovery. Introduced lucide-react for accessible controls and tsx for the snapshot CLI; updated the existing transitive nanoid patch after the dependency audit reported an advisory. npm audit reports zero vulnerabilities. See SCREENER_V4.md for complete behavior and deployment/schedule limits.
+
+
 이 프로젝트가 어떻게 만들어졌는지의 기록. (역순 아님, 시간순)
 
 ## 1. 데이터 소스 조사 & 설계

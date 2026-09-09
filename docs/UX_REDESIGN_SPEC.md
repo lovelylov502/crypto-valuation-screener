@@ -1,5 +1,7 @@
 # Screener-first UX Spec — Crypto Valuation Research
 
+> Current v4 contract (2026-09-08): [SCREENER_V4.md](./SCREENER_V4.md). The sections below preserve the v3 baseline. For the current independent discovery signals, same-period accounting, refresh, history and UI, follow the v4 contract.
+
 ## 의도
 
 별도 리서치 탭을 제거하고, 사용자가 한 화면에서 조건을 바꿔가며 재발견 전 후보와 데이터 보류 대상을 찾게 한다.

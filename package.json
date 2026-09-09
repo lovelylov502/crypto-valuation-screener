@@ -9,6 +9,7 @@
     "lint": "next lint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "snapshot:capture": "tsx scripts/capture-snapshot.ts",
     "test:deploy-preflight": "node --test scripts/deploy-contract.test.mjs",
     "deploy:preflight": "node scripts/deploy-preflight.mjs",
     "verify:local": "npm run deploy:preflight && npm run test:deploy-preflight && npm test && npm run typecheck && npm run build && git diff --check",
@@ -16,6 +17,7 @@
     "deploy:production": "node scripts/deploy-production.mjs"
   },
   "dependencies": {
+    "lucide-react": "^1.17.0",
     "next": "^16.2.12",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
@@ -27,6 +29,7 @@
     "@types/react-dom": "^19.2.3",
     "postcss": "^8.5.23",
     "tailwindcss": "^4.3.0",
+    "tsx": "^4.23.13",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
   },

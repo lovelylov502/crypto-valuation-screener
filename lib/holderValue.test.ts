@@ -401,6 +401,21 @@ describe("classifyHolderMethodology", () => {
 });
 
 describe("aggregateHolderValueByGroup", () => {
+  it("does not manufacture growth from an incomplete component history", () => {
+    const result = aggregateHolderValueByGroup([
+      { slug: "a", total30d: 100, total60dto30d: 100, methodology: { HoldersRevenue: "Token buybacks" } },
+      { slug: "b", total30d: 100, total60dto30d: null, methodology: { HoldersRevenue: "Token buybacks" } },
+    ], () => "parent").get("parent")!;
+    expect(result.eligibleCurrent30d).toBe(200);
+    expect(result.eligiblePrevious30d).toBeNull();
+    expect(result.warning).toContain("이력 누락");
+  });
+  it("preserves a reported all-zero eligible history", () => {
+    const result = aggregateHolderValueByGroup([{slug:"zero",total30d:0,total60dto30d:0,methodology:{HoldersRevenue:"Token buybacks"}}],s=>s).get("zero")!;
+    expect(result.eligibleCurrent30d).toBe(0);
+    expect(result.eligiblePrevious30d).toBe(0);
+    expect(result.eligibleRunRate).toBeNull();
+  });
   const parent = (slug: string) =>
     slug.startsWith("mixed-") || slug === "duplicate" ? "parent#mixed" : slug;
 

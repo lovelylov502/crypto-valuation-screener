@@ -1,18 +1,31 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import type { CoinScored, MarketDataFreshness } from "@/lib/types";
-import { fmtKstMinute, fmtUsd, fmtMult, fmtPct } from "@/lib/format";
 import {
-  clampRangePosition,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpRight,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Columns3,
+  Download,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  Star,
+  X,
+} from "lucide-react";
+import type { ScreenerResponse } from "@/lib/types";
+import type { OpportunityTrack } from "@/lib/signals";
+import { fmtKstMinute } from "@/lib/format";
+import {
   hasEligibleCurrentHolderValue,
   matchesRange,
   parseFavoriteSlugs,
   parseStoredSelection,
   serializeFavoriteSlugs,
-  serializeStoredSelection,
 } from "@/lib/screenerFilters";
-import { holderEconomicTypeLabel } from "@/lib/holderValue";
 import {
   COLUMN_GROUP_LABELS,
   COLUMN_PRESETS,
@@ -21,536 +34,68 @@ import {
   type ColumnGroup,
   type SortKey,
 } from "@/lib/screenerColumns";
-import { ScoreBadge } from "./ScoreBadge";
+import { compareSnapshot, makeSnapshot } from "@/lib/snapshotHistory";
+import { SNAPSHOT_STALE_MS, REVALIDATE_MS } from "@/lib/screenerRefresh";
+import { CoinDetail } from "./CoinDetail";
+import { renderCell, sortValue } from "./ScreenerCells";
+import {
+  MultipleRangeFilter,
+  ScoreRangeFilter,
+  UsdRangeFilter,
+} from "./RangeFilters";
+import { useScreenerData } from "./useScreenerData";
 
-const FAVORITES_STORAGE_KEY = "crypto-valuation-favorites-v1";
-const COLUMNS_STORAGE_KEY = "crypto-valuation-columns-v3";
-const PAGE_SIZE = 50;
-
-// 로그 슬라이더(0~100) <-> USD 양방향. 0이면 필터 없음, 100이면 $100B
-function sliderToUsd(s: number): number {
-  if (s <= 0) return 0;
-  return Math.pow(10, 6 + (s / 100) * 5); // 1e6 ~ 1e11
-}
-function usdToSlider(usd: number): number {
-  if (usd <= 0) return 0;
-  return Math.max(0, Math.min(100, ((Math.log10(usd) - 6) / 5) * 100));
-}
-
-// P/HR 같은 멀티플용 로그 슬라이더. 0이면 필터 없음, 100이면 1000x
-function sliderToMultiple(s: number): number {
-  if (s <= 0) return 0;
-  return Math.pow(10, -1 + (s / 100) * 4); // 0.1x ~ 1000x
-}
-function multipleToSlider(v: number): number {
-  if (v <= 0) return 0;
-  return Math.max(0, Math.min(100, ((Math.log10(v) + 1) / 4) * 100));
-}
-
-// 코인 외부 링크: canonical CMC 우선, 없으면 CoinGecko/DefiLlama 폴백
-function coinUrl(c: CoinScored): string {
-  if (c.cmcSlug) return `https://coinmarketcap.com/currencies/${c.cmcSlug}/`;
-  if (c.geckoId) return `https://www.coingecko.com/en/coins/${c.geckoId}`;
-  return `https://defillama.com/protocol/${c.slug.replace(/^parent#/, "")}`;
-}
-
-function sortValue(c: CoinScored, key: SortKey): number | string | null {
-  switch (key) {
-    case "name": return c.name.toLowerCase();
-    case "category": return (c.category ?? "").toLowerCase();
-    case "valueScore": return c.valueScore;
-    case "scoreAxes": return c.scoreAxes.discovery;
-    case "confidence": return c.confidence;
-    case "gateStatus": return c.gates.passed ? 1 : 0;
-    case "captureScore": return c.valueCapture.score;
-    case "ps": return c.multiples.ps;
-    case "phr": return c.multiples.phr;
-    case "revenueAnnual": return c.revenueAnnual;
-    case "holderValueRunRate": return c.holderValue.eligibleRunRate;
-    case "holderValueTtm": return c.holderValue.rawTtm;
-    case "revenue30d": return c.revenue30d;
-    case "mcap": return c.mcap;
-    case "totalVolume": return c.totalVolume;
-    case "fdv": return c.fdv;
-    case "tvl": return c.tvl;
-    case "priceChange7d": return c.priceChange7d;
-    case "priceChange14d": return c.priceChange14d;
-    case "priceChange30d": return c.priceChange30d;
-    case "priceChange60d": return c.priceChange60d;
-    case "priceChange1y": return c.priceChange1y;
-    case "athChangePercentage": return c.athChangePercentage;
-    case "atlChangePercentage": return c.atlChangePercentage;
-    case "feesChange7d": return c.feesChange7dover7d;
-  }
-}
-
-function changeClass(v: number | null): string {
-  if (v === null) return "";
-  return v >= 0 ? "text-emerald-400" : "text-red-400";
-}
-
-function captureClass(score: number | null): string {
-  if (score === null) return "text-[var(--color-muted)]";
-  if (score >= 70) return "text-emerald-400";
-  if (score >= 45) return "text-amber-300";
-  return "text-[var(--color-muted)]";
-}
-
-function toggleButtonClass(active: boolean): string {
-  return `shrink-0 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-    active
-      ? "border-[var(--color-accent)] bg-[var(--color-accent)]/15 text-blue-200"
-      : "border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-muted)] hover:text-[var(--color-text)]"
-  }`;
-}
-
-function holderTypeSummary(c: CoinScored): string {
-  const labels = [
-    ...new Set(
-      c.holderValue.components.map((component) =>
-        holderEconomicTypeLabel(component.economicType),
-      ),
-    ),
-  ];
-  if (labels.length === 0) return "유형 없음";
-  if (labels.length <= 2) return labels.join("+");
-  return `${labels.slice(0, 2).join("+")} 외 ${labels.length - 2}`;
-}
-
-function holderValueDetail(c: CoinScored): string {
-  const componentDetail = c.holderValue.components.map((component) =>
-    `${component.name}: ${holderEconomicTypeLabel(component.economicType)} · ${component.eligible ? "P/HR 포함" : "제외"} · 30d ${fmtUsd(component.current30d)} · TTM ${fmtUsd(component.ttm)} · ${component.reason}`,
-  );
-  return [
-    "DefiLlama-derived 분류 (공식·온체인 검증 아님)",
-    c.holderValue.currentVsEligibleTtmRatio !== null
-      ? `현재 run-rate / 적격 TTM ${c.holderValue.currentVsEligibleTtmRatio.toFixed(2)}x`
-      : null,
-    c.holderValue.excludedDoublecountedCount > 0
-      ? `doublecounted ${c.holderValue.excludedDoublecountedCount}개 제외`
-      : null,
-    c.holderValue.warning,
-    ...componentDetail,
-  ].filter((value): value is string => !!value).join(" / ");
-}
-
-// 셀 렌더 (코인 제외)
-function renderCell(c: CoinScored, key: SortKey) {
-  switch (key) {
-    case "category":
-      return (
-        <span
-          title={c.category ?? undefined}
-          className="text-[var(--color-muted)] block max-w-[100px] truncate"
-        >
-          {c.category ?? "–"}
-        </span>
-      );
-    case "valueScore":
-      return (
-        <ScoreBadge
-          score={c.valueScore}
-          status={c.status}
-          confidenceGrade={c.confidenceGrade}
-          confidence={c.confidence}
-          reasons={c.gates.reasons}
-        />
-      );
-    case "scoreAxes":
-      return (
-        <span
-          title={c.scoreNotes.join(" · ") || "산출 근거 없음"}
-          className="inline-grid min-w-[165px] grid-cols-4 gap-1 text-center text-[10px]"
-        >
-          {[
-            ["가치", c.scoreAxes.value, 30],
-            ["개선", c.scoreAxes.improvement, 25],
-            ["미발견", c.scoreAxes.discovery, 25],
-            ["품질", c.scoreAxes.quality, 20],
-          ].map(([label, value, maximum]) => (
-            <span key={String(label)} className="rounded bg-[var(--color-panel-2)] px-1 py-1">
-              <span className="block text-[var(--color-muted)]">{label}</span>
-              <strong className="block text-xs text-[var(--color-text)]">
-                {value}/{maximum}
-              </strong>
-            </span>
-          ))}
-        </span>
-      );
-    case "confidence":
-      return (
-        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-          <strong>{c.confidenceGrade}</strong>
-          <span className="text-xs text-[var(--color-muted)]">
-            {Math.round(c.confidence * 100)}%
-          </span>
-        </span>
-      );
-    case "gateStatus":
-      return c.gates.passed ? (
-        <span className="text-emerald-400">통과</span>
-      ) : (
-        <span
-          title={c.gates.reasons.join(" · ")}
-          className="inline-flex max-w-[190px] flex-col items-end"
-        >
-          <strong className="text-amber-300">{c.gates.reasons.length}개 미통과</strong>
-          <span className="block max-w-[190px] truncate text-[10px] text-[var(--color-muted)]">
-            {c.gates.reasons[0]}
-          </span>
-        </span>
-      );
-    case "captureScore":
-      return (
-        <span
-          title={[...c.valueCapture.signals, ...c.valueCapture.risks.map((r) => `위험: ${r}`)].join(" · ") || c.valueCapture.label}
-          className="inline-flex flex-col items-end gap-0.5 whitespace-nowrap"
-        >
-          <span className={`font-semibold tabular-nums ${captureClass(c.valueCapture.score)}`}>
-            {c.valueCapture.score ?? "–"}
-          </span>
-          <span className="text-[11px] text-[var(--color-muted)]">{c.valueCapture.label}</span>
-        </span>
-      );
-    case "ps": return fmtMult(c.multiples.ps);
-    case "phr":
-      return (
-        <span className="inline-flex min-w-[120px] flex-col items-end gap-0.5">
-          <strong>{fmtMult(c.multiples.phr)}</strong>
-          {c.multiples.phr === null &&
-            ((c.holderValue.rawTtm ?? 0) > 0 || c.holderValue.warning) && (
-              <span
-                className="block max-w-[160px] truncate text-[10px] text-amber-300"
-                title={holderValueDetail(c)}
-              >
-                {c.holderValue.phrUnavailableReason}
-              </span>
-            )}
-        </span>
-      );
-    case "revenueAnnual": return fmtUsd(c.revenueAnnual);
-    case "holderValueRunRate":
-      return (
-        <span
-          title={holderValueDetail(c)}
-          className="inline-flex min-w-[155px] flex-col items-end gap-0.5"
-        >
-          <strong className={c.holderValue.eligibleRunRate !== null ? "text-emerald-300" : "text-[var(--color-muted)]"}>
-            {fmtUsd(c.holderValue.eligibleRunRate)}
-            {c.holderValue.warning && <span className="ml-1 text-amber-300">⚠</span>}
-          </strong>
-          <span className="block max-w-[180px] truncate text-[10px] text-[var(--color-muted)]">
-            {holderTypeSummary(c)} · DL 파생
-          </span>
-        </span>
-      );
-    case "holderValueTtm":
-      return (
-        <span
-          title={holderValueDetail(c)}
-          className="inline-flex min-w-[120px] flex-col items-end gap-0.5"
-        >
-          <span>{fmtUsd(c.holderValue.rawTtm)}</span>
-          <span className="text-[10px] text-[var(--color-muted)]">
-            {(c.holderValue.excludedTtm ?? 0) > 0 ? "제외 유형 포함" : "raw TTM"}
-          </span>
-        </span>
-      );
-    case "revenue30d": return fmtUsd(c.revenue30d);
-    case "mcap": return fmtUsd(c.mcap);
-    case "totalVolume": return fmtUsd(c.totalVolume);
-    case "fdv":
-      return (
-        <span className="whitespace-nowrap">
-          {fmtUsd(c.fdv)}
-          {c.highDilution && (
-            <span title="유통량 30% 미만 (MC/FDV<0.3) — 미래 언락 매도압 주의" className="ml-1 text-amber-400">⚠</span>
-          )}
-        </span>
-      );
-    case "tvl": return fmtUsd(c.tvl);
-    case "priceChange7d":
-      return <span className={changeClass(c.priceChange7d)}>{fmtPct(c.priceChange7d)}</span>;
-    case "priceChange14d":
-      return <span className={changeClass(c.priceChange14d)}>{fmtPct(c.priceChange14d)}</span>;
-    case "priceChange30d":
-      return <span className={changeClass(c.priceChange30d)}>{fmtPct(c.priceChange30d)}</span>;
-    case "priceChange60d":
-      return <span className={changeClass(c.priceChange60d)}>{fmtPct(c.priceChange60d)}</span>;
-    case "priceChange1y":
-      return <span className={changeClass(c.priceChange1y)}>{fmtPct(c.priceChange1y)}</span>;
-    case "athChangePercentage":
-      return <span className={changeClass(c.athChangePercentage)}>{fmtPct(c.athChangePercentage)}</span>;
-    case "atlChangePercentage":
-      return <span className={changeClass(c.atlChangePercentage)}>{fmtPct(c.atlChangePercentage)}</span>;
-    case "feesChange7d":
-      return (
-        <span className="inline-flex flex-col items-end gap-0.5">
-          <span className={changeClass(c.feesChange7dover7d)}>{fmtPct(c.feesChange7dover7d)}</span>
-          <span className={`${changeClass(c.feesChange30dover30d)} text-[11px] opacity-75`}>
-            30d {fmtPct(c.feesChange30dover30d)}
-          </span>
-        </span>
-      );
-    default: return null;
-  }
-}
-
-function DualRangeSlider({
-  minPosition,
-  maxPosition,
-  onMinChange,
-  onMaxChange,
-  minLabel,
-  maxLabel,
-  step = 0.5,
-}: {
-  minPosition: number;
-  maxPosition: number;
-  onMinChange: (position: number) => void;
-  onMaxChange: (position: number) => void;
-  minLabel: string;
-  maxLabel: string;
-  step?: number;
-}) {
-  const changeMin = (next: number) => onMinChange(clampRangePosition("min", next, minPosition, maxPosition));
-  const changeMax = (next: number) => onMaxChange(clampRangePosition("max", next, minPosition, maxPosition));
-
-  return (
-    <div className="relative mt-3 h-6">
-      <div className="absolute left-0 right-0 top-2.5 h-1 rounded-full bg-[var(--color-border)]">
-        <div
-          className="absolute h-full rounded-full bg-[var(--color-accent)]"
-          style={{ left: `${minPosition}%`, right: `${100 - maxPosition}%` }}
-        />
-      </div>
-      <input
-        type="range"
-        min={0}
-        max={100}
-        step={step}
-        value={minPosition}
-        onChange={(event) => changeMin(Number(event.target.value))}
-        aria-label={minLabel}
-        className="dual-range-input z-20"
-      />
-      <input
-        type="range"
-        min={0}
-        max={100}
-        step={step}
-        value={maxPosition}
-        onChange={(event) => changeMax(Number(event.target.value))}
-        aria-label={maxLabel}
-        className="dual-range-input z-30"
-      />
-    </div>
-  );
-}
-
-function UsdRangeFilter({
-  label, minUsd, maxUsd, onMinChange, onMaxChange,
-}: {
-  label: string;
-  minUsd: number;
-  maxUsd: number;
-  onMinChange: (usd: number) => void;
-  onMaxChange: (usd: number) => void;
-}) {
-  const setMin = (usd: number) => onMinChange(maxUsd > 0 ? Math.min(usd, maxUsd) : usd);
-  const setMax = (usd: number) => onMaxChange(usd > 0 ? Math.max(usd, minUsd) : 0);
-
-  return (
-    <div className="min-w-[250px]">
-      <div className="mb-2 text-xs text-[var(--color-muted)]">{label}</div>
-      <div className="grid grid-cols-2 gap-2 text-xs text-[var(--color-muted)]">
-        <label className="flex items-center gap-1">
-          <span>최소 $</span>
-          <input
-            type="number" min={0} step={1}
-            value={minUsd > 0 ? Math.round(minUsd / 1e6) : ""}
-            onChange={(e) => {
-              const m = parseFloat(e.target.value);
-              setMin(Number.isFinite(m) && m > 0 ? m * 1e6 : 0);
-            }}
-            placeholder="0"
-            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
-          />
-          <span>M</span>
-        </label>
-        <label className="flex items-center gap-1">
-          <span>최대 $</span>
-          <input
-            type="number" min={0} step={1}
-            value={maxUsd > 0 ? Math.round(maxUsd / 1e6) : ""}
-            onChange={(e) => {
-              const m = parseFloat(e.target.value);
-              setMax(Number.isFinite(m) && m > 0 ? m * 1e6 : 0);
-            }}
-            placeholder="∞"
-            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
-          />
-          <span>M</span>
-        </label>
-      </div>
-      <DualRangeSlider
-        minPosition={usdToSlider(minUsd)}
-        maxPosition={maxUsd > 0 ? usdToSlider(maxUsd) : 100}
-        onMinChange={(position) => setMin(sliderToUsd(position))}
-        onMaxChange={(position) => setMax(position >= 100 ? 0 : sliderToUsd(position))}
-        minLabel={`${label} 최소`}
-        maxLabel={`${label} 최대`}
-      />
-    </div>
-  );
-}
-
-function MultipleRangeFilter({
-  label, min, max, onMinChange, onMaxChange,
-}: {
-  label: string;
-  min: number;
-  max: number;
-  onMinChange: (v: number) => void;
-  onMaxChange: (v: number) => void;
-}) {
-  const setMin = (v: number) => onMinChange(max > 0 ? Math.min(v, max) : v);
-  const setMax = (v: number) => onMaxChange(v > 0 ? Math.max(v, min) : 0);
-
-  return (
-    <div className="min-w-[250px]">
-      <div className="mb-2 text-xs text-[var(--color-muted)]">{label}</div>
-      <div className="grid grid-cols-2 gap-2 text-xs text-[var(--color-muted)]">
-        <label className="flex items-center gap-1">
-          <span>최소</span>
-          <input
-            type="number" min={0} step={0.1}
-            value={min > 0 ? Number(min.toFixed(1)) : ""}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
-              setMin(Number.isFinite(v) && v > 0 ? v : 0);
-            }}
-            placeholder="0"
-            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
-          />
-          <span>x</span>
-        </label>
-        <label className="flex items-center gap-1">
-          <span>최대</span>
-          <input
-            type="number" min={0} step={0.1}
-            value={max > 0 ? Number(max.toFixed(1)) : ""}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
-              setMax(Number.isFinite(v) && v > 0 ? v : 0);
-            }}
-            placeholder="∞"
-            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
-          />
-          <span>x</span>
-        </label>
-      </div>
-      <DualRangeSlider
-        minPosition={multipleToSlider(min)}
-        maxPosition={max > 0 ? multipleToSlider(max) : 100}
-        onMinChange={(position) => setMin(sliderToMultiple(position))}
-        onMaxChange={(position) => setMax(position >= 100 ? 0 : sliderToMultiple(position))}
-        minLabel={`${label} 최소`}
-        maxLabel={`${label} 최대`}
-      />
-    </div>
-  );
-}
-
-function ScoreRangeFilter({
-  min,
-  max,
-  onMinChange,
-  onMaxChange,
-}: {
-  min: number;
-  max: number;
-  onMinChange: (score: number) => void;
-  onMaxChange: (score: number) => void;
-}) {
-  const maxPosition = max > 0 ? max : 100;
-  const setMin = (score: number) => onMinChange(Math.min(Math.max(score, 0), maxPosition));
-  const setMax = (score: number) => onMaxChange(score >= 100 ? 0 : Math.max(score, min));
-
-  return (
-    <div className="min-w-[250px]">
-      <div className="mb-2 text-xs text-[var(--color-muted)]">발견 점수 범위 <span className="opacity-70">(게이트 통과 자산만 산출)</span></div>
-      <div className="grid grid-cols-2 gap-2 text-xs text-[var(--color-muted)]">
-        <label className="flex items-center gap-1">
-          <span>최소</span>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            step={1}
-            value={min > 0 ? min : ""}
-            onChange={(event) => {
-              const score = Number(event.target.value);
-              setMin(Number.isFinite(score) && score > 0 ? score : 0);
-            }}
-            placeholder="0"
-            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
-          />
-        </label>
-        <label className="flex items-center gap-1">
-          <span>최대</span>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            step={1}
-            value={max > 0 ? max : ""}
-            onChange={(event) => {
-              const score = Number(event.target.value);
-              setMax(Number.isFinite(score) && score > 0 ? score : 0);
-            }}
-            placeholder="100"
-            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
-          />
-        </label>
-      </div>
-      <DualRangeSlider
-        minPosition={min}
-        maxPosition={maxPosition}
-        onMinChange={setMin}
-        onMaxChange={setMax}
-        minLabel="발견 점수 최소"
-        maxLabel="발견 점수 최대"
-        step={1}
-      />
-    </div>
-  );
-}
-
-type StatusMode = "candidate" | "watch" | "hold" | null;
+const FAVORITES_KEY = "crypto-valuation-favorites-v1";
+const COLUMNS_KEY = "crypto-valuation-columns-v4";
+const PAGE_SIZE = 30;
+const TRACKS: {
+  key: OpportunityTrack;
+  name: string;
+  description: string;
+  number: string;
+}[] = [
+  {
+    key: "business",
+    name: "실적 개선",
+    description: "매출·수수료가 늘어나는 곳",
+    number: "01",
+  },
+  {
+    key: "holder",
+    name: "홀더 배분",
+    description: "배분·매입·조건부 보상 발생",
+    number: "02",
+  },
+  {
+    key: "transition",
+    name: "흐름 전환",
+    description: "홀더 금액의 0 ↔ 양수 변화",
+    number: "03",
+  },
+];
+type View = "all" | "signals" | "favorites" | "changes" | "data";
 
 export function ScreenerClient({
-  coins,
-  categories,
-  updatedAt,
-  marketDataFreshness,
-  fdvCoverage,
-  cmcCoverage,
-  verifiedIdentityCount,
-  discoveryCandidateCount,
-  scoreVersion,
+  initialData,
 }: {
-  coins: CoinScored[];
-  categories: string[];
-  updatedAt: string;
-  marketDataFreshness: MarketDataFreshness;
-  fdvCoverage: number;
-  cmcCoverage: number;
-  verifiedIdentityCount: number;
-  discoveryCandidateCount: number;
-  scoreVersion: string;
+  initialData: ScreenerResponse | null;
 }) {
+  const {
+    data,
+    refreshing,
+    refresh,
+    message,
+    error,
+    checkedAt,
+    baseline,
+    historyCount,
+    acknowledge,
+    storageError,
+    now,
+  } = useScreenerData(initialData);
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<View>("all");
+  const [tracks, setTracks] = useState<Set<OpportunityTrack>>(new Set());
   const [cats, setCats] = useState<Set<string>>(new Set());
   const [minMcap, setMinMcap] = useState(0);
   const [maxMcap, setMaxMcap] = useState(0);
@@ -562,134 +107,110 @@ export function ScreenerClient({
   const [maxPs, setMaxPs] = useState(0);
   const [minScore, setMinScore] = useState(0);
   const [maxScore, setMaxScore] = useState(0);
-  const [hideZombie, setHideZombie] = useState(true);
+  const [hideInactive, setHideInactive] = useState(false);
   const [holderOnly, setHolderOnly] = useState(false);
-  const [excludeHighDilution, setExcludeHighDilution] = useState(false);
+  const [excludeRisk, setExcludeRisk] = useState(false);
+  const [completeOnly, setCompleteOnly] = useState(false);
   const [newOnly, setNewOnly] = useState(false);
-  const [highConfidenceOnly, setHighConfidenceOnly] = useState(false);
-  const [statusMode, setStatusMode] = useState<StatusMode>(null);
-  const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [favoriteSlugs, setFavoriteSlugs] = useState<Set<string>>(new Set());
-  const [favoritesReady, setFavoritesReady] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Set<SortKey>>(
     new Set(DEFAULT_VISIBLE_COLUMNS),
   );
-  const [columnsReady, setColumnsReady] = useState(false);
+  const [storedReady, setStoredReady] = useState(false);
+  const [preferencesError, setPreferencesError] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [page, setPage] = useState(1);
-  const [sortKey, setSortKey] = useState<SortKey>("valueScore");
+  const [sortKey, setSortKey] = useState<SortKey>("signals");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-
-  const newSlugs = useMemo(
-    () => new Set(
-      coins
-        .filter((coin) => coin.status === "신규 프로젝트")
-        .map((coin) => coin.slug),
-    ),
-    [coins],
-  );
-  const watchCount = useMemo(
-    () => coins.filter((coin) => (coin.valueScore ?? 0) >= 65).length,
-    [coins],
-  );
-  const dataHoldCount = useMemo(
-    () => coins.filter((coin) => coin.status === "데이터 보류").length,
-    [coins],
-  );
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [sourceOpen, setSourceOpen] = useState(false);
 
   useEffect(() => {
-    setFavoriteSlugs(parseFavoriteSlugs(window.localStorage.getItem(FAVORITES_STORAGE_KEY)));
-    setFavoritesReady(true);
+    try {
+      setFavoriteSlugs(parseFavoriteSlugs(localStorage.getItem(FAVORITES_KEY)));
+      const saved =
+        localStorage.getItem(COLUMNS_KEY) ??
+        localStorage.getItem("crypto-valuation-columns-v3");
+      setVisibleColumns(
+        parseStoredSelection(
+          saved,
+          COLS.map((c) => c.key),
+          DEFAULT_VISIBLE_COLUMNS,
+        ),
+      );
+    } catch {
+      setPreferencesError(true);
+    }
+    setStoredReady(true);
   }, []);
-
   useEffect(() => {
-    if (!favoritesReady) return;
-    window.localStorage.setItem(FAVORITES_STORAGE_KEY, serializeFavoriteSlugs(favoriteSlugs));
-  }, [favoriteSlugs, favoritesReady]);
-
-  useEffect(() => {
-    const storedColumns = parseStoredSelection(
-      window.localStorage.getItem(COLUMNS_STORAGE_KEY),
-      COLS.map((col) => col.key),
-      DEFAULT_VISIBLE_COLUMNS,
-    );
-    setVisibleColumns(storedColumns);
-    if (!storedColumns.has("valueScore")) {
-      const firstVisible = COLS.find((col) => storedColumns.has(col.key))?.key ?? "name";
-      setSortKey(firstVisible);
-      setSortDir(firstVisible === "category" ? "asc" : "desc");
+    if (!storedReady) return;
+    try {
+      localStorage.setItem(
+        FAVORITES_KEY,
+        serializeFavoriteSlugs(favoriteSlugs),
+      );
+      localStorage.setItem(COLUMNS_KEY, JSON.stringify([...visibleColumns]));
+    } catch {
+      setPreferencesError(true);
     }
-    setColumnsReady(true);
-  }, []);
+  }, [favoriteSlugs, visibleColumns, storedReady]);
 
-  useEffect(() => {
-    if (!columnsReady) return;
-    window.localStorage.setItem(
-      COLUMNS_STORAGE_KEY,
-      serializeStoredSelection(visibleColumns),
-    );
-  }, [visibleColumns, columnsReady]);
-
-  const toggleFavorite = (slug: string) =>
-    setFavoriteSlugs((prev) => {
-      const next = new Set(prev);
-      if (next.has(slug)) next.delete(slug); else next.add(slug);
+  const coins = useMemo(() => data?.coins ?? [], [data]);
+  const comparisonBaseline =
+    baseline && data && Date.parse(baseline.at) <= Date.parse(data.updatedAt)
+      ? baseline
+      : null;
+  const changes = useMemo(
+    () =>
+      new Map(
+        coins.map((c) => [
+          c.slug,
+          compareSnapshot(c, comparisonBaseline, data?.scoreVersion ?? ""),
+        ]),
+      ),
+    [coins, comparisonBaseline, data?.scoreVersion],
+  );
+  const counts = useMemo(
+    () => ({
+      business: coins.filter((c) => c.opportunities.business).length,
+      holder: coins.filter((c) => c.opportunities.holder).length,
+      transition: coins.filter((c) => c.opportunities.transition).length,
+      signals: coins.filter(
+        (c) =>
+          c.opportunities.business ||
+          c.opportunities.holder ||
+          c.opportunities.transition,
+      ).length,
+      favorites: coins.filter((c) => favoriteSlugs.has(c.slug)).length,
+      changes: coins.filter((c) => changes.get(c.slug)?.meaningful).length,
+      data: coins.filter((c) => c.opportunities.dataIssues.length > 0).length,
+    }),
+    [coins, favoriteSlugs, changes],
+  );
+  const toggleSet = <T,>(
+    setter: React.Dispatch<React.SetStateAction<Set<T>>>,
+    key: T,
+  ) =>
+    setter((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
-
-  const toggleColumn = (key: SortKey) => {
-    if (visibleColumns.has(key) && visibleColumns.size === 1) return;
-    setVisibleColumns((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
-    if (visibleColumns.has(key) && sortKey === key) {
-      setSortKey("name");
-      setSortDir("asc");
-    }
-  };
-
-  const applyColumnPreset = (keys: SortKey[]) => {
-    setVisibleColumns(new Set(keys));
-    if (!keys.includes(sortKey)) {
-      setSortKey(keys.includes("valueScore") ? "valueScore" : keys[0]);
-      setSortDir("desc");
-    }
-  };
-
-  const toggleCat = (c: string) =>
-    setCats((prev) => {
-      const next = new Set(prev);
-      if (next.has(c)) next.delete(c); else next.add(c);
-      return next;
-    });
-
   const onSort = (key: SortKey) => {
     if (key === sortKey) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
-    else { setSortKey(key); setSortDir(key === "name" || key === "category" ? "asc" : "desc"); }
+    else {
+      setSortKey(key);
+      setSortDir(key === "name" || key === "category" ? "asc" : "desc");
+    }
+    setPage(1);
   };
-
-  const applyPreset = (mode: Exclude<StatusMode, null>) => {
-    setStatusMode(mode);
-    setMinScore(mode === "watch" ? 65 : 0);
-    setMaxScore(0);
-    if (mode === "hold") setHideZombie(false);
-    setSortKey("valueScore");
-    setSortDir("desc");
-  };
-
-  const clearScoreRange = () => {
-    setStatusMode(null);
-    setMinScore(0);
-    setMaxScore(0);
-    setSortKey("valueScore");
-    setSortDir("desc");
-  };
-
-  const resetFilters = () => {
+  const reset = () => {
     setSearch("");
+    setView("all");
+    setTracks(new Set());
     setCats(new Set());
     setMinMcap(0);
     setMaxMcap(0);
@@ -701,213 +222,460 @@ export function ScreenerClient({
     setMaxPs(0);
     setMinScore(0);
     setMaxScore(0);
-    setHideZombie(true);
+    setHideInactive(false);
     setHolderOnly(false);
-    setExcludeHighDilution(false);
+    setExcludeRisk(false);
+    setCompleteOnly(false);
     setNewOnly(false);
-    setHighConfidenceOnly(false);
-    setStatusMode(null);
-    setFavoriteOnly(false);
-    setSortKey("valueScore");
+    setSortKey("signals");
     setSortDir("desc");
+    setPage(1);
   };
-
-  const activeFilterCount = [
-    search.trim().length > 0,
+  const activeCount = [
     cats.size > 0,
-    minScore > 0 || maxScore > 0,
     minMcap > 0 || maxMcap > 0,
     minTvl > 0 || maxTvl > 0,
     minPhr > 0 || maxPhr > 0,
     minPs > 0 || maxPs > 0,
-    hideZombie,
+    minScore > 0 || maxScore > 0,
+    hideInactive,
     holderOnly,
-    excludeHighDilution,
+    excludeRisk,
+    completeOnly,
     newOnly,
-    highConfidenceOnly,
-    statusMode !== null,
-    favoriteOnly,
   ].filter(Boolean).length;
-
-  const selectedCols = useMemo(
-    () => COLS.filter((col) => visibleColumns.has(col.key)),
-    [visibleColumns],
-  );
-
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const filtered = coins.filter((c) => {
-      if (hideZombie && c.lowActivity) return false;
-      if (holderOnly && !hasEligibleCurrentHolderValue(c.holderValue)) return false;
-      if (excludeHighDilution && c.highDilution) return false;
-      if (newOnly && !newSlugs.has(c.slug)) return false;
-      if (highConfidenceOnly && c.confidenceGrade === "C") return false;
-      if (statusMode === "candidate" && c.status !== "발굴 후보") return false;
-      if (statusMode === "watch" && (c.valueScore ?? 0) < 65) return false;
-      if (statusMode === "hold" && c.status !== "데이터 보류") return false;
-      if (favoriteOnly && !favoriteSlugs.has(c.slug)) return false;
-      if (cats.size > 0 && (!c.category || !cats.has(c.category))) return false;
-      if (!matchesRange(c.valueScore, minScore, maxScore)) return false;
-      if (!matchesRange(c.mcap, minMcap, maxMcap)) return false;
-      if (!matchesRange(c.tvl, minTvl, maxTvl)) return false;
-      if (!matchesRange(c.multiples.phr, minPhr, maxPhr)) return false;
-      if (!matchesRange(c.multiples.ps, minPs, maxPs)) return false;
-      if (q) {
-        const hay = `${c.name} ${c.symbol ?? ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-    const dir = sortDir === "asc" ? 1 : -1;
-    filtered.sort((a, b) => {
-      const va = sortValue(a, sortKey);
-      const vb = sortValue(b, sortKey);
-      if (va === null && vb === null) return 0;
-      if (va === null) return 1;
-      if (vb === null) return -1;
-      if (typeof va === "string" && typeof vb === "string") return va.localeCompare(vb) * dir;
-      return ((va as number) - (vb as number)) * dir;
-    });
-    return filtered;
-  }, [coins, search, cats, minScore, maxScore, minMcap, maxMcap, minTvl, maxTvl, minPhr, maxPhr, minPs, maxPs, hideZombie, holderOnly, excludeHighDilution, newOnly, newSlugs, highConfidenceOnly, statusMode, favoriteOnly, favoriteSlugs, sortKey, sortDir]);
-
-  // 입력은 즉시 반응시키고, 무거운 테이블 렌더는 지연 → 슬라이더 드래그 버벅임 완화
+    return coins
+      .filter((c) => {
+        const o = c.opportunities;
+        if (q && !`${c.name} ${c.symbol ?? ""}`.toLowerCase().includes(q))
+          return false;
+        if (tracks.size && ![...tracks].some((t) => o[t])) return false;
+        if (view === "signals" && !o.business && !o.holder && !o.transition)
+          return false;
+        if (view === "favorites" && !favoriteSlugs.has(c.slug)) return false;
+        if (view === "changes" && !changes.get(c.slug)?.meaningful)
+          return false;
+        if (view === "data" && o.dataIssues.length === 0) return false;
+        if (cats.size > 0 && (!c.category || !cats.has(c.category)))
+          return false;
+        if (hideInactive && c.lowActivity) return false;
+        if (holderOnly && !hasEligibleCurrentHolderValue(c.holderValue))
+          return false;
+        if (excludeRisk && c.highDilution) return false;
+        if (completeOnly && c.confidenceGrade === "C") return false;
+        if (newOnly && c.status !== "신규 프로젝트") return false;
+        return (
+          matchesRange(c.mcap, minMcap, maxMcap) &&
+          matchesRange(c.tvl, minTvl, maxTvl) &&
+          matchesRange(c.multiples.phr, minPhr, maxPhr) &&
+          matchesRange(c.multiples.ps, minPs, maxPs) &&
+          matchesRange(c.valueScore, minScore, maxScore)
+        );
+      })
+      .sort((a, b) => {
+        const av = sortValue(a, sortKey),
+          bv = sortValue(b, sortKey);
+        if (av === null && bv === null) return a.name.localeCompare(b.name);
+        if (av === null) return 1;
+        if (bv === null) return -1;
+        const direction = sortDir === "asc" ? 1 : -1;
+        const diff =
+          typeof av === "string" && typeof bv === "string"
+            ? av.localeCompare(bv)
+            : Number(av) - Number(bv);
+        return (
+          diff * direction ||
+          (b.mcap ?? 0) - (a.mcap ?? 0) ||
+          a.name.localeCompare(b.name)
+        );
+      });
+  }, [
+    coins,
+    search,
+    tracks,
+    view,
+    favoriteSlugs,
+    changes,
+    cats,
+    hideInactive,
+    holderOnly,
+    excludeRisk,
+    completeOnly,
+    newOnly,
+    minMcap,
+    maxMcap,
+    minTvl,
+    maxTvl,
+    minPhr,
+    maxPhr,
+    minPs,
+    maxPs,
+    minScore,
+    maxScore,
+    sortKey,
+    sortDir,
+  ]);
   const deferredRows = useDeferredValue(rows);
-  const stale = deferredRows !== rows;
-  const pageCount = Math.max(1, Math.ceil(deferredRows.length / PAGE_SIZE));
-  const pageStart = (page - 1) * PAGE_SIZE;
-  const pagedRows = deferredRows.slice(pageStart, pageStart + PAGE_SIZE);
-
   useEffect(() => {
     setPage(1);
-  }, [rows]);
-
-  useEffect(() => {
-    setPage((current) => Math.min(current, pageCount));
-  }, [pageCount]);
-
-  const sortArrow = (key: SortKey) => (key === sortKey ? (sortDir === "desc" ? " ↓" : " ↑") : "");
-  const ariaSort = (key: SortKey): "ascending" | "descending" | "none" =>
-    key === sortKey ? (sortDir === "asc" ? "ascending" : "descending") : "none";
-
-  // 고정 코인 셀 공통 클래스 (헤더/바디에서 배경만 다름)
-  const stickyBase = "sticky left-0 z-10 min-w-[190px] max-w-[190px] sm:min-w-[230px] sm:max-w-[290px]";
-  const visibleStart = deferredRows.length === 0 ? 0 : pageStart + 1;
-  const visibleEnd = Math.min(pageStart + PAGE_SIZE, deferredRows.length);
+  }, [
+    search,
+    tracks,
+    view,
+    cats,
+    hideInactive,
+    holderOnly,
+    excludeRisk,
+    completeOnly,
+    newOnly,
+    minMcap,
+    maxMcap,
+    minTvl,
+    maxTvl,
+    minPhr,
+    maxPhr,
+    minPs,
+    maxPs,
+    minScore,
+    maxScore,
+  ]);
+  const pages = Math.max(1, Math.ceil(deferredRows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pages);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const selectedCols = [...visibleColumns]
+    .map((key) => COLS.find((c) => c.key === key))
+    .filter((c) => c !== undefined);
+  const selectedCoin = coins.find((c) => c.slug === selectedSlug);
+  const snapshotAge = data && now ? now - Date.parse(data.updatedAt) : 0;
+  const sourceFailures =
+    data?.sources.filter((s) => s.status === "error").length ?? 0;
+  const freshLabel = !data
+    ? "자료 준비 중"
+    : snapshotAge > SNAPSHOT_STALE_MS
+      ? "오래된 자료"
+      : sourceFailures
+        ? "일부 자료 미수집"
+        : "최근 수집 자료";
+  const hasFilters =
+    search !== "" || view !== "all" || tracks.size > 0 || activeCount > 0;
+  const sortArrow = (key: SortKey) =>
+    sortKey === key ? (
+      sortDir === "desc" ? (
+        <ArrowDown size={13} />
+      ) : (
+        <ArrowUp size={13} />
+      )
+    ) : null;
+  const exportSnapshot = () => {
+    if (!data) return;
+    const blob = new Blob([JSON.stringify(makeSnapshot(data), null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `screener-${data.updatedAt.replace(/[:.]/g, "-")}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <div className="space-y-3">
-      <section
-        aria-label="스크리너 필터"
-        className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-3 sm:p-4"
-      >
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-          <div className="flex gap-2 overflow-x-auto pb-1 thin-scroll xl:pb-0">
-            <button
-              type="button"
-              onClick={() => applyPreset("candidate")}
-              aria-pressed={statusMode === "candidate"}
-              className={toggleButtonClass(statusMode === "candidate")}
-            >
-              발굴 후보 {discoveryCandidateCount}
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPreset("watch")}
-              aria-pressed={statusMode === "watch"}
-              className={toggleButtonClass(statusMode === "watch")}
-            >
-              65+ 전체 {watchCount}
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPreset("hold")}
-              aria-pressed={statusMode === "hold"}
-              className={toggleButtonClass(statusMode === "hold")}
-            >
-              데이터 보류 {dataHoldCount}
-            </button>
-            <button
-              type="button"
-              onClick={clearScoreRange}
-              aria-pressed={statusMode === null && minScore === 0 && maxScore === 0}
-              className={toggleButtonClass(statusMode === null && minScore === 0 && maxScore === 0)}
-            >
-              전체
-            </button>
+    <main className="research-app">
+      <a className="skip-link" href="#screener-results">
+        결과 표로 이동
+      </a>
+      <header className="app-header">
+        <div>
+          <p className="eyebrow">
+            CRYPTO VALUATION <span>RESEARCH DESK</span>
+          </p>
+          <h1>크립토 밸류에이션 리서치</h1>
+          <p className="intro">
+            실적 개선과 홀더 배분을 함께 살펴보는 크립토 스크리너
+          </p>
+        </div>
+        <div className="update-block">
+          <span
+            className={`freshness ${snapshotAge > SNAPSHOT_STALE_MS || sourceFailures ? "caution" : ""}`}
+          >
+            {freshLabel}
+          </span>
+          <p>
+            {data ? fmtKstMinute(data.updatedAt) : "첫 데이터를 불러옵니다"}
+          </p>
+          <button
+            className="button refresh-button"
+            onClick={() => void refresh()}
+            disabled={refreshing}
+          >
+            <RefreshCw size={15} className={refreshing ? "spinning" : ""} />
+            {refreshing ? "확인 중" : "최신 자료 확인"}
+          </button>
+        </div>
+      </header>
+      <div className="update-feedback" role="status" aria-live="polite">
+        {error ? (
+          <span className="error-text">
+            {error} {data ? "표에는 마지막으로 받은 자료를 유지합니다." : ""}
+          </span>
+        ) : (
+          message || "화면을 열거나 돌아오면 최신 자료를 확인합니다."
+        )}
+        {data && snapshotAge >= REVALIDATE_MS && !refreshing && (
+          <span className="caution-text">
+            {" "}
+            현재 자료는 30분 이상 경과했습니다.
+          </span>
+        )}
+        <button
+          className="text-button"
+          onClick={() => setSourceOpen((v) => !v)}
+          aria-expanded={sourceOpen}
+          aria-controls="source-details"
+        >
+          수집 상태와 기준
+        </button>
+      </div>
+      {sourceOpen && (
+        <section className="source-details" id="source-details">
+          <h2>데이터를 읽는 기준</h2>
+          <p>
+            매출·홀더 배분·P/S·P/HR은 최근 30일 기준으로 비교합니다. 금액의 생성
+            시각과 이 화면의 수집·계산 시각은 다릅니다.
+          </p>
+          <div className="source-grid">
+            <div>
+              <strong>DefiLlama</strong>
+              <p>수수료·매출·홀더 금액. 원천 생성 시각은 제공되지 않습니다.</p>
+            </div>
+            <div>
+              <strong>CoinMarketCap</strong>
+              <p>
+                원천{" "}
+                {data?.marketDataFreshness.oldestAt
+                  ? fmtKstMinute(data.marketDataFreshness.oldestAt)
+                  : "미확인"}{" "}
+                ~{" "}
+                {data?.marketDataFreshness.newestAt
+                  ? fmtKstMinute(data.marketDataFreshness.newestAt)
+                  : "미확인"}
+              </p>
+            </div>
+            <div>
+              <strong>CoinGecko</strong>
+              <p>일부 가격·공급 데이터 보강. 캐시 주기 최대 6시간.</p>
+            </div>
           </div>
+          <p>
+            마지막 서버 확인 {checkedAt ? fmtKstMinute(checkedAt) : "확인 중"} ·{" "}
+            {data?.scoreVersion ?? "–"}
+          </p>
+          {data?.sources.map((s) => (
+            <p className="source-entry" key={s.url}>
+              <span className={s.status === "ok" ? "positive" : "caution-text"}>
+                {s.status === "ok" ? "응답 수신" : "수집 실패"}
+              </span>{" "}
+              <a href={s.url} target="_blank" rel="noreferrer">
+                {s.url.includes("coingecko")
+                  ? `CoinGecko 페이지 ${new URL(s.url).searchParams.get("page")}`
+                  : s.url.includes("coinmarketcap")
+                    ? "CoinMarketCap"
+                    : new URL(s.url).pathname +
+                      (new URL(s.url).searchParams.get("dataType")
+                        ? ` · ${new URL(s.url).searchParams.get("dataType")}`
+                        : "")}
+              </a>{" "}
+              · {fmtKstMinute(s.observedAt)}
+            </p>
+          ))}
+          <p className="muted">
+            일부 제공처가 실패하면 확보된 자료만 표시합니다. 배분 권리와
+            운영비·인센티브·언락 일정은 별도 확인이 필요합니다.
+          </p>
+        </section>
+      )}
+      {(storageError || preferencesError) && (
+        <p className="notice" role="status">
+          브라우저 저장소를 사용할 수 없어 관심종목·열·이전 기록이 유지되지 않을
+          수 있습니다.
+        </p>
+      )}
 
-          <div className="flex min-w-0 flex-1 gap-2">
-            <label htmlFor="coin-search" className="sr-only">코인 또는 심볼 검색</label>
-            <input
-              id="coin-search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="코인/심볼 검색"
-              className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
-            />
+      <section className="track-grid" aria-label="포착 기준">
+        {TRACKS.map((t) => (
+          <button
+            key={t.key}
+            className={`track-card ${t.key} ${tracks.has(t.key) ? "selected" : ""}`}
+            aria-pressed={tracks.has(t.key)}
+            onClick={() => toggleSet(setTracks, t.key)}
+          >
+            <span className="track-top">
+              <span className="track-number">{t.number}</span>
+              <span>
+                {tracks.has(t.key) ? (
+                  <Check size={18} />
+                ) : (
+                  <ArrowUpRight size={18} />
+                )}
+              </span>
+            </span>
+            <span className="track-title">
+              {t.name}
+              <strong>{data ? counts[t.key] : "–"}</strong>
+            </span>
+            <span className="track-description">{t.description}</span>
+          </button>
+        ))}
+      </section>
+      <div className="track-caption">
+        <span>
+          {tracks.size > 0
+            ? `${tracks.size}개 기준 중 하나라도 해당하는 종목 · 다른 필터와 함께 적용`
+            : "기준을 누르면 해당 종목만 표시합니다. 한 종목에 여러 신호가 겹칠 수 있습니다."}
+        </span>
+        {tracks.size > 0 && (
+          <button className="text-button" onClick={() => setTracks(new Set())}>
+            기준 해제
+          </button>
+        )}
+      </div>
+
+      <section className="workspace" aria-label="스크리너">
+        <div className="view-bar" aria-label="결과 보기">
+          {(
+            [
+              { key: "all", label: "전체", count: coins.length },
+              { key: "signals", label: "신호 있음", count: counts.signals },
+              { key: "favorites", label: "관심종목", count: counts.favorites },
+              {
+                key: "changes",
+                label: "지난 확인 이후",
+                count: counts.changes,
+              },
+              { key: "data", label: "자료 확인 필요", count: counts.data },
+            ] as { key: View; label: string; count: number }[]
+          ).map((item) => (
             <button
-              type="button"
-              onClick={() => setAdvancedOpen((open) => !open)}
+              key={item.key}
+              className={`view-button ${view === item.key ? "selected" : ""}`}
+              aria-pressed={view === item.key}
+              onClick={() => setView(item.key)}
+            >
+              {item.key === "favorites" && <Star size={14} />} {item.label}
+              <span>{item.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className="toolbar">
+          <label className="search-box">
+            <Search size={17} />
+            <span className="sr-only">코인 또는 심볼 검색</span>
+            <input
+              aria-label="코인 또는 심볼 검색"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="코인 또는 심볼 검색"
+            />
+            {search && (
+              <button aria-label="검색 지우기" onClick={() => setSearch("")}>
+                <X size={15} />
+              </button>
+            )}
+          </label>
+          <div className="toolbar-actions">
+            <button
+              className={`button ${advancedOpen ? "active" : ""}`}
+              onClick={() => {
+                setAdvancedOpen((v) => !v);
+                setColumnsOpen(false);
+              }}
               aria-expanded={advancedOpen}
               aria-controls="advanced-filters"
-              className={toggleButtonClass(advancedOpen)}
             >
-              필터 {activeFilterCount}
+              <SlidersHorizontal size={15} />
+              필터
+              {activeCount > 0 && (
+                <span className="count-pill">{activeCount}</span>
+              )}
             </button>
             <button
-              type="button"
-              onClick={() => setColumnsOpen((open) => !open)}
+              className={`button ${columnsOpen ? "active" : ""}`}
+              onClick={() => {
+                setColumnsOpen((v) => !v);
+                setAdvancedOpen(false);
+              }}
               aria-expanded={columnsOpen}
               aria-controls="column-settings"
-              className={toggleButtonClass(columnsOpen)}
             >
-              열 {selectedCols.length}
+              <Columns3 size={15} />
+              표시 열
+            </button>
+            <button
+              className="icon-button export-button"
+              onClick={exportSnapshot}
+              aria-label="현재 스냅샷 JSON 내보내기"
+              title="스냅샷 JSON 내보내기"
+              disabled={!data}
+            >
+              <Download size={17} />
             </button>
           </div>
         </div>
-
-        <div className="mt-3 flex gap-2 overflow-x-auto border-t border-[var(--color-border)] pt-3 thin-scroll">
-          <button type="button" aria-pressed={hideZombie} onClick={() => setHideZombie((value) => !value)} className={toggleButtonClass(hideZombie)}>
-            좀비 숨김
-          </button>
-          <button type="button" aria-pressed={holderOnly} onClick={() => setHolderOnly((value) => !value)} className={toggleButtonClass(holderOnly)}>
-            현재 홀더가치만
-          </button>
-          <button type="button" aria-pressed={excludeHighDilution} onClick={() => setExcludeHighDilution((value) => !value)} className={toggleButtonClass(excludeHighDilution)}>
-            고희석 제외
-          </button>
-          <button type="button" aria-pressed={highConfidenceOnly} onClick={() => setHighConfidenceOnly((value) => !value)} className={toggleButtonClass(highConfidenceOnly)}>
-            신뢰도 B+
-          </button>
-          <button type="button" aria-pressed={newOnly} onClick={() => setNewOnly((value) => !value)} className={toggleButtonClass(newOnly)}>
-            신규 트랙 {newSlugs.size}
-          </button>
-          <button type="button" aria-pressed={favoriteOnly} onClick={() => setFavoriteOnly((value) => !value)} className={toggleButtonClass(favoriteOnly)}>
-            관심만 {favoriteSlugs.size}
-          </button>
-          <button type="button" onClick={resetFilters} className={toggleButtonClass(false)}>
-            필터 초기화
-          </button>
-        </div>
-
         {advancedOpen && (
-          <div id="advanced-filters" className="mt-4 border-t border-[var(--color-border)] pt-4">
-            <div className="grid gap-x-8 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
-              <ScoreRangeFilter min={minScore} max={maxScore} onMinChange={setMinScore} onMaxChange={setMaxScore} />
+          <section
+            id="advanced-filters"
+            className="filter-panel"
+            aria-label="상세 필터"
+          >
+            <div className="panel-heading">
+              <h2>상세 필터</h2>
+              <button className="text-button" onClick={reset}>
+                모두 초기화
+              </button>
+            </div>
+            <div className="filter-toggles">
+              {[
+                {
+                  label: "최근 활동 있음",
+                  value: hideInactive,
+                  set: setHideInactive,
+                },
+                {
+                  label: "P/HR 적격 배분만",
+                  value: holderOnly,
+                  set: setHolderOnly,
+                },
+                {
+                  label: "고희석 제외",
+                  value: excludeRisk,
+                  set: setExcludeRisk,
+                },
+                {
+                  label: "자료 완성도 B 이상",
+                  value: completeOnly,
+                  set: setCompleteOnly,
+                },
+                { label: "상장 90일 미만", value: newOnly, set: setNewOnly },
+              ].map((f) => (
+                <label key={f.label}>
+                  <input
+                    type="checkbox"
+                    checked={f.value}
+                    onChange={(e) => f.set(e.target.checked)}
+                  />
+                  {f.label}
+                </label>
+              ))}
+            </div>
+            <div className="range-grid">
               <UsdRangeFilter
                 label="시총 범위"
                 minUsd={minMcap}
                 maxUsd={maxMcap}
                 onMinChange={setMinMcap}
                 onMaxChange={setMaxMcap}
-              />
-              <UsdRangeFilter
-                label="TVL 범위"
-                minUsd={minTvl}
-                maxUsd={maxTvl}
-                onMinChange={setMinTvl}
-                onMaxChange={setMaxTvl}
               />
               <MultipleRangeFilter
                 label="P/HR 범위"
@@ -923,216 +691,371 @@ export function ScreenerClient({
                 onMinChange={setMinPs}
                 onMaxChange={setMaxPs}
               />
+              <UsdRangeFilter
+                label="TVL 범위"
+                minUsd={minTvl}
+                maxUsd={maxTvl}
+                onMinChange={setMinTvl}
+                onMaxChange={setMaxTvl}
+              />
+              <ScoreRangeFilter
+                min={minScore}
+                max={maxScore}
+                onMinChange={setMinScore}
+                onMaxChange={setMaxScore}
+              />
             </div>
-
-            <details className="mt-4">
-              <summary className="cursor-pointer select-none text-sm text-[var(--color-muted)] hover:text-[var(--color-text)]">
-                섹터 {cats.size > 0 ? `${cats.size}개 선택` : "전체"}
+            <details className="sector-picker">
+              <summary>
+                섹터 {cats.size ? `${cats.size}개 선택` : "전체"}
               </summary>
-              <div className="mt-2 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto thin-scroll">
-                {categories.map((category) => (
+              <div>
+                {data?.categories.map((category) => (
                   <button
                     key={category}
-                    type="button"
-                    onClick={() => toggleCat(category)}
+                    className={`chip ${cats.has(category) ? "selected" : ""}`}
                     aria-pressed={cats.has(category)}
-                    className={`rounded-full border px-2.5 py-1.5 text-xs transition-colors ${
-                      cats.has(category)
-                        ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
-                        : "border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-muted)]"
-                    }`}
+                    onClick={() => toggleSet(setCats, category)}
                   >
                     {category}
                   </button>
                 ))}
               </div>
-              {cats.size > 0 && (
-                <button type="button" onClick={() => setCats(new Set())} className="mt-2 text-xs text-[var(--color-accent)] hover:underline">
-                  섹터 선택 해제
-                </button>
-              )}
             </details>
-          </div>
+          </section>
         )}
-      </section>
-
-      {columnsOpen && (
-        <section
-          id="column-settings"
-          aria-label="표시 열 설정"
-          className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="font-semibold">표시 열 설정</h2>
-              <p className="mt-1 text-xs text-[var(--color-muted)]">코인 열은 항상 고정됩니다. 선택은 이 브라우저에 저장됩니다.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {COLUMN_PRESETS.map((preset) => (
-                <button key={preset.label} type="button" onClick={() => applyColumnPreset(preset.keys)} className={toggleButtonClass(false)}>
-                  {preset.label}
-                </button>
-              ))}
-              <button type="button" onClick={() => applyColumnPreset(COLS.map((col) => col.key))} className={toggleButtonClass(false)}>
-                전체 열
+        {columnsOpen && (
+          <section
+            id="column-settings"
+            className="filter-panel"
+            aria-label="표시 열 설정"
+          >
+            <div className="panel-heading">
+              <div>
+                <h2>표시 열</h2>
+                <p className="muted">
+                  코인 이름은 고정됩니다. 선택은 이 브라우저에 저장됩니다.
+                </p>
+              </div>
+              <button
+                className="icon-button"
+                aria-label="열 설정 닫기"
+                onClick={() => setColumnsOpen(false)}
+              >
+                <X size={17} />
               </button>
             </div>
-          </div>
-
-          <div className="mt-4 grid gap-4 border-t border-[var(--color-border)] pt-4 md:grid-cols-2 xl:grid-cols-4">
-            {(Object.keys(COLUMN_GROUP_LABELS) as ColumnGroup[]).map((group) => (
-              <fieldset key={group}>
-                <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">
-                  {COLUMN_GROUP_LABELS[group]}
-                </legend>
-                <div className="flex flex-wrap gap-2">
-                  {COLS.filter((col) => col.group === group).map((col) => (
-                    <button
-                      key={col.key}
-                      type="button"
-                      onClick={() => toggleColumn(col.key)}
-                      aria-pressed={visibleColumns.has(col.key)}
-                      title={col.title}
-                      className={toggleButtonClass(visibleColumns.has(col.key))}
-                    >
-                      {col.label}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-[var(--color-muted)]">
-        <span>
-          <strong className="text-[var(--color-text)]">{deferredRows.length.toLocaleString()}개</strong>
-          {" "}/ 전체 {coins.length.toLocaleString()}개 · 현재 {visibleStart.toLocaleString()}–{visibleEnd.toLocaleString()}
-        </span>
-        <span>
-          {scoreVersion} · CMC {cmcCoverage} · 정체성 확인 {verifiedIdentityCount} · FDV {fdvCoverage}
-          {" · "}계산 {fmtKstMinute(updatedAt)}
-          {marketDataFreshness.oldestAt && marketDataFreshness.newestAt && (
-            <span title={`${marketDataFreshness.source} 원천 시각 범위 · ${marketDataFreshness.timestampedCoinCount}개`}>
-              {" · "}CMC 원천 {fmtKstMinute(marketDataFreshness.oldestAt)}–{fmtKstMinute(marketDataFreshness.newestAt)}
-            </span>
-          )}
-        </span>
-      </div>
-
-      <div
-        className="overflow-x-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] thin-scroll"
-        style={{ opacity: stale ? 0.6 : 1, transition: "opacity 120ms" }}
-      >
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
-              <th
-                aria-sort={ariaSort("name")}
-                title="프로토콜/토큰"
-                className={`${stickyBase} bg-[var(--color-panel)] px-3 py-2.5 text-left font-medium ${sortKey === "name" ? "text-[var(--color-text)]" : ""}`}
-              >
-                <button type="button" onClick={() => onSort("name")} className="w-full text-left hover:text-[var(--color-text)]">
-                  코인{sortArrow("name")}
-                </button>
-              </th>
-              {selectedCols.map((col) => (
-                <th
-                  key={col.key}
-                  aria-sort={ariaSort(col.key)}
-                  title={col.title}
-                  className={`px-3 py-2.5 font-medium whitespace-nowrap ${col.key === "category" ? "text-left" : "text-right"} ${col.key === sortKey ? "text-[var(--color-text)]" : ""}`}
+            <div className="column-presets">
+              {COLUMN_PRESETS.map((p) => (
+                <button
+                  className="chip"
+                  key={p.label}
+                  onClick={() => setVisibleColumns(new Set(p.keys))}
                 >
-                  <button
-                    type="button"
-                    onClick={() => onSort(col.key)}
-                    className={`w-full hover:text-[var(--color-text)] ${col.key === "category" ? "text-left" : "text-right"}`}
-                  >
-                    {col.label}{sortArrow(col.key)}
-                  </button>
-                </th>
+                  {p.label}
+                </button>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {pagedRows.map((coin, index) => (
-              <tr key={coin.slug} className="group border-b border-[var(--color-border)]/50 hover:bg-[var(--color-panel-2)]">
-                <td className={`${stickyBase} bg-[var(--color-panel)] px-3 py-2.5 group-hover:bg-[var(--color-panel-2)]`}>
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 shrink-0 text-right text-xs tabular-nums text-[var(--color-muted)]">{pageStart + index + 1}</span>
-                    <button
-                      type="button"
-                      onClick={() => toggleFavorite(coin.slug)}
-                      aria-pressed={favoriteSlugs.has(coin.slug)}
-                      aria-label={`${coin.name} 관심종목 ${favoriteSlugs.has(coin.slug) ? "해제" : "추가"}`}
-                      title={favoriteSlugs.has(coin.slug) ? "관심종목 해제" : "관심종목 추가"}
-                      className={`shrink-0 text-lg leading-none transition-colors ${favoriteSlugs.has(coin.slug) ? "text-amber-300" : "text-[var(--color-muted)] hover:text-amber-200"}`}
-                    >
-                      {favoriteSlugs.has(coin.slug) ? "★" : "☆"}
-                    </button>
-                    {coin.logo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={coin.logo} alt="" width={20} height={20} className="shrink-0 rounded-full" loading="lazy" />
-                    ) : (
-                      <span className="h-5 w-5 shrink-0 rounded-full bg-[var(--color-panel-2)]" />
-                    )}
-                    <a
-                      href={coinUrl(coin)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={coin.cmcSlug ? "CoinMarketCap에서 열기" : coin.geckoId ? "CoinGecko에서 열기" : "DefiLlama에서 열기"}
-                      className="truncate font-medium hover:text-[var(--color-accent)] hover:underline"
-                    >
-                      {coin.name}
-                    </a>
-                    {coin.symbol && <span className="shrink-0 text-xs text-[var(--color-muted)]">{coin.symbol}</span>}
-                    {newSlugs.has(coin.slug) && (
-                      <span className="shrink-0 rounded-full bg-cyan-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-300" title="CMC 상장 90일 미만 — 기존 후보 점수와 분리">
-                        신규
-                      </span>
-                    )}
-                  </div>
-                </td>
-                {selectedCols.map((col) => (
-                  <td key={col.key} className={`px-3 py-2.5 tabular-nums ${col.key === "category" ? "text-left" : "text-right"}`}>
-                    {renderCell(coin, col.key)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {deferredRows.length === 0 && (
-          <div className="p-8 text-center text-sm text-[var(--color-muted)]">
-            조건에 맞는 코인이 없습니다. 필터를 완화해 보세요.
+            </div>
+            <div className="column-groups">
+              {(Object.keys(COLUMN_GROUP_LABELS) as ColumnGroup[]).map(
+                (group) => (
+                  <fieldset key={group}>
+                    <legend>{COLUMN_GROUP_LABELS[group]}</legend>
+                    {COLS.filter((c) => c.group === group).map((c) => (
+                      <label key={c.key}>
+                        <input
+                          type="checkbox"
+                          checked={visibleColumns.has(c.key)}
+                          disabled={
+                            visibleColumns.has(c.key) &&
+                            visibleColumns.size === 1
+                          }
+                          onChange={() => toggleSet(setVisibleColumns, c.key)}
+                        />
+                        <span>
+                          {c.label}
+                          <small>{c.title}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </fieldset>
+                ),
+              )}
+            </div>
+          </section>
+        )}
+
+        {hasFilters && (
+          <div className="active-filters">
+            <span>적용 중</span>
+            {tracks.size > 0 && (
+              <span>
+                {[...tracks]
+                  .map((t) => TRACKS.find((x) => x.key === t)!.name)
+                  .join(" 또는 ")}
+              </span>
+            )}
+            {view !== "all" && (
+              <span>
+                {view === "favorites"
+                  ? "관심종목"
+                  : view === "changes"
+                    ? "이전 기록과 비교"
+                    : view === "data"
+                      ? "자료 확인 필요"
+                      : "신호 있음"}
+              </span>
+            )}
+            {search && (
+              <button onClick={() => setSearch("")}>
+                검색: {search} <X size={12} />
+              </button>
+            )}
+            {activeCount > 0 && <span>상세 조건 {activeCount}</span>}
+            <button onClick={reset}>
+              모두 해제 <X size={12} />
+            </button>
           </div>
         )}
-      </div>
-
-      {deferredRows.length > 0 && (
-        <nav aria-label="결과 페이지" className="flex items-center justify-center gap-3 pt-1">
-          <button
-            type="button"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={page <= 1}
-            className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            이전
-          </button>
-          <span className="min-w-20 text-center text-sm tabular-nums text-[var(--color-muted)]">
-            {page} / {pageCount}
+        {view === "changes" && (
+          <div className="comparison-note">
+            <p>
+              {baseline
+                ? `비교 기준 ${fmtKstMinute(baseline.at)} · 신호 진입·이탈, 점수 3점, 매출·홀더 금액 5% 및 $100 이상 변화`
+                : "첫 방문입니다. 이번 자료를 저장한 뒤 다음 확인부터 변화를 표시합니다."}
+            </p>
+            {baseline && (
+              <button className="text-button" onClick={acknowledge}>
+                현재 자료까지 확인함
+              </button>
+            )}
+          </div>
+        )}
+        <div className="results-heading" id="screener-results" tabIndex={-1}>
+          <h2>
+            프로토콜 <strong>{deferredRows.length}</strong>
+            <span>/ {coins.length}</span>
+          </h2>
+          <div>
+            <label className="sort-select">
+              정렬{" "}
+              <select
+                aria-label="결과 정렬"
+                value={sortKey}
+                onChange={(e) => {
+                  setSortKey(e.target.value as SortKey);
+                  setPage(1);
+                }}
+              >
+                <option value="name">코인 이름</option>
+                {COLS.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="icon-button"
+              onClick={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))}
+              aria-label={
+                sortDir === "desc" ? "오름차순으로 변경" : "내림차순으로 변경"
+              }
+            >
+              {sortDir === "desc" ? (
+                <ArrowDown size={16} />
+              ) : (
+                <ArrowUp size={16} />
+              )}
+            </button>
+          </div>
+        </div>
+        <div
+          className="table-scroll thin-scroll"
+          role="region"
+          aria-label="프로토콜 비교 표 · 가로 스크롤 가능"
+          tabIndex={0}
+          aria-busy={rows !== deferredRows}
+        >
+          <table className="screener-table">
+            <caption className="sr-only">
+              실적과 홀더 배분 비교. 코인 이름을 누르면 계산 근거와 조건을 볼 수
+              있습니다.
+            </caption>
+            <thead>
+              <tr>
+                <th
+                  className="coin-column"
+                  scope="col"
+                  aria-sort={
+                    sortKey === "name"
+                      ? sortDir === "asc"
+                        ? "ascending"
+                        : "descending"
+                      : "none"
+                  }
+                >
+                  <button onClick={() => onSort("name")}>
+                    프로토콜 {sortArrow("name")}
+                  </button>
+                </th>
+                {selectedCols.map((col) => (
+                  <th
+                    key={col.key}
+                    scope="col"
+                    title={col.title}
+                    className={col.key === "signals" ? "signal-column" : ""}
+                    aria-sort={
+                      sortKey === col.key
+                        ? sortDir === "asc"
+                          ? "ascending"
+                          : "descending"
+                        : "none"
+                    }
+                  >
+                    <button onClick={() => onSort(col.key)}>
+                      {col.label}
+                      {sortArrow(col.key)}
+                    </button>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {deferredRows.slice(pageStart, pageStart + PAGE_SIZE).map((c) => (
+                <tr key={c.slug}>
+                  <th scope="row" className="coin-column">
+                    <div className="coin-identity">
+                      <button
+                        className={`favorite-button ${favoriteSlugs.has(c.slug) ? "saved" : ""}`}
+                        aria-pressed={favoriteSlugs.has(c.slug)}
+                        aria-label={`${c.name} 관심종목 ${favoriteSlugs.has(c.slug) ? "해제" : "추가"}`}
+                        onClick={() => toggleSet(setFavoriteSlugs, c.slug)}
+                      >
+                        <Star
+                          size={16}
+                          fill={
+                            favoriteSlugs.has(c.slug) ? "currentColor" : "none"
+                          }
+                        />
+                      </button>
+                      <button
+                        className="coin-open"
+                        aria-label={`${c.name} 상세 보기`}
+                        onClick={() => setSelectedSlug(c.slug)}
+                      >
+                        {c.logo && (
+                          <img
+                            src={c.logo}
+                            alt=""
+                            width={26}
+                            height={26}
+                            loading="lazy"
+                          />
+                        )}
+                        <span>
+                          <strong>{c.name}</strong>
+                          <small>
+                            {c.symbol ?? "심볼 미확인"}
+                            {changes.get(c.slug)?.meaningful && (
+                              <span className="change-dot">변화</span>
+                            )}
+                          </small>
+                        </span>
+                      </button>
+                    </div>
+                  </th>
+                  {selectedCols.map((col) => (
+                    <td
+                      key={col.key}
+                      className={col.key === "signals" ? "signal-column" : ""}
+                    >
+                      {renderCell(c, col.key)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {deferredRows.length === 0 && (
+          <div className="empty-state">
+            <Search size={25} />
+            <h3>
+              {!data
+                ? "데이터를 준비하고 있습니다"
+                : view === "favorites" && !counts.favorites
+                  ? "관심종목을 골라 주세요"
+                  : view === "changes" && !baseline
+                    ? "비교할 첫 기록을 남겼습니다"
+                    : "이 조건에 맞는 종목이 없습니다"}
+            </h3>
+            <p>
+              {!data
+                ? error || "공개 데이터 응답을 기다리고 있습니다."
+                : view === "favorites"
+                  ? "코인 이름 옆 별표를 누르면 여기에 모입니다."
+                  : view === "changes" && !baseline
+                    ? "다음 확인부터 새 신호와 실적 변화를 볼 수 있습니다."
+                    : "검색어와 적용한 기준을 확인하거나 전체 종목을 살펴보세요."}
+            </p>
+            <button
+              className="button"
+              onClick={!data ? () => void refresh() : reset}
+            >
+              {!data ? "다시 확인" : "전체 종목 보기"}
+            </button>
+          </div>
+        )}
+        <div className="pagination">
+          <span>
+            {deferredRows.length ? pageStart + 1 : 0}–
+            {Math.min(pageStart + PAGE_SIZE, deferredRows.length)} /{" "}
+            {deferredRows.length}개
           </span>
-          <button
-            type="button"
-            onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
-            disabled={page >= pageCount}
-            className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            다음
-          </button>
-        </nav>
+          <nav aria-label="결과 페이지">
+            <button
+              className="icon-button"
+              aria-label="이전 페이지"
+              disabled={currentPage === 1}
+              onClick={() => setPage(currentPage - 1)}
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <span>
+              {currentPage} / {pages}
+            </span>
+            <button
+              className="icon-button"
+              aria-label="다음 페이지"
+              disabled={currentPage === pages}
+              onClick={() => setPage(currentPage + 1)}
+            >
+              <ChevronRight size={18} />
+            </button>
+          </nav>
+          <span className="table-help">코인 이름을 눌러 근거 확인</span>
+        </div>
+      </section>
+      <footer className="app-footer">
+        <p>
+          DefiLlama · CoinMarketCap · CoinGecko{" "}
+          <span>
+            시총 $1M 이상 · 관측 신호는 투자 추천이나 수익률 예측이 아닙니다.
+          </span>
+        </p>
+        <p>
+          이 브라우저에 {historyCount}일 기록 · 최근 60일 보관 · 매일 마지막으로
+          확인한 스냅샷
+        </p>
+      </footer>
+      {selectedCoin && (
+        <CoinDetail
+          coin={selectedCoin}
+          change={changes.get(selectedCoin.slug)!}
+          onClose={() => setSelectedSlug(null)}
+        />
       )}
-    </div>
+    </main>
   );
 }

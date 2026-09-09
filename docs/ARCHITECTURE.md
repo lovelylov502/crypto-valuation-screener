@@ -1,5 +1,7 @@
 # 아키텍처
 
+> Current v4 contract (2026-09-08): [SCREENER_V4.md](./SCREENER_V4.md). The sections below preserve the v3 baseline. For the current independent discovery signals, same-period accounting, refresh, history and UI, follow the v4 contract.
+
 ## 데이터 흐름
 
 ```

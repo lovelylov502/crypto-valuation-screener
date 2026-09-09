@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   MIN_ACTIVITY_USD,
   MIN_SECTOR_SAMPLE,
@@ -7,14 +7,115 @@ import {
 } from "./valuation";
 import type { CoinRaw } from "./types";
 import type { HolderValueSummary } from "./holderValue";
+import { aggregateHolderValueByGroup, emptyHolderValueSummary } from "./holderValue";
+import { compareFlow } from "./signals";
+import { appendSnapshot, compareSnapshot, makeSnapshot, parseHistory } from "./snapshotHistory";
+import { assembleScreener } from "./screener";
+import { fetchLatestSnapshot } from "./screenerRefresh";
 
 const REFERENCE = "2026-07-28T05:00:00.000Z";
 const OLD_LISTING = Date.parse("2025-01-01T00:00:00.000Z") / 1000;
+
+describe("independent opportunity signals and same-period accounting", () => {
+  it("uses matching 30-day amounts for shares and every primary cashflow multiple", () => {
+    const raw = sample({ revenue30d: 97_363, revenueAnnual: 7_138_646, holderValue: { eligibleCurrent30d: 48_685, eligibleRunRate: 48_685 * 365 / 30 } });
+    const [c] = scoreCoins([raw], REFERENCE);
+    expect(c.valueCapture.eligibleHolderValueShare).toBeCloseTo(48_685 / 97_363);
+    expect(c.multiples.ps).toBeCloseTo(raw.mcap! / (97_363 * 365 / 30));
+    expect(c.multiples.pf).toBeCloseTo(raw.mcap! / (raw.fees30d! * 365 / 30));
+  });
+  it("preserves ratios above 100% and warns about incompatible scope or funding", () => {
+    const [c] = scoreCoins([sample({ revenue30d: 100, holderValue: { eligibleCurrent30d: 200 } })], REFERENCE);
+    expect(c.valueCapture.eligibleHolderValueShare).toBe(2);
+    expect(c.valueCapture.risks.join(" ")).toContain("분모를 초과");
+    expect(c.valueCapture.score!).toBeLessThanOrEqual(100);
+  });
+  it("surfaces growing businesses even with no holder capture and no peer score", () => {
+    const [c] = scoreCoins([sample({ holderValue: emptyHolderValueSummary() })], REFERENCE);
+    expect(c.opportunities.business).toBe(true);
+    expect(c.opportunities.holder).toBe(false);
+    expect(c.peerCounts.phr).toBe(0);
+    expect(c.status).not.toBe("발굴 후보");
+  });
+  it("keeps an opportunity when price rises or dilution fails a score gate", () => {
+    const rows = [sample({ priceChange30d: 19 }), sample({ slug: "later", priceChange30d: 21, fdv: 500_000_000 })];
+    const [a,b] = scoreCoins(rows, REFERENCE);
+    expect(a.opportunities.business).toBe(true);
+    expect(b.opportunities.business).toBe(true);
+    expect(b.opportunities.holder).toBe(true);
+    expect(b.opportunities.risks).toContain("높은 희석 비율");
+    expect(b.opportunities.dataIssues).not.toContain("높은 희석 비율");
+    expect(b.valueScore).toBeNull();
+  });
+  it("never promotes a token with an ambiguous identity", () => {
+    const [c] = scoreCoins([sample({ identityStatus: "ambiguous" })], REFERENCE);
+    expect([c.opportunities.business,c.opportunities.holder,c.opportunities.transition]).toEqual([false,false,false]);
+  });
+  it("separates zero transitions, missing history and a stopped flow", () => {
+    expect(compareFlow(10, 0)).toEqual({state:"from_zero",changePct:null});
+    expect(compareFlow(10, null)).toEqual({state:"unknown",changePct:null});
+    expect(compareFlow(0, 10)).toEqual({state:"to_zero",changePct:-100});
+    const [started, unknown] = scoreCoins([sample({holderValue:{eligiblePrevious30d:0}}), sample({holderValue:{eligiblePrevious30d:null}})], REFERENCE);
+    expect(started.opportunities.transition).toBe(true);
+    expect(unknown.opportunities.transition).toBe(false);
+  });
+  it("observes conditional locker revenue without making it eligible for general P/HR", () => {
+    const holderValue = aggregateHolderValueByGroup([{slug:"ve-test",total30d:100,total60dto30d:80,methodology:{HoldersRevenue:"All fees distributed to ve token voters."}}],s=>s).get("ve-test")!;
+    const [c] = scoreCoins([sample({holderValue})], REFERENCE);
+    expect(c.opportunities.holder).toBe(true);
+    expect(c.opportunities.conditionalCurrent30d).toBe(100);
+    expect(c.multiples.phr).toBeNull();
+  });
+});
+
+describe("local observations and refresh recovery", () => {
+  const payload = (at = REFERENCE) => assembleScreener([sample()], at, []);
+  it("keeps one newest observation per KST day without replacing it with old ISR data", () => {
+    const a = makeSnapshot(payload());
+    const b = makeSnapshot(payload("2026-07-28T06:00:00.000Z"));
+    expect(appendSnapshot([a], b)).toEqual([b]);
+    expect(appendSnapshot([b], a)).toEqual([b]);
+    const tomorrow = makeSnapshot(payload("2026-07-28T16:00:00.000Z"));
+    expect(appendSnapshot([b], tomorrow)).toHaveLength(2);
+  });
+  it("rejects corrupt persisted records and retains a valid snapshot", () => {
+    const a = makeSnapshot(payload());
+    expect(parseHistory(JSON.stringify([a]))).toEqual([a]);
+    expect(parseHistory('{bad')).toEqual([]);
+    expect(parseHistory(JSON.stringify([{...a,coins:{broken:{identity:"x"}}}]))).toEqual([]);
+  });
+  it("does not compare scores after a rule or token identity change", () => {
+    const data = payload(); const c = data.coins[0]; const s = makeSnapshot(data);
+    expect(compareSnapshot(c,s,"new-rules").state).toBe("rules_changed");
+    expect(compareSnapshot({...c,cmcId:999999},s,data.scoreVersion).state).toBe("identity_changed");
+    expect(compareSnapshot(c,s,data.scoreVersion).meaningful).toBe(false);
+    expect(compareSnapshot({...c,revenue30d:c.revenue30d! * 1.1},s,data.scoreVersion).meaningful).toBe(true);
+  });
+  it("retries a stale ISR response and returns the regenerated snapshot", async () => {
+    const old = payload("2026-07-27T00:00:00.000Z"); const fresh = payload();
+    const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(old))).mockResolvedValueOnce(new Response(JSON.stringify(fresh)));
+    const onWaiting = vi.fn();
+    const result = await fetchLatestSnapshot({fetcher,signal:new AbortController().signal,onWaiting,wait:async()=>{},now:()=>Date.parse(REFERENCE)});
+    expect(result.updatedAt).toBe(REFERENCE); expect(fetcher).toHaveBeenCalledTimes(2); expect(onWaiting).toHaveBeenCalledOnce();
+  });
+  it("bounds stale retries and rejects failure, empty and old-schema payloads", async () => {
+    const old = payload("2026-07-27T00:00:00.000Z");
+    const options = {signal:new AbortController().signal,onWaiting:()=>{},wait:async()=>{},now:()=>Date.parse(REFERENCE)};
+    const fetcher = vi.fn().mockImplementation(async()=>new Response(JSON.stringify(old)));
+    expect((await fetchLatestSnapshot({...options,fetcher})).updatedAt).toBe(old.updatedAt);
+    expect(fetcher).toHaveBeenCalledTimes(7);
+    for (const response of [new Response("{}",{status:502}),new Response(JSON.stringify({...payload(),coins:[]})),new Response(JSON.stringify({...payload(),coins:[{}]}))]) {
+      await expect(fetchLatestSnapshot({...options,fetcher:async()=>response})).rejects.toThrow();
+    }
+  });
+});
 
 type CoinOverrides = Omit<Partial<CoinRaw>, "holderValue"> & {
   slug: string;
   holderValue?: Partial<HolderValueSummary>;
 };
+
+function sample(partial: Partial<CoinOverrides> = {}): CoinRaw { return make({ slug: "sample", ...partial }); }
 
 function make(partial: CoinOverrides): CoinRaw {
   const { holderValue, ...rest } = partial;
@@ -159,7 +260,7 @@ describe("scoreCoins discovery model", () => {
     const [scored] = scoreCoins([current], REFERENCE);
 
     expect(scored.multiples.phr).toBeCloseTo(120_000_000 / 12_166_666.666666666);
-    expect(SCORE_VERSION).toBe("rediscovery-v3-holder-classifier");
+    expect(SCORE_VERSION).toBe("research-v4-same-window");
   });
 
   it("leaves current P/HR unavailable when TTM is positive but current 30d is zero", () => {

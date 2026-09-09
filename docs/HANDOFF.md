@@ -1,5 +1,23 @@
 # Handoff
 
+## 2026-09-09 publication preparation
+
+The user explicitly authorized production deployment. GitHub rejected the first push because the active OAuth credential lacks `workflow` scope. The complete implementation, including `.github/workflows/daily-snapshot.yml`, is preserved in local branch `codex/screener-signal-ux-overhaul` at `ad6afc1722e1d768ad88755f7e9efbcfcfe75b89`. The web application and capture scripts are being published from `main`; the workflow is deferred until credential authorization is available. Unattended collection is not active. The canonical deployment wrapper and live readback remain required before reporting publication success.
+
+## 2026-09-08 implementation handoff — v4
+
+Current implementation: `research-v4-same-window`, on `codex/screener-signal-ux-overhaul`. See [SCREENER_V4.md](./SCREENER_V4.md) for the governing product/UX/accounting contract. The older deployment receipts below remain historical and do not prove v4 is deployed.
+
+Independent business/holder/transition signals, same-period accounting, refresh recovery, browser history, a responsive research table and native coin details are implemented. The twice-daily collection workflow must reach the default branch before scheduling starts; local collection was exercised successfully. Production must still use the guarded canonical deployment route.
+
+Final local validation (2026-09-09 KST): 138 application tests, six deployment-contract tests, TypeScript and production build passed. Live-source local production `/api/screener` returned 707 rows in 2,246,846 bytes, below the 4.5MB gate. The observed counts were 178 business, 54 holder and 3 transition signals; 141 business signals did not require a holder signal. No unverified identity produced a signal. The final page/API had no source failures; a separate capture recorded a CoinGecko partial failure correctly.
+
+Browser QA covers desktop/mobile layouts, range filtering, column presets, source disclosure, retained search/favorite filters after data refresh, favorite persistence after reload, and native dialog Escape/focus restoration. Browser error/warning logs were empty in the final local session. Archive contents and rule hashes were verified against the final source. The preview runs at `http://127.0.0.1:3101` while its local server remains active. Screenshots, audit notes, API data and `final-validation.json` are saved outside the repository at `C:\Users\TAE\Documents\Codex\2026-09-08\crypto-screener-overhaul`.
+
+At this implementation handoff, v4 had not yet been committed, pushed, deployed or scheduled in GitHub. The canonical guarded production deployment remains the only supported publishing path. Browser history starts from actual visits; scheduled artifacts are separate research receipts and are not a server-side history feed.
+
+## Historical v3 deployment and recovery receipts
+
 마지막 작업 기준: 2026-08-31 KST
 
 ## 현재 제품

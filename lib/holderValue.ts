@@ -319,10 +319,13 @@ export function emptyHolderValueSummary(): HolderValueSummary {
 }
 
 function finalize(accumulator: HolderAccumulator): HolderValueSummary {
-  const eligibleCurrent30d = accumulator.eligibleCurrentObserved
+  const eligible = accumulator.components.filter(component => component.eligible);
+  const currentComplete = eligible.length > 0 && eligible.every(c => c.current30d !== null);
+  const previousComplete = eligible.length > 0 && eligible.every(c => c.previous30d !== null);
+  const eligibleCurrent30d = accumulator.eligibleCurrentObserved && currentComplete
     ? accumulator.eligibleCurrent
     : null;
-  const eligiblePrevious30d = accumulator.eligiblePreviousObserved
+  const eligiblePrevious30d = accumulator.eligiblePreviousObserved && previousComplete
     ? accumulator.eligiblePrevious
     : null;
   const eligibleRunRate =
@@ -366,6 +369,11 @@ function finalize(accumulator: HolderAccumulator): HolderValueSummary {
     availability = "excluded";
     warning = "DefiLlama holder revenue가 일반 홀더 P/HR 제외 유형";
     phrUnavailableReason = "일반 홀더 P/HR 제외 경제유형";
+  }
+
+  if (eligible.length > 0 && (!currentComplete || !previousComplete)) {
+    warning = [warning, "적격 구성요소 일부의 30일 이력 누락 · 전체 성장률 비교 보류"].filter(Boolean).join(" · ");
+    if (!currentComplete) phrUnavailableReason = "적격 구성요소의 최근 30일 금액 일부 누락";
   }
 
   return {
@@ -416,9 +424,9 @@ export function aggregateHolderValueByGroup(
     const previous30d = amount(row.total60dto30d);
     const ttm = amount(row.total1y);
     if (
-      (current30d ?? 0) <= 0 &&
-      (previous30d ?? 0) <= 0 &&
-      (ttm ?? 0) <= 0
+      current30d === null &&
+      previous30d === null &&
+      ttm === null
     ) {
       continue;
     }

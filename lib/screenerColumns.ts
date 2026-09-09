@@ -1,4 +1,7 @@
 export type SortKey =
+  | "signals"
+  | "revenueGrowth"
+  | "holderGrowth"
   | "valueScore"
   | "scoreAxes"
   | "confidence"
@@ -46,9 +49,12 @@ export const COLUMN_GROUP_LABELS: Record<ColumnGroup, string> = {
 };
 
 export const SCREENER_COLUMNS: ScreenerColumn[] = [
-  { key: "valueScore", label: "판정 / 점수", title: "필수 게이트 통과 후 산출한 발견 점수와 상태", group: "valuation" },
+  { key: "signals", label: "포착 신호", title: "실적 개선 · 현재 홀더 배분 · 관측 흐름 전환. 여러 신호가 함께 나타날 수 있습니다", group: "valuation" },
+  { key: "revenueGrowth", label: "매출 변화", title: "동일 구성요소 최근 30일 / 직전 30일 변화", group: "fundamentals" },
+  { key: "holderGrowth", label: "홀더 변화", title: "적격 홀더 금액 최근 30일 / 직전 30일 변화. 0과 누락을 구분", group: "fundamentals" },
+  { key: "valueScore", label: "실험 점수", title: "홀더 귀속 중심의 실험적 점수. 신호 포함 여부와 독립적이며 미래 수익률 확률이 아닙니다", group: "valuation" },
   { key: "scoreAxes", label: "4축", title: "가치 30 · 개선 25 · 미발견 25 · 품질 20", group: "valuation" },
-  { key: "confidence", label: "신뢰도", title: "데이터 완성도 A/B/C와 백분율", group: "valuation" },
+  { key: "confidence", label: "자료 완성도", title: "필드 확보율 A/B/C. 성공 확률이나 근거 신뢰도가 아닙니다", group: "valuation" },
   { key: "gateStatus", label: "게이트", title: "정체성·시세·이력·유동성·희석·상장기간·활동성 필수 조건", group: "valuation" },
   { key: "phr", label: "P/HR", title: "시총 / 적격 최근 30일 holder value 연환산 (낮을수록 쌈)", group: "valuation" },
   { key: "holderValueRunRate", label: "현재 홀더가치/년", title: "P/HR 적격 최근 30일 holder value × 365/30. DefiLlama-derived 분류", group: "fundamentals" },
@@ -63,8 +69,8 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
   { key: "atlChangePercentage", label: "ATL 대비", title: "현재가의 사상 최저가 대비 변화율", group: "performance" },
   { key: "category", label: "섹터", title: "카테고리", group: "market" },
   { key: "captureScore", label: "포획", title: "최근 30일 적격 경제유형만 반영한 일반 홀더 가치포획 점수", group: "valuation" },
-  { key: "ps", label: "P/S", title: "시총 / 연매출 (낮을수록 쌈)", group: "valuation" },
-  { key: "revenueAnnual", label: "매출/년", title: "연율화 프로토콜 매출", group: "fundamentals" },
+  { key: "ps", label: "P/S", title: "시총 / (최근 30일 매출 × 365/30). P/HR과 동일 기간", group: "valuation" },
+  { key: "revenueAnnual", label: "매출 TTM/연환산", title: "전체 구성요소 TTM 우선, 불완전하면 전체 최근 30일 연환산. P/S에는 최근 30일만 사용", group: "fundamentals" },
   { key: "revenue30d", label: "매출 30일", title: "최근 30일 매출 (원값)", group: "fundamentals" },
   { key: "fdv", label: "FDV", title: "완전희석가치 (CoinMarketCap 우선)", group: "market" },
   { key: "tvl", label: "TVL", title: "예치자산", group: "market" },
@@ -73,19 +79,18 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
 ];
 
 export const DEFAULT_VISIBLE_COLUMNS: SortKey[] = [
-  "valueScore",
-  "scoreAxes",
+  "signals",
+  "revenue30d",
   "phr",
   "holderValueRunRate",
   "mcap",
-  "totalVolume",
   "priceChange30d",
-  "priceChange60d",
-  "priceChange1y",
 ];
 
 export const COLUMN_PRESETS: { label: string; keys: SortKey[] }[] = [
   { label: "핵심", keys: DEFAULT_VISIBLE_COLUMNS },
+  { label: "실적 비교", keys: ["signals", "revenue30d", "revenueGrowth", "ps", "mcap", "priceChange30d"] },
+  { label: "홀더 배분", keys: ["signals", "holderValueRunRate", "holderGrowth", "holderValueTtm", "phr", "mcap"] },
   {
     label: "가격 성과",
     keys: ["mcap", "totalVolume", "priceChange7d", "priceChange14d", "priceChange30d", "priceChange60d", "priceChange1y", "athChangePercentage", "atlChangePercentage"],

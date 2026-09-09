@@ -1,6 +1,6 @@
 import { fetchCoins } from "./sources";
 import { MIN_MCAP_USD, SCORE_VERSION, scoreCoins } from "./valuation";
-import type { MarketDataFreshness, ScreenerResponse } from "./types";
+import type { CoinRaw, MarketDataFreshness, ScreenerResponse, SourceObservation } from "./types";
 
 export function filterScreenableCoins<T extends { mcap: number | null }>(
   coins: T[],
@@ -27,11 +27,16 @@ export function summarizeMarketDataFreshness<
 
 // 데이터 수집 → 점수화 → 응답 페이로드 조립 (route와 page 서버컴포넌트가 공유)
 export async function buildScreener(): Promise<ScreenerResponse> {
-  const raw = await fetchCoins();
-  const updatedAt = new Date().toISOString();
+  const sources: SourceObservation[] = [];
+  const raw = await fetchCoins(sources);
+  return assembleScreener(raw, new Date().toISOString(), sources);
+}
+
+export function assembleScreener(raw: CoinRaw[], updatedAt: string, sources: SourceObservation[]): ScreenerResponse {
   // 전체 원천 universe로 상대점수를 계산한 뒤, UI와 API에는 실제 스크리닝 대상만 싣는다.
   // 이 경계를 공유해야 API ISR 응답이 Vercel Function 4.5MB 한도를 넘지 않는다.
   const coins = filterScreenableCoins(scoreCoins(raw, updatedAt));
+  if (coins.length === 0) throw new Error("스크리닝 가능한 데이터 없음");
 
   const categories = Array.from(
     new Set(coins.map((c) => c.category).filter((c): c is string => !!c)),
@@ -59,5 +64,6 @@ export async function buildScreener(): Promise<ScreenerResponse> {
     verifiedIdentityCount,
     discoveryCandidateCount,
     scoreVersion: SCORE_VERSION,
+    sources,
   };
 }

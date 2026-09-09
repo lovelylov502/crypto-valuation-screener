@@ -1,4 +1,5 @@
 import type { HolderValueSummary } from "./holderValue";
+import type { OpportunitySignals } from "./signals";
 
 // 조인된 코인 1건의 원천 데이터 (밸류에이션 계산 전)
 export interface CoinRaw {
@@ -69,15 +70,18 @@ export interface CoinRaw {
 export interface ValueCapture {
   score: number | null; // 0~100, 높을수록 토큰 홀더가 실제 가치를 잘 포획
   label: ValueCaptureLabel;
-  eligibleHolderValueShare: number | null; // 적격 current run-rate / protocol revenue(or fees), 0~1
+  eligibleHolderValueShare: number | null; // 동일 최근 30일 금액 비율. 1 초과도 보존
+  shareBasis: "revenue30d" | "fees30d" | null;
   signals: string[];
   risks: string[];
 }
 
 export interface CoinScored extends CoinRaw {
+  opportunities: OpportunitySignals;
+  peerCounts: { phr: number; ps: number; pf: number };
   multiples: {
-    pf: number | null; // P/F = mcap / feesAnnual
-    ps: number | null; // P/S = mcap / revenueAnnual
+    pf: number | null; // P/F = mcap / (fees30d * 365 / 30)
+    ps: number | null; // P/S = mcap / (revenue30d * 365 / 30)
     phr: number | null; // P/HR = mcap / holderValue.eligibleRunRate
     mcapTvl: number | null; // mcap / tvl
     fdvTvl: number | null; // fdv / tvl
@@ -161,4 +165,11 @@ export interface ScreenerResponse {
   verifiedIdentityCount: number;
   discoveryCandidateCount: number;
   scoreVersion: string;
+  sources: SourceObservation[];
+}
+
+export interface SourceObservation {
+  url: string;
+  observedAt: string; // 이 수집에서 응답을 읽은 시각. 원천 데이터 생성 시각과 다름
+  status: "ok" | "error";
 }
