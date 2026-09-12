@@ -1,10 +1,15 @@
 import type { CoinScored, ScreenerResponse } from "./types";
 import type { OpportunityTrack } from "./signals";
+import { researchPs } from "./research";
+import { revenueAmount } from "./revenueHistory";
 
 export const HISTORY_STORAGE_KEY = "crypto-screener-history-v1";
+export const REVIEW_BASELINE_KEY = "crypto-screener-review-baseline-v1";
 export interface SnapshotCoin {
   identity: string;
   price: number | null;
+  mcap?: number | null;
+  ps?: number | null;
   score: number | null;
   phr: number | null;
   revenue30d: number | null;
@@ -32,9 +37,11 @@ export function makeSnapshot(data: ScreenerResponse): Snapshot {
         {
           identity: identity(c),
           price: c.price,
+          mcap: c.mcap,
+          ps: researchPs(c),
           score: c.valueScore,
           phr: c.multiples.phr,
-          revenue30d: c.revenue30d,
+          revenue30d: revenueAmount(c, 30),
           holder30d: c.holderValue.eligibleCurrent30d,
           tracks: (["business", "holder", "transition"] as const).filter(
             (track) => c.opportunities[track],
@@ -70,6 +77,7 @@ export function parseHistory(raw: string | null): Snapshot[] {
               (n) =>
                 n === null || (typeof n === "number" && Number.isFinite(n)),
             ) &&
+            [c.ps, c.mcap].every(n => n === undefined || n === null || (typeof n === "number" && Number.isFinite(n))) &&
             Array.isArray(c.tracks) &&
             c.tracks.every((t) =>
               ["business", "holder", "transition"].includes(t),
@@ -105,6 +113,7 @@ export interface SnapshotChange {
   added: OpportunityTrack[];
   scoreDelta: number | null;
   phrDelta: number | null;
+  psDelta: number | null;
   revenueDelta: number | null;
   holderDelta: number | null;
   meaningful: boolean;
@@ -119,6 +128,7 @@ export function compareSnapshot(
     added: [],
     scoreDelta: null,
     phrDelta: null,
+    psDelta: null,
     revenueDelta: null,
     holderDelta: null,
     meaningful: false,
@@ -139,7 +149,7 @@ export function compareSnapshot(
   );
   const scoreDelta = delta(coin.valueScore, previous.score);
   const phrDelta = delta(coin.multiples.phr, previous.phr);
-  const revenueDelta = delta(coin.revenue30d, previous.revenue30d);
+  const revenueDelta = delta(revenueAmount(coin, 30), previous.revenue30d);
   const holderDelta = delta(
     coin.holderValue.eligibleCurrent30d,
     previous.holder30d,
@@ -155,12 +165,12 @@ export function compareSnapshot(
     added,
     scoreDelta,
     phrDelta,
+    psDelta: delta(researchPs(coin), previous.ps ?? null),
     revenueDelta,
     holderDelta,
     meaningful:
       added.length > 0 ||
       removed ||
-      Math.abs(scoreDelta ?? 0) >= 3 ||
       materialFlow(revenueDelta, previous.revenue30d) ||
       materialFlow(holderDelta, previous.holder30d),
   };

@@ -6,6 +6,7 @@ import { fetchLatestSnapshot, REVALIDATE_MS } from "@/lib/screenerRefresh";
 import {
   appendSnapshot,
   HISTORY_STORAGE_KEY,
+  REVIEW_BASELINE_KEY,
   makeSnapshot,
   parseHistory,
   type Snapshot,
@@ -30,7 +31,10 @@ export function useScreenerData(initial: ScreenerResponse | null) {
   useEffect(() => {
     try {
       history.current = parseHistory(localStorage.getItem(HISTORY_STORAGE_KEY));
-      setBaseline(history.current.at(-1) ?? null);
+      const savedReview = parseHistory(localStorage.getItem(REVIEW_BASELINE_KEY)).at(-1);
+      const firstBaseline = savedReview ?? history.current.at(-1) ?? (initial ? makeSnapshot(initial) : null);
+      setBaseline(firstBaseline);
+      if (firstBaseline && !savedReview) localStorage.setItem(REVIEW_BASELINE_KEY, JSON.stringify([firstBaseline]));
     } catch {
       setStorageError(true);
     }
@@ -48,10 +52,15 @@ export function useScreenerData(initial: ScreenerResponse | null) {
         HISTORY_STORAGE_KEY,
         JSON.stringify(history.current),
       );
+      if (!baseline) {
+        const first = makeSnapshot(data);
+        setBaseline(first);
+        localStorage.setItem(REVIEW_BASELINE_KEY, JSON.stringify([first]));
+      }
     } catch {
       setStorageError(true);
     }
-  }, [data, ready]);
+  }, [data, ready, baseline]);
 
   const refresh = useCallback(async () => {
     if (active.current) return;
@@ -125,7 +134,11 @@ export function useScreenerData(initial: ScreenerResponse | null) {
   }, [refresh]);
 
   const acknowledge = () => {
-    if (data) setBaseline(makeSnapshot(data));
+    if (!data) return;
+    const snapshot = makeSnapshot(data);
+    setBaseline(snapshot);
+    try { localStorage.setItem(REVIEW_BASELINE_KEY, JSON.stringify([snapshot])); }
+    catch { setStorageError(true); }
   };
   return {
     data,
@@ -139,5 +152,6 @@ export function useScreenerData(initial: ScreenerResponse | null) {
     acknowledge,
     storageError,
     now,
+    history: history.current,
   };
 }

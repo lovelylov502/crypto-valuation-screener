@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { DEPLOY_CONTRACT } from "./deploy-contract.mjs";
 
-const ADVANCED_UI_MARKERS = ["실적 개선", "홀더 배분", "흐름 전환", "지난 확인 이후", "최신 자료 확인"];
+const ADVANCED_UI_MARKERS = ["P/S 참고선", "매출 성장", "P/S · 매출 추이", "확인 후 변화", "최신 자료 확인"];
 const LEGACY_UI_MARKERS = ["저평가 80+", "고평가 20 이하"];
 const MAX_API_BYTES = 4_500_000;
 const MAX_ATTEMPTS = 8;
@@ -68,6 +68,9 @@ function inspectApi(readback) {
     const sample = data.coins.find((coin) => coin && typeof coin === "object");
     for (const field of ["status", "scoreAxes", "holderValue", "opportunities", "peerCounts"]) {
       if (!(field in sample)) errors.push(`API advanced field missing: ${field}`);
+    }
+    if (!data.coins.some((coin) => coin.revenueHistory?.periods?.[30]?.total > 0 && coin.revenueHistory?.weeks?.length === 13)) {
+      errors.push("API has no usable completed-day revenue history");
     }
   }
   return { errors, data };

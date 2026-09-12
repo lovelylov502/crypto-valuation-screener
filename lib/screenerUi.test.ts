@@ -13,7 +13,9 @@ describe("holder-value screener columns", () => {
     expect(current).toMatchObject({ label: "현재 홀더가치/년" });
     expect(current?.title).toContain("적격 최근 30일");
     expect(current?.title).toContain("365/30");
-    expect(DEFAULT_VISIBLE_COLUMNS).toContain("holderValueRunRate");
+    expect(DEFAULT_VISIBLE_COLUMNS).toContain("ps");
+    expect(DEFAULT_VISIBLE_COLUMNS).toContain("revenue30d");
+    expect(DEFAULT_VISIBLE_COLUMNS).not.toContain("captureScore");
   });
 
   it("offers raw TTM separately and explains P/HR with eligible current semantics", () => {

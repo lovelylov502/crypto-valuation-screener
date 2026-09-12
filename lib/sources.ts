@@ -1,13 +1,9 @@
 import type { CoinRaw, IdentityStatus, SourceObservation } from "./types";
+import { fetchRevenueHistory } from "./revenueSource";
 import {
   aggregateHolderValueByGroup,
   emptyHolderValueSummary,
 } from "./holderValue";
-
-// 캐시 TTL (초)
-const TTL_DEFILLAMA = 1800; // 30분
-const TTL_COINGECKO = 21600; // 6시간
-const TTL_CMC = 1800; // 30분
 
 const LLAMA = "https://api.llama.fi";
 const GECKO = "https://api.coingecko.com/api/v3";
@@ -24,11 +20,12 @@ const GECKO_PAGES = 4; // 상위 ~1000개
 
 type Json = Record<string, unknown>;
 
-async function getJson<T>(url: string, revalidate: number, observations: SourceObservation[]): Promise<T> {
+async function getJson<T>(url: string, observations: SourceObservation[]): Promise<T> {
   try {
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch(url, {
-      next: { revalidate },
+      // The server caches the compressed joined snapshot; source responses can exceed 2 MB.
+      cache: "no-store",
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(30_000),
     });
@@ -68,7 +65,7 @@ function prettyParent(key: string): string {
 // DefiLlama overview 응답을 raw 배열로 (parentProtocol 필드 접근 위해)
 async function fetchOverviewList(path: string, observations: SourceObservation[]): Promise<Json[]> {
   const url = `${LLAMA}${path}${path.includes("?") ? "&" : "?"}excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true`;
-  const data = await getJson<{ protocols?: Json[] }>(url, TTL_DEFILLAMA, observations);
+  const data = await getJson<{ protocols?: Json[] }>(url, observations);
   if (!Array.isArray(data.protocols) || data.protocols.length === 0) {
     const observation = observations.find(s => s.url === url);
     if (observation) observation.status = "error";
@@ -83,7 +80,7 @@ async function fetchGecko(observations: SourceObservation[]): Promise<{ byId: Ma
   for (let page = 1; page <= GECKO_PAGES; page++) {
     const url = `${GECKO}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${page}&price_change_percentage=7d,14d,30d,1y`;
     try {
-      const rows = await getJson<Json[]>(url, TTL_COINGECKO, observations);
+      const rows = await getJson<Json[]>(url, observations);
       if (!Array.isArray(rows) || rows.length === 0) throw new Error("CoinGecko response is empty");
       for (const r of rows) {
         const id = str(r.id);
@@ -114,7 +111,6 @@ async function fetchCmc(observations: SourceObservation[]): Promise<CmcIndex> {
   try {
     const response = await getJson<{ data?: Json[] }>(
       url,
-      TTL_CMC,
       observations,
     );
     if (!Array.isArray(response.data) || response.data.length === 0) throw new Error("CMC response is empty");
@@ -248,14 +244,15 @@ export function aggregateOverviewByGroup(
  * holder revenue는 child 경제유형을 보존해 적격 최근 30일과 raw TTM을 따로 합산한다.
  */
 export async function fetchCoins(observations: SourceObservation[] = []): Promise<CoinRaw[]> {
-  const [protocols, feesL, revL, hrL, dexsL, gecko, cmc] = await Promise.all([
-    getJson<Json[]>(`${LLAMA}/protocols`, TTL_DEFILLAMA, observations),
+  const [protocols, feesL, revL, hrL, dexsL, gecko, cmc, revenueHistories] = await Promise.all([
+    getJson<Json[]>(`${LLAMA}/protocols`, observations),
     fetchOverviewList("/overview/fees", observations),
     fetchOverviewList("/overview/fees?dataType=dailyRevenue", observations),
     fetchOverviewList("/overview/fees?dataType=dailyHoldersRevenue", observations),
     fetchOverviewList("/overview/dexs", observations),
     fetchGecko(observations),
     fetchCmc(observations),
+    fetchRevenueHistory(observations),
   ]);
 
   // slug → parentProtocol 매핑 (overview에서만 제공됨)
@@ -326,6 +323,7 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
 
     const fees = feesAgg.get(k);
     const rev = revAgg.get(k);
+    const history = revenueHistories[k] ?? null;
     const holderValue = holderValues.get(k) ?? emptyHolderValueSummary();
     const vol = volAgg.get(k);
     // CoinGecko는 명시적 gecko_id만 사용한다. symbol-only 폴백은 동명이인 오매칭 위험 때문에 금지.
@@ -381,17 +379,21 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       isParent,
       identityStatus,
       identityReason,
+      description: str(rep.description),
+      descriptionSource: `https://defillama.com/protocol/${encodeURIComponent(String(rep.slug))}`,
+      website: str(rep.url),
+      revenueHistory: history,
 
       mcap,
       tvl,
-      change1d: quote ? num(quote.percent_change_24h) : num(rep.change_1d),
-      change7d: quote ? num(quote.percent_change_7d) : num(rep.change_7d),
+      change1d: quote ? num(quote.percent_change_24h) : g ? num(g.price_change_percentage_24h) : null,
+      change7d: quote ? num(quote.percent_change_7d) : g ? num(g.price_change_percentage_7d_in_currency) : null,
       price: quote ? num(quote.price) : g ? num(g.current_price) : null,
       marketCapRank: cmcRow ? num(cmcRow.cmc_rank) : g ? num(g.market_cap_rank) : null,
       totalVolume: quote ? num(quote.volume_24h) : g ? num(g.total_volume) : null,
       numMarketPairs: cmcRow ? num(cmcRow.num_market_pairs) : null,
       marketDataUpdatedAt: quote ? str(quote.last_updated) : null,
-      priceChange7d: quote ? num(quote.percent_change_7d) : g ? num(g.price_change_percentage_7d_in_currency) : num(rep.change_7d),
+      priceChange7d: quote ? num(quote.percent_change_7d) : g ? num(g.price_change_percentage_7d_in_currency) : null,
       priceChange14d: g ? num(g.price_change_percentage_14d_in_currency) : null,
       priceChange30d: quote ? num(quote.percent_change_30d) : g ? num(g.price_change_percentage_30d_in_currency) : null,
       priceChange60d: quote ? num(quote.percent_change_60d) : null,
@@ -408,8 +410,12 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       feesChange7dover7d: feesChange7,
       feesChange30dover30d: feesChange,
 
+      // Preserve overview amounts for the existing same-window holder/revenue ratio.
+      // Research P/S uses the separate completed-day history, including explicit coverage.
       revenueAnnual: rev?.annual ?? null,
       revenue1y: rev?.y1 ?? null,
+      revenue7d: rev?.d7 ?? null,
+      revenue90d: history?.periods[90].total ?? null,
       revenue30d: rev?.d30 ?? null,
       revenuePrev30d: rev?.prev30 ?? null,
 

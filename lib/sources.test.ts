@@ -1,5 +1,28 @@
-import { describe, expect, it } from "vitest";
-import { aggregateOverviewByGroup } from "./sources";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { aggregateOverviewByGroup, fetchCoins } from "./sources";
+
+describe("quote changes", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const mockSources = (quote: boolean) => vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+    const url = String(input);
+    const body = url.includes("/coins/markets")
+      ? quote ? [{ id: "token", current_price: 1, market_cap: 10000000, price_change_percentage_24h: 3, price_change_percentage_7d_in_currency: 5 }] : []
+      : url.includes("coinmarketcap.com") ? { data: [] }
+      : url.endsWith("/protocols") ? [{ slug: "token", name: "Token", symbol: "T", gecko_id: "token", mcap: 10000000, change_1d: 99, change_7d: 88 }]
+      : { protocols: [{ slug: "token", total30d: 100, total60dto30d: 90 }] };
+    return new Response(JSON.stringify(body));
+  }));
+  it("never fills missing price changes with DefiLlama TVL changes", async () => {
+    mockSources(false);
+    const [coin] = await fetchCoins([]);
+    expect([coin.change1d, coin.change7d, coin.priceChange7d]).toEqual([null, null, null]);
+  });
+  it("uses actual CoinGecko price changes when CMC is unavailable", async () => {
+    mockSources(true);
+    const [coin] = await fetchCoins([]);
+    expect([coin.change1d, coin.change7d, coin.priceChange7d]).toEqual([3, 5, 5]);
+  });
+});
 
 describe("aggregateOverviewByGroup", () => {
   it("preserves zeros but marks incomplete parent periods as unknown", () => {

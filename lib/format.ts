@@ -9,6 +9,12 @@ export function fmtUsd(v: number | null | undefined): string {
   return `$${v.toFixed(0)}`;
 }
 
+export function fmtPrice(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "–";
+  if (v === 0) return "$0";
+  return "$" + v.toLocaleString("en-US", { maximumSignificantDigits: v < 1 ? 4 : undefined, maximumFractionDigits: v >= 1 ? 2 : 10 });
+}
+
 // 멀티플 (12.3x)
 export function fmtMult(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "–";

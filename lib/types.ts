@@ -1,5 +1,6 @@
 import type { HolderValueSummary } from "./holderValue";
 import type { OpportunitySignals } from "./signals";
+import type { RevenueHistory } from "./revenueHistory";
 
 // 조인된 코인 1건의 원천 데이터 (밸류에이션 계산 전)
 export interface CoinRaw {
@@ -16,11 +17,17 @@ export interface CoinRaw {
   isParent: boolean;
   identityStatus: IdentityStatus;
   identityReason: string;
+  description?: string | null;
+  descriptionSource?: string | null;
+  website?: string | null;
+  revenueHistory?: RevenueHistory | null;
+  revenue7d?: number | null;
+  revenue90d?: number | null;
 
   // 시장 데이터 (CoinMarketCap Keyless 우선, CoinGecko 보조)
   mcap: number | null; // 유통 시가총액
   tvl: number | null;
-  change1d: number | null; // 가격/시총 24h 변화율(%)
+  change1d: number | null; // 토큰 가격 24h 변화율(%)
   change7d: number | null;
   price: number | null;
   marketCapRank: number | null;

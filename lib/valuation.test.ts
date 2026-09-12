@@ -12,9 +12,55 @@ import { compareFlow } from "./signals";
 import { appendSnapshot, compareSnapshot, makeSnapshot, parseHistory } from "./snapshotHistory";
 import { assembleScreener } from "./screener";
 import { fetchLatestSnapshot } from "./screenerRefresh";
+import { researchPs, researchReasons, revenueGrowing } from "./research";
+import { matchesRange } from "./screenerFilters";
+import { summarizeRevenueHistory } from "./revenueHistory";
 
 const REFERENCE = "2026-07-28T05:00:00.000Z";
 const OLD_LISTING = Date.parse("2025-01-01T00:00:00.000Z") / 1000;
+
+describe("P/S research rules", () => {
+  it("uses 20 as an optional highlight while leaving higher multiples screenable", () => {
+    const [c] = scoreCoins([sample({ revenue30d: 100_000 })], REFERENCE);
+    expect(researchPs(c)).toBeGreaterThan(20);
+    expect(matchesRange(researchPs(c), 0, 0)).toBe(true);
+    expect(researchReasons(c, 20)).not.toContain("P/S 20배 이하");
+    expect(researchReasons(c, 100)).toContain("P/S 100배 이하");
+  });
+  it("keeps the same research reasons for rising and falling price histories", () => {
+    const rows = scoreCoins([
+      sample({ priceChange30d: 80, priceChange60d: 150 }),
+      sample({ slug: "falling", priceChange30d: -80, priceChange60d: -90 }),
+    ], REFERENCE);
+    expect(rows.every(revenueGrowing)).toBe(true);
+    expect(researchReasons(rows[0])).toEqual(researchReasons(rows[1]));
+    const [uncertain] = scoreCoins([sample({ identityStatus: "ambiguous" })], REFERENCE);
+    expect(researchPs(uncertain)).toBeNull();
+    expect(revenueGrowing(uncertain)).toBe(false);
+  });
+  it("uses completed-day revenue in discovery without mixing the holder accounting denominator", () => {
+    const end = Math.floor(Date.parse(REFERENCE) / 86400000) * 86400 - 86400;
+    const chart: [number, Record<string, number>][] = Array.from({ length: 60 }, (_, i) => [end - i * 86400, { Sample: i < 30 ? 2000 : 1000 }]);
+    const history = summarizeRevenueHistory([{ slug: "sample", name: "Sample" }], chart, Date.parse(REFERENCE), "fixture").sample;
+    const raw = sample({ revenue30d: 100_000, revenuePrev30d: 200_000, revenueHistory: history });
+    const [c] = scoreCoins([raw], REFERENCE);
+    expect(c.opportunities.revenue.changePct).toBe(100);
+    expect(researchPs(c)).toBeCloseTo(raw.mcap! / (60_000 * 365 / 30));
+    expect(c.valueCapture.eligibleHolderValueShare).toBe(3);
+    expect(makeSnapshot(assembleScreener([raw], REFERENCE, [])).coins.sample.revenue30d).toBe(60_000);
+  });
+  it("keeps observed zero amounts separate from missing comparison history", () => {
+    const [zero, stopped] = scoreCoins([
+      sample({ revenue30d: 0, revenuePrev30d: 0, fees30d: 0, feesPrev30d: 0, holderValue: { eligibleCurrent30d: 0, eligiblePrevious30d: 0 } }),
+      sample({ slug: "stopped", holderValue: { eligibleCurrent30d: 0, eligiblePrevious30d: 100 } }),
+    ], REFERENCE);
+    expect(zero.opportunities.revenue.state).toBe("flat");
+    expect(zero.opportunities.dataIssues).not.toContain("실적 비교 자료 부족 · 누락 또는 음수 금액 확인");
+    expect(researchPs(zero)).toBeNull();
+    expect(stopped.opportunities.holder).toBe(false);
+    expect(stopped.opportunities.transition).toBe(true);
+  });
+});
 
 describe("independent opportunity signals and same-period accounting", () => {
   it("uses matching 30-day amounts for shares and every primary cashflow multiple", () => {
@@ -83,6 +129,23 @@ describe("local observations and refresh recovery", () => {
     expect(parseHistory(JSON.stringify([a]))).toEqual([a]);
     expect(parseHistory('{bad')).toEqual([]);
     expect(parseHistory(JSON.stringify([{...a,coins:{broken:{identity:"x"}}}]))).toEqual([]);
+  });
+  it("retains pre-v5 history and rejects malformed optional valuation fields", () => {
+    const snapshot = makeSnapshot(payload());
+    delete snapshot.coins.sample.ps;
+    delete snapshot.coins.sample.mcap;
+    expect(parseHistory(JSON.stringify([snapshot]))).toEqual([snapshot]);
+    expect(parseHistory(JSON.stringify([{ ...snapshot, coins: { sample: { ...snapshot.coins.sample, ps: "20" } } }]))).toEqual([]);
+  });
+  it("does not classify price or experimental score movement alone as a research change", () => {
+    const data = payload(); const c = data.coins[0]; const baseline = makeSnapshot(data);
+    const changed = { ...c, mcap: c.mcap! * 2, price: c.price! * 2, valueScore: 99 };
+    const comparison = compareSnapshot(changed, baseline, data.scoreVersion);
+    expect(comparison.psDelta).toBeGreaterThan(0);
+    expect(comparison.meaningful).toBe(false);
+    const later = appendSnapshot([baseline], makeSnapshot({ ...data, updatedAt: "2026-07-29T05:00:00.000Z" }));
+    expect(later).toHaveLength(2);
+    expect(baseline.at).toBe(REFERENCE);
   });
   it("does not compare scores after a rule or token identity change", () => {
     const data = payload(); const c = data.coins[0]; const s = makeSnapshot(data);
@@ -260,7 +323,7 @@ describe("scoreCoins discovery model", () => {
     const [scored] = scoreCoins([current], REFERENCE);
 
     expect(scored.multiples.phr).toBeCloseTo(120_000_000 / 12_166_666.666666666);
-    expect(SCORE_VERSION).toBe("research-v4-same-window");
+    expect(SCORE_VERSION).toBe("research-v5-ps-revenue");
   });
 
   it("leaves current P/HR unavailable when TTM is positive but current 30d is zero", () => {

@@ -1,4 +1,15 @@
 export type SortKey =
+  | "price"
+  | "change1d"
+  | "ps7d"
+  | "ps90d"
+  | "ps1y"
+  | "revenue7d"
+  | "revenue90d"
+  | "revenue1y"
+  | "holderRoute"
+  | "payoutAsset"
+  | "holderCondition"
   | "signals"
   | "revenueGrowth"
   | "holderGrowth"
@@ -42,10 +53,10 @@ export interface ScreenerColumn {
 }
 
 export const COLUMN_GROUP_LABELS: Record<ColumnGroup, string> = {
-  valuation: "밸류에이션",
-  fundamentals: "펀더멘털",
-  market: "시장",
-  performance: "가격 성과",
+  valuation: "가치 비교 · 기존 점수",
+  fundamentals: "매출 · 홀더 환원",
+  market: "가격 · 시총 · 공급",
+  performance: "가격 변화",
 };
 
 export const SCREENER_COLUMNS: ScreenerColumn[] = [
@@ -69,31 +80,41 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
   { key: "atlChangePercentage", label: "ATL 대비", title: "현재가의 사상 최저가 대비 변화율", group: "performance" },
   { key: "category", label: "섹터", title: "카테고리", group: "market" },
   { key: "captureScore", label: "포획", title: "최근 30일 적격 경제유형만 반영한 일반 홀더 가치포획 점수", group: "valuation" },
-  { key: "ps", label: "P/S", title: "시총 / (최근 30일 매출 × 365/30). P/HR과 동일 기간", group: "valuation" },
+  { key: "ps", label: "P/S · 30일", title: "현재 시총 / (최근 30일 매출 × 365/30). 완료된 UTC 날짜 기준. 20배는 참고선이며 종목을 제외하지 않습니다", group: "valuation" },
   { key: "revenueAnnual", label: "매출 TTM/연환산", title: "전체 구성요소 TTM 우선, 불완전하면 전체 최근 30일 연환산. P/S에는 최근 30일만 사용", group: "fundamentals" },
   { key: "revenue30d", label: "매출 30일", title: "최근 30일 매출 (원값)", group: "fundamentals" },
   { key: "fdv", label: "FDV", title: "완전희석가치 (CoinMarketCap 우선)", group: "market" },
   { key: "tvl", label: "TVL", title: "예치자산", group: "market" },
   { key: "priceChange14d", label: "14일", title: "CoinGecko 14일 가격 변화율", group: "performance" },
   { key: "feesChange7d", label: "수수료 변화", title: "최근 7일 vs 직전 7일 수수료 변화 (30일 변화 보조 표시)", group: "fundamentals" },
+  { key: "price", label: "가격", title: "현재 토큰 가격 · USD", group: "market" },
+  { key: "change1d", label: "가격 24시간", title: "토큰 가격의 24시간 변화. 포착 조건에는 반영하지 않습니다", group: "performance" },
+  { key: "ps1y", label: "P/S · 1년", title: "현재 시총 / 최근 365일 실제 매출 합계. 1년 미만의 이력은 연환산하지 않습니다", group: "valuation" },
+  { key: "ps90d", label: "P/S · 90일", title: "현재 시총 / (최근 90일 매출 × 365/90)", group: "valuation" },
+  { key: "ps7d", label: "P/S · 7일", title: "현재 시총 / (최근 7일 매출 × 365/7). 일시적인 매출에 민감합니다", group: "valuation" },
+  { key: "revenue7d", label: "매출 7일", title: "최근 7일 실제 매출. 누락은 0으로 채우지 않습니다", group: "fundamentals" },
+  { key: "revenue90d", label: "매출 90일", title: "최근 90일 실제 매출 합계", group: "fundamentals" },
+  { key: "revenue1y", label: "매출 1년", title: "최근 365일 실제 매출 합계 · 연환산 아님", group: "fundamentals" },
+  { key: "holderRoute", label: "환원 방식", title: "공식 문서 확인 경로 우선. 미확인 종목은 원천 설명의 자동 분류를 구분해 표시", group: "fundamentals" },
+  { key: "payoutAsset", label: "지급 자산", title: "보유자가 받는 자산 또는 소각 대상. 금액만으로 추정하지 않습니다", group: "fundamentals" },
+  { key: "holderCondition", label: "수령 대상", title: "일반 보유자·스테이커·락업·투표자 등 공식 확인 대상", group: "fundamentals" },
 ];
 
 export const DEFAULT_VISIBLE_COLUMNS: SortKey[] = [
-  "signals",
+  "ps",
   "revenue30d",
-  "phr",
-  "holderValueRunRate",
   "mcap",
-  "priceChange30d",
+  "fdv",
+  "price",
 ];
 
 export const COLUMN_PRESETS: { label: string; keys: SortKey[] }[] = [
-  { label: "핵심", keys: DEFAULT_VISIBLE_COLUMNS },
-  { label: "실적 비교", keys: ["signals", "revenue30d", "revenueGrowth", "ps", "mcap", "priceChange30d"] },
-  { label: "홀더 배분", keys: ["signals", "holderValueRunRate", "holderGrowth", "holderValueTtm", "phr", "mcap"] },
+  { label: "종목 훑기", keys: DEFAULT_VISIBLE_COLUMNS },
+  { label: "P/S · 매출 추이", keys: ["ps1y", "ps90d", "ps", "ps7d", "revenue30d", "mcap", "fdv", "price"] },
+  { label: "홀더 환원", keys: ["holderRoute", "payoutAsset", "holderCondition", "holderValueRunRate", "phr", "mcap", "fdv", "price"] },
   {
-    label: "가격 성과",
-    keys: ["mcap", "totalVolume", "priceChange7d", "priceChange14d", "priceChange30d", "priceChange60d", "priceChange1y", "athChangePercentage", "atlChangePercentage"],
+    label: "가격 · 공급",
+    keys: ["price", "mcap", "fdv", "change1d", "priceChange7d", "priceChange30d", "totalVolume"],
   },
   {
     label: "점수 근거",

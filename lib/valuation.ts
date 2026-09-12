@@ -13,7 +13,7 @@ export const MIN_ACTIVITY_USD = 100_000;
 export const MIN_MCAP_USD = 1_000_000;
 export const MIN_SECTOR_SAMPLE = 8;
 export const NEW_PROJECT_DAYS = 90;
-export const SCORE_VERSION = "research-v4-same-window";
+export const SCORE_VERSION = "research-v5-ps-revenue";
 
 const MULTIPLE_CAP = 1000;
 const DILUTION_WARN = 1 / 0.3;

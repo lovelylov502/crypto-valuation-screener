@@ -1,5 +1,9 @@
 # 작업 이력
 
+## 2026-09-12 — P/S and revenue UX implementation
+
+Implemented the user-approved v5 research flow on `codex/ps-research-ux`: a soft P/S reference, fixed-cap multi-window multiples, completed-day revenue history, weekly amounts, market-first details, business introductions and explicit holder policy fields. Acknowledgement now has its own persisted baseline. Corrected TVL-as-price-change fallback and the large-payload server cache. 150 application tests, six deployment contract tests, TypeScript, production build and live-data browser QA passed. This is local implementation only; coverage, source limitations and receipts are in HANDOFF.md and SCREENER_V5.md.
+
 ## 2026-09-09 — daily collection enabled
 
 Added the user-authorized GitHub CLI `workflow` scope after account reauthentication, restored the workflow and changed the schedule to one daily run at 09:17 KST. Published workflow commit `422829b`; GitHub workflow `353641950` is active on `main`. The hosted manual run `34303173744` passed collection (697 rows, zero source failures), upload and website warming. Downloaded artifact payload hashes and exact Git rule hashes passed; canonical page/API verification also passed. Evidence and artifact retention are recorded in HANDOFF.md. Application code and its production deployment were unchanged in this step.

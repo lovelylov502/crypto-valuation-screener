@@ -1,10 +1,10 @@
-import { buildScreener } from "@/lib/screener";
+import { getScreener } from "@/lib/serverScreener";
 import { ScreenerClient } from "@/components/ScreenerClient";
 
 export const revalidate = 1800;
 
 export default async function Home() {
   // The client can recover from initial collection failure and retain filters on refresh.
-  const data = await buildScreener().catch(() => null);
+  const data = await getScreener().catch(() => null);
   return <ScreenerClient initialData={data} />;
 }

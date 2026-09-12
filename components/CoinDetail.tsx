@@ -3,21 +3,28 @@
 import { useEffect, useRef } from "react";
 import { ExternalLink, X } from "lucide-react";
 import type { CoinScored } from "@/lib/types";
-import { fmtKstMinute, fmtMult, fmtUsd } from "@/lib/format";
-import { flowLabel } from "@/lib/signals";
+import { fmtKstMinute, fmtMult, fmtUsd, fmtPrice, fmtPct } from "@/lib/format";
+import { compareFlow, flowLabel } from "@/lib/signals";
 import { holderEconomicTypeLabel } from "@/lib/holderValue";
 import { MECHANISM_EVIDENCE } from "@/lib/mechanismEvidence";
-import type { SnapshotChange } from "@/lib/snapshotHistory";
+import { protocolResearch } from "@/lib/protocolResearch";
+import { researchReasons } from "@/lib/research";
+import { RevenuePanel } from "./RevenuePanel";
+import type { Snapshot, SnapshotChange } from "@/lib/snapshotHistory";
 import { coinUrl } from "./ScreenerCells";
 
 export function CoinDetail({
   coin: c,
   change,
   onClose,
+  history,
+  psReference,
 }: {
   coin: CoinScored;
   change: SnapshotChange;
   onClose: () => void;
+  history: Snapshot[];
+  psReference: number;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -33,6 +40,9 @@ export function CoinDetail({
     };
   }, []);
   const evidence = MECHANISM_EVIDENCE[c.slug];
+  const research = protocolResearch(c);
+  const reasons = researchReasons(c, psReference);
+  const safeUrl = (v: string | null | undefined) => v && /^https?:\/\//i.test(v) ? v : undefined;
   const share = c.valueCapture.eligibleHolderValueShare;
   return (
     <dialog
@@ -61,103 +71,25 @@ export function CoinDetail({
             <X size={20} />
           </button>
         </header>
-        <section className="detail-section">
-          <h3>무엇이 포착됐나요?</h3>
-          <ul className="reason-list">
-            {(c.opportunities.reasons.length
-              ? c.opportunities.reasons
-              : ["현재 세 포착 기준에 해당하는 관측 신호 없음"]
-            ).map((r) => (
-              <li key={r}>{r}</li>
-            ))}
-          </ul>
-          {c.opportunities.transition && (
-            <p className="notice">
-              0↔양수는 관측 금액의 변화입니다. 정책의 신설·재개·중단 여부는 공식
-              자료에서 확인해야 합니다.
-            </p>
-          )}
+        <section className="market-overview" aria-label="현재 가격과 시장 규모">
+          <div className="current-price">{fmtPrice(c.price)}</div>
+          <div className="price-changes">{[["24시간", c.change1d], ["7일", c.priceChange7d], ["30일", c.priceChange30d]].map(([label, value]) => <span key={String(label)}>{label} <strong className={typeof value === "number" ? value >= 0 ? "positive" : "negative" : ""}>{fmtPct(value as number | null)}</strong></span>)}</div>
+          <dl className="market-summary"><div><dt>시가총액</dt><dd>{fmtUsd(c.mcap)}</dd></div><div><dt>FDV</dt><dd>{fmtUsd(c.fdv)}</dd></div><div><dt>24시간 거래량</dt><dd>{fmtUsd(c.totalVolume)}</dd></div></dl>
+          <p className="detail-note muted">시세 기준 {c.marketDataUpdatedAt ? fmtKstMinute(c.marketDataUpdatedAt) : "원천 시각 미확인"}</p>
         </section>
-        <section className="detail-section">
-          <h3>같은 30일로 비교</h3>
-          <div className="detail-table-wrap">
-            <table className="detail-table">
-              <thead>
-                <tr>
-                  <th>항목</th>
-                  <th>직전 30일</th>
-                  <th>최근 30일</th>
-                  <th>변화</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  [
-                    "프로토콜 매출",
-                    c.revenuePrev30d,
-                    c.revenue30d,
-                    flowLabel(c.opportunities.revenue),
-                  ],
-                  [
-                    "전체 수수료",
-                    c.feesPrev30d,
-                    c.fees30d,
-                    flowLabel(c.opportunities.fees),
-                  ],
-                  [
-                    "P/HR 적격 홀더",
-                    c.holderValue.eligiblePrevious30d,
-                    c.holderValue.eligibleCurrent30d,
-                    flowLabel(c.opportunities.eligibleHolder),
-                  ],
-                ].map(([name, prev, curr, growth]) => (
-                  <tr key={String(name)}>
-                    <th>{name}</th>
-                    <td>{fmtUsd(prev as number | null)}</td>
-                    <td>{fmtUsd(curr as number | null)}</td>
-                    <td>{growth}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="muted detail-note">
-            매출은 운영비·토큰 인센티브를 차감한 순이익이 아닙니다. 누락은 ‘–’,
-            보고된 0은 ‘$0’으로 표시합니다.
-          </p>
-          <dl className="detail-metrics">
-            <div>
-              <dt>P/HR · 30일 연환산</dt>
-              <dd>{fmtMult(c.multiples.phr)}</dd>
-            </div>
-            <div>
-              <dt>P/S · 30일 연환산</dt>
-              <dd>{fmtMult(c.multiples.ps)}</dd>
-            </div>
-            <div>
-              <dt>
-                홀더 금액 /{" "}
-                {c.valueCapture.shareBasis === "fees30d" ? "수수료" : "매출"} ·
-                30일
-              </dt>
-              <dd>{share === null ? "–" : `${(share * 100).toFixed(1)}%`}</dd>
-            </div>
-          </dl>
-          <p className="muted detail-note">
-            금액 비율은 공식 배분율과 다를 수 있습니다. 재원·집계 범위·지급
-            시차의 영향을 받습니다.
-          </p>
-          {c.valueCapture.risks
-            .filter((r) => r.includes("분모"))
-            .map((r) => (
-              <p className="notice" key={r}>
-                {r}
-              </p>
-            ))}
+        <section className="detail-section project-introduction">
+          <h3>어떤 사업인가요?</h3>
+          <p>{research?.description ?? c.description ?? "프로젝트 소개 자료를 확보하지 못했습니다. 원천 페이지에서 사업과 수익원을 확인해 주세요."}</p>
+          <p className="detail-note muted">{research ? `${research.scope} · 공식 자료 확인 ${research.reviewedAt}` : c.isParent ? "구성 제품의 원문 소개입니다. 이 표의 금액은 그룹 단위로 합산합니다." : "DefiLlama 원문 소개 · 최신 내용은 공식 자료에서 확인"}</p>
+          <div className="detail-links">{safeUrl(research?.source ?? c.descriptionSource) && <a href={safeUrl(research?.source ?? c.descriptionSource)} target="_blank" rel="noreferrer">소개 출처 <ExternalLink size={13} /></a>}{safeUrl(c.website) && <a href={safeUrl(c.website)} target="_blank" rel="noreferrer">프로젝트 홈페이지 <ExternalLink size={13} /></a>}<a href={coinUrl(c)} target="_blank" rel="noreferrer">시장 원자료 <ExternalLink size={13} /></a></div>
+          {reasons.length > 0 && <div className="detail-reasons">{reasons.map(r => <span key={r}>{r}</span>)}</div>}
         </section>
+        <RevenuePanel coin={c} history={history} reference={psReference} />
         <section className="detail-section">
           <h3>홀더에게 어떻게 귀속되나요?</h3>
-          {evidence && (
+          {research?.holder && <div className="holder-facts"><strong>{research.holder.route}</strong><dl>{[["재원", research.holder.funding], ["지급·소각 자산", research.holder.asset], ["수령 대상", research.holder.recipient], ["참여 조건", research.holder.condition], ["시행·검증 상태", research.holder.status]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><a href={research.holder.source} target="_blank" rel="noreferrer">공식 근거 <ExternalLink size={13} /></a><small>문서 확인 {research.reviewedAt} · 아래 금액은 원천 집계이며 정책 비율로 재계산하지 않습니다.</small></div>}
+          {!research?.holder && <div className="holder-facts unverified"><strong>지급 자산 · 수령 조건 · 정책 상태 미확인</strong><p>아래는 원천 설명의 자동 분류입니다. 금액만으로 현금 배당이나 보유자의 수령 권리를 판단하지 않습니다.</p></div>}
+          {!research?.holder && evidence && (
             <div className="evidence-card">
               <strong>{evidence.route}</strong>
               <p>{evidence.condition}</p>
@@ -174,7 +106,7 @@ export function CoinDetail({
             <p className="notice">{c.holderValue.warning}</p>
           )}
           {c.holderValue.components.length === 0 ? (
-            <p className="muted">배분 금액·방식에 관한 원천 자료가 없습니다.</p>
+            <p className="muted">표시할 배분 금액·방식의 자동 분류 항목이 없습니다.</p>
           ) : (
             c.holderValue.components.map((part) => (
               <article className="component-row" key={part.slug}>
@@ -207,9 +139,85 @@ export function CoinDetail({
             않습니다.
           </p>
         </section>
+        <details className="detail-section source-accounting">
+          <summary>원천 집계와 금액 비율</summary>
+          <div className="detail-table-wrap">
+            <table className="detail-table">
+              <thead>
+                <tr>
+                  <th>항목</th>
+                  <th>직전 30일</th>
+                  <th>최근 30일</th>
+                  <th>변화</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  [
+                    "프로토콜 매출",
+                    c.revenuePrev30d,
+                    c.revenue30d,
+                    flowLabel(compareFlow(c.revenue30d, c.revenuePrev30d)),
+                  ],
+                  [
+                    "전체 수수료",
+                    c.feesPrev30d,
+                    c.fees30d,
+                    flowLabel(c.opportunities.fees),
+                  ],
+                  [
+                    "P/HR 적격 홀더",
+                    c.holderValue.eligiblePrevious30d,
+                    c.holderValue.eligibleCurrent30d,
+                    flowLabel(c.opportunities.eligibleHolder),
+                  ],
+                ].map(([name, prev, curr, growth]) => (
+                  <tr key={String(name)}>
+                    <th>{name}</th>
+                    <td>{fmtUsd(prev as number | null)}</td>
+                    <td>{fmtUsd(curr as number | null)}</td>
+                    <td>{growth}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="muted detail-note">
+            이 표는 매출·수수료·홀더 금액 모두 원천의 최근·직전 30일 집계입니다. 위의 완료된 UTC 날짜 기준 매출과 기간 경계가 다를 수 있습니다. 누락은 ‘–’, 보고된 0은 ‘$0’입니다.
+          </p>
+          <dl className="detail-metrics">
+            <div>
+              <dt>P/HR · 30일 연환산</dt>
+              <dd>{fmtMult(c.multiples.phr)}</dd>
+            </div>
+            <div>
+              <dt>P/S · 원천 집계 30일</dt>
+              <dd>{fmtMult(c.multiples.ps)}</dd>
+            </div>
+            <div>
+              <dt>
+                홀더 금액 /{" "}
+                {c.valueCapture.shareBasis === "fees30d" ? "수수료" : "매출"} ·
+                30일
+              </dt>
+              <dd>{share === null ? "–" : `${(share * 100).toFixed(1)}%`}</dd>
+            </div>
+          </dl>
+          <p className="muted detail-note">
+            같은 원천 집계의 홀더 금액을 매출 또는 수수료로 나눈 비율입니다. 사용한 분모는 위 항목에 표시합니다. 위의 완료일 매출과 섞지 않습니다. 금액 비율은 공식 배분율과 다를 수 있습니다. 재원·집계 범위·지급
+            시차의 영향을 받습니다.
+          </p>
+          {c.valueCapture.risks
+            .filter((r) => r.includes("분모"))
+            .map((r) => (
+              <p className="notice" key={r}>
+                {r}
+              </p>
+            ))}
+        </details>
         <section className="detail-section detail-split">
           <div>
-            <h3>자료 확인 {c.opportunities.dataIssues.length}</h3>
+            <h3>추가 확인 항목 {c.opportunities.dataIssues.length}개</h3>
             <ul className="reason-list">
               {(c.opportunities.dataIssues.length
                 ? c.opportunities.dataIssues
@@ -235,15 +243,15 @@ export function CoinDetail({
           </div>
         </section>
         <section className="detail-section">
-          <h3>지난 확인과 비교</h3>
+          <h3>확인 완료한 자료와 비교</h3>
           {change.state === "comparable" ? (
             <dl className="detail-metrics">
               <div>
-                <dt>실험 점수 변화</dt>
+                <dt>P/S 변화 · 기록 시점 기준</dt>
                 <dd>
-                  {change.scoreDelta === null
+                  {change.psDelta === null
                     ? "–"
-                    : `${change.scoreDelta > 0 ? "+" : ""}${change.scoreDelta}점`}
+                    : `${change.psDelta > 0 ? "+" : ""}${change.psDelta.toFixed(2)}배`}
                 </dd>
               </div>
               <div>
@@ -266,15 +274,15 @@ export function CoinDetail({
           ) : (
             <p className="muted">
               {change.state === "rules_changed"
-                ? "계산 규칙이 변경되어 이전 점수와 비교하지 않습니다."
+                ? "계산 규칙이 바뀌어 이전 기록과 비교하지 않습니다."
                 : change.state === "identity_changed"
                   ? "토큰 연결이 바뀌어 이전 자료와 비교하지 않습니다."
-                  : "다음 확인부터 이 브라우저의 기록과 비교할 수 있습니다."}
+                  : "확인 완료한 기준과 비교 가능한 자료가 아직 없습니다."}
             </p>
           )}
         </section>
         <details className="detail-section score-explainer">
-          <summary>실험 점수와 비교 표본</summary>
+          <summary>기존 실험 점수 · 기본 탐색에는 사용하지 않음</summary>
           <p>
             {c.valueScore ?? "산출 보류"} / 100 · {c.status} · 자료 완성도{" "}
             {Math.round(c.confidence * 100)}%

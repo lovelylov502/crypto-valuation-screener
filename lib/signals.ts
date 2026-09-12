@@ -1,4 +1,5 @@
 import type { CoinRaw, ScoreGates } from "./types";
+import { revenueAmount } from "./revenueHistory";
 
 export type FlowState =
   "growing" | "declining" | "flat" | "from_zero" | "to_zero" | "unknown";
@@ -68,7 +69,7 @@ export function deriveOpportunities(
   coin: CoinRaw,
   gates: ScoreGates,
 ): OpportunitySignals {
-  const revenue = compareFlow(coin.revenue30d, coin.revenuePrev30d);
+  const revenue = compareFlow(revenueAmount(coin, 30), coin.revenueHistory ? coin.revenueHistory.previous30.total : coin.revenuePrev30d);
   const fees = compareFlow(coin.fees30d, coin.feesPrev30d);
   const eligibleHolder = compareFlow(
     coin.holderValue.eligibleCurrent30d,
@@ -106,11 +107,16 @@ export function deriveOpportunities(
   if (!verified) dataIssues.push(coin.identityReason);
   if (!gates.marketData)
     dataIssues.push("시세·60일 가격·거래량 누락 또는 지연");
-  if (!gates.fundamentalHistory) dataIssues.push("최근·직전 30일 비교 불가");
-  if (coin.revenue30d !== null && coin.revenuePrev30d === null)
+  if ([revenue, fees, eligibleHolder].every(f => f.state === "unknown"))
+    dataIssues.push("실적 비교 자료 부족 · 누락 또는 음수 금액 확인");
+  const currentRevenue = revenueAmount(coin, 30);
+  const previousRevenue = coin.revenueHistory ? coin.revenueHistory.previous30.total : coin.revenuePrev30d;
+  if (currentRevenue !== null && previousRevenue === null)
     dataIssues.push("직전 30일 매출 누락");
-  if (coin.revenue30d === null && coin.revenuePrev30d !== null)
+  if (currentRevenue === null)
     dataIssues.push("최근 30일 매출 누락");
+  if (coin.revenueHistory && coin.revenueHistory.periods[365].reportedDays < 365)
+    dataIssues.push(`1년 매출 이력 ${coin.revenueHistory.periods[365].reportedDays}/365일`);
   if (coin.holderValue.warning?.includes("이력 누락"))
     dataIssues.push("홀더 구성요소 일부 이력 누락");
   if (coin.fdv === null) dataIssues.push("FDV 미확인");

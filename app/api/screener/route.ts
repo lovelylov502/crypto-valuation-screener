@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { buildScreener } from "@/lib/screener";
+import { getScreener } from "@/lib/serverScreener";
 
-// 라우트 응답 캐시 (초). 내부 fetch도 각자 revalidate를 가짐.
-export const revalidate = 1800;
+// Only the joined snapshot is cached. A second ISR cache could extend stale data by 30 minutes.
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const data = await buildScreener();
-    return NextResponse.json(data);
+    const data = await getScreener();
+    return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown error";
     return NextResponse.json(

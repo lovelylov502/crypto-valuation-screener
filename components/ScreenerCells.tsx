@@ -1,5 +1,8 @@
 import type { CoinScored } from "@/lib/types";
-import { fmtUsd, fmtMult, fmtPct } from "@/lib/format";
+import { fmtUsd, fmtMult, fmtPct, fmtPrice } from "@/lib/format";
+import { researchPs } from "@/lib/research";
+import { revenueAmount } from "@/lib/revenueHistory";
+import { protocolResearch } from "@/lib/protocolResearch";
 import { holderEconomicTypeLabel } from "@/lib/holderValue";
 import { flowLabel } from "@/lib/signals";
 import type { SortKey } from "@/lib/screenerColumns";
@@ -15,6 +18,17 @@ export function coinUrl(c: CoinScored): string {
 
 export function sortValue(c: CoinScored, key: SortKey): number | string | null {
   switch (key) {
+    case "price": return c.price;
+    case "change1d": return c.change1d;
+    case "ps7d": return researchPs(c, 7);
+    case "ps90d": return researchPs(c, 90);
+    case "ps1y": return researchPs(c, 365);
+    case "revenue7d": return revenueAmount(c, 7);
+    case "revenue90d": return revenueAmount(c, 90);
+    case "revenue1y": return revenueAmount(c, 365);
+    case "holderRoute": return protocolResearch(c)?.holder?.route ?? holderTypeSummary(c);
+    case "payoutAsset": return protocolResearch(c)?.holder?.asset ?? null;
+    case "holderCondition": return protocolResearch(c)?.holder?.recipient ?? null;
     case "signals":
       return (
         Number(c.opportunities.business) +
@@ -40,7 +54,7 @@ export function sortValue(c: CoinScored, key: SortKey): number | string | null {
     case "captureScore":
       return c.valueCapture.score;
     case "ps":
-      return c.multiples.ps;
+      return researchPs(c);
     case "phr":
       return c.multiples.phr;
     case "revenueAnnual":
@@ -50,7 +64,7 @@ export function sortValue(c: CoinScored, key: SortKey): number | string | null {
     case "holderValueTtm":
       return c.holderValue.rawTtm;
     case "revenue30d":
-      return c.revenue30d;
+      return revenueAmount(c, 30);
     case "mcap":
       return c.mcap;
     case "totalVolume":
@@ -129,18 +143,29 @@ function holderValueDetail(c: CoinScored): string {
 // 셀 렌더 (코인 제외)
 export function renderCell(c: CoinScored, key: SortKey) {
   switch (key) {
+    case "price": return fmtPrice(c.price);
+    case "change1d": return <span className={changeClass(c.change1d)}>{fmtPct(c.change1d)}</span>;
+    case "ps1y": return fmtMult(researchPs(c, 365));
+    case "ps90d": return fmtMult(researchPs(c, 90));
+    case "ps7d": return fmtMult(researchPs(c, 7));
+    case "revenue7d": return fmtUsd(revenueAmount(c, 7));
+    case "revenue90d": return fmtUsd(revenueAmount(c, 90));
+    case "revenue1y": return fmtUsd(revenueAmount(c, 365));
+    case "holderRoute": return <span className="route-cell">{protocolResearch(c)?.holder?.route ?? holderTypeSummary(c)}<small>{protocolResearch(c)?.holder ? "공식 문서 확인" : "원천 설명 자동 분류"}</small></span>;
+    case "payoutAsset": return <span className="route-cell">{protocolResearch(c)?.holder?.asset ?? "미확인"}</span>;
+    case "holderCondition": return <span className="route-cell">{protocolResearch(c)?.holder?.recipient ?? "수령 조건 미확인"}</span>;
     case "signals":
       return (
         <span className="signal-cell">
           <span className="signal-tags">
             {c.opportunities.business && (
-              <span className="tag business">실적 개선</span>
+              <span className="tag business">매출·수수료 성장</span>
             )}
             {c.opportunities.holder && (
-              <span className="tag holder">홀더 배분</span>
+              <span className="tag holder">홀더 환원</span>
             )}
             {c.opportunities.transition && (
-              <span className="tag transition">흐름 전환</span>
+              <span className="tag transition">홀더 0↔양수</span>
             )}
             {!c.opportunities.business &&
               !c.opportunities.holder &&
@@ -151,9 +176,7 @@ export function renderCell(c: CoinScored, key: SortKey) {
           <span className="cell-note">
             {c.opportunities.dataIssues[0] ??
               c.opportunities.risks[0] ??
-              (c.opportunities.marketAhead
-                ? "가격 상승 동반"
-                : "최근 30일 관측")}
+              "최근 30일 관측"}
           </span>
         </span>
       );
@@ -259,7 +282,7 @@ export function renderCell(c: CoinScored, key: SortKey) {
         </span>
       );
     case "ps":
-      return fmtMult(c.multiples.ps);
+      return <span className="metric-cell"><strong>{fmtMult(researchPs(c))}</strong>{!c.revenueHistory && researchPs(c) !== null && <span className="muted">원천 기간 집계</span>}</span>;
     case "phr":
       return (
         <span className="inline-flex min-w-[120px] flex-col items-end gap-0.5">
@@ -322,7 +345,7 @@ export function renderCell(c: CoinScored, key: SortKey) {
     case "revenue30d":
       return (
         <span className="metric-cell">
-          <strong>{fmtUsd(c.revenue30d)}</strong>
+          <strong>{fmtUsd(revenueAmount(c, 30))}</strong>
           <span className={changeClass(c.opportunities.revenue.changePct)}>
             {flowLabel(c.opportunities.revenue)}
           </span>

@@ -1,5 +1,19 @@
 # Handoff
 
+## 2026-09-12 — v5 local implementation
+
+The user authorized implementation and a broad UX redesign after the P/S discussion. Current local branch is `codex/ps-research-ux`; version `research-v5-ps-revenue`. No commit, push or production deployment has been performed in this implementation turn. The earlier v4 deployment below remains historical. Governing behavior and research maintenance are documented in [SCREENER_V5.md](./SCREENER_V5.md).
+
+P/S is the default research column and sort. The editable 20x reference highlights without filtering. Price direction is excluded from research inclusion. Fixed-current-cap 365/90/30/7-day P/S, actual period revenue, 13 non-overlapping weeks, price/24h/7d/30d/mcap/FDV detail headers, business descriptions, structured holder policy evidence, four primary presets and an explicit review baseline are implemented. Legacy scores and source-accounting ratios are secondary disclosures. Source-accounting denominators remain aligned, and missing daily revenue is never zero-filled.
+
+Final local validation: 150 application tests, six deployment-contract tests, TypeScript and the production build pass. Local page and API return HTTP 200. The captured runtime snapshot at `2026-09-12T08:24:09.830Z` has 702 rows and 3,013,593 API bytes; the compressed cache entry is 506,492 base64 bytes, below Next's 2MB entry limit. Repeated API reads share the timestamp. Positive, identity-verified P/S coverage: 194 (7d), 190 (30d), 178 (90d), 140 (365d). There are 76 rows at or below the 20x reference, 111 revenue-growth rows, 52 current holder-flow rows and two observed zero/positive transitions. These counts are a dated observation, not fixed product limits.
+
+CoinGecko page 3 failed in that snapshot and is disclosed in source status; CMC and the new revenue history source succeeded. All 702 rows have a provider or curated introduction. Nine Korean introductions and four official holder-policy records are shipped. Remaining payout assets, recipients and conditions are explicitly unverified. GMX's official record separates ongoing buybacks from suspended staking distributions. Provider amount classification is not upgraded to on-chain verification.
+
+Browser QA covers desktop and narrow layouts, editable reference without universe exclusion, a >20x Pendle detail, dated P/S cards, weekly bar selection, explicit source fallback, favorites and columns across reloads, an acknowledgement baseline that persists across reopening, both Lido zero-to-positive and boop.fun positive-to-zero transitions, and Escape/focus restoration. The local preview is `http://127.0.0.1:3107` while the server remains running. Evidence, API data, source hashes and final screenshots are outside Git at `C:/Users/TAE/.codex/visualizations/2026/09/12/01a09451-4088-7c41-be99-45f80414f679/screener-research`.
+
+Browser history records actual observations; it does not import the independent GitHub daily archives or reconstruct events that appeared and disappeared between visits. Production still requires the canonical clean synchronized main branch and `npm run deploy:production`; no raw deploy command is allowed.
+
 ## 2026-09-09 daily collection activation
 
 Daily collection is active. The user authorized adding the GitHub CLI `workflow` scope, completed GitHub account reauthentication and selected one run per day. `gh auth status` confirmed the added scope; the workflow was pushed to default branch `main` at `422829b047c16b19647633d29baa454c4aec9eba`. GitHub reports workflow `353641950` as `active`, with one schedule at 00:17 UTC / 09:17 KST. It keeps 60 days of observation artifacts on a standard Ubuntu runner with read-only repository permission. The website application build remains the deployed v4 release below.

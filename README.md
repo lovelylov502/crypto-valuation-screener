@@ -1,23 +1,21 @@
 # 크립토 밸류에이션 리서치
 
-현금흐름은 개선되지만 가격에는 아직 충분히 반영되지 않은 **재발견 전 후보**를 찾는 단일 화면 스크리너.
+P/S와 실제 매출의 규모·추이를 비교해 추가 조사할 크립토 종목을 찾는 단일 화면 스크리너.
 주식·일반 기업 리서치, 조사노트, 후보 큐 같은 별도 워크플로는 다루지 않는다.
 
 **🌐 라이브: https://crypto-valuation-screener.vercel.app**
 데이터: [DefiLlama](https://defillama.com) · [CoinMarketCap Keyless](https://coinmarketcap.com/api/documentation/pro-api-reference/keyless-public-api) · [CoinGecko](https://coingecko.com)
 
-## Current v4
+## Current v5
 
-- Independent views for business improvement, current holder flows and observed zero/positive transitions. Signals can overlap and remain visible despite a low experimental score.
-- Same 30-day basis for P/HR, P/S, P/F and holder amount ratios; zero and missing component history remain distinct.
-- Automatic and manual refresh, visible source status, bounded ISR retry, and last-good-table retention on failure.
-- A compact responsive table, searchable filters, persistent favorites and column choices, and an accessible coin detail panel for conditions and calculation evidence.
-- Previous-view comparisons and up to 60 days of browser observations, with JSON export.
-- Daily GitHub observation artifacts and website cache warming at 09:17 KST, with 60-day artifact retention. The hosted workflow is active and its first manual run passed. No new paid data service.
+- Current market cap stays fixed across P/S based on actual 365-day revenue and annualized rolling 90/30/7-day revenue. The 20x reference is editable and highlights rows without excluding higher multiples. Price direction does not control research inclusion.
+- The main presets are discovery, P/S and revenue trend, holder return mechanisms, and price/supply. Legacy experimental scores are optional.
+- Details begin with token price, 24h/7d/30d changes, market cap and FDV, then business descriptions, dated revenue windows, 13 non-overlapping weekly totals and holder policy evidence.
+- Official research records distinguish buybacks, burning, distributions, payout assets, recipients, conditions and policy status. Unknown facts stay explicit. Provider descriptions fill uncovered projects.
+- The review baseline moves only when explicitly acknowledged. Browser observations retain up to 60 days; unattended daily archives remain separate.
+- Large source responses bypass the 2MB fetch-cache limit. The server caches a compressed joined snapshot for 30 minutes; the refresh API adds no second response cache.
 
-The current rule version is `research-v4-same-window`. Scores are experimental and holder-centric; they are not the eligibility rule for the independent signal views. Field completeness is not a return probability. Conditional ve/voter flows remain outside general P/HR but can be discovered separately.
-
-Read [the current v4 product, accounting, UX and operational contract](./docs/SCREENER_V4.md). The older brief and UX/methodology sections preserve the v3 baseline. Production safety is in [DEPLOYMENT.md](./docs/DEPLOYMENT.md).
+Current rule version: `research-v5-ps-revenue`. See [HANDOFF.md](./docs/HANDOFF.md) for dated validation and deployment receipts, and [SCREENER_V5.md](./docs/SCREENER_V5.md) for calculation rules, coverage and research maintenance. [SCREENER_V4.md](./docs/SCREENER_V4.md) preserves the earlier contract. Production safety remains in [DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
 ## 개발
 
