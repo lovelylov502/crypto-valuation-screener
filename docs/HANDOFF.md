@@ -1,5 +1,15 @@
 # Handoff
 
+## 2026-09-12 — v5 production deployment
+
+V5 is deployed at https://crypto-valuation-screener.vercel.app. The user explicitly authorized deployment after implementation. Source commit: `2d3ea8116514c6204cb0e0fe3c13895e37f74727`; deployment ID: `dpl_FyZxNX4oW7fu5HDFV8Cjyo4UVtTv`; unique URL: https://crypto-valuation-screener-ggr76o5z5-bodycation.vercel.app. The authenticated Vercel API confirms `READY`, production, the expected project/team, this exact commit on `main` and the canonical alias. This receipt is a later documentation-only change, not another application build.
+
+`npm run deploy:production` passed the clean synchronized canonical `main` proof, authenticated remote identity, 150 application tests, six deployment-contract tests, TypeScript, production build, pinned CLI dry run, deployment and canonical readback. The page returned HTTP 200, 3,418,029 bytes and all five v5 markers. The API returned HTTP 200, `research-v5-ps-revenue`, 700 rows and 3,009,806 bytes, with `updatedAt=2026-09-12T08:55:07.744Z` and `Cache-Control: no-store`. All 11 source observations succeeded. All 700 rows have an introduction; 199 rows have positive completed-day 30-day revenue history before token-identity eligibility is applied. These are dated coverage observations.
+
+Live browser verification passed the P/S/revenue preset, Lido's price/24h/7d/30d/market-cap/FDV header, four dated P/S windows, interactive weekly revenue selection, an above-reference Pendle row (47.1x at a 20x reference), Escape close and the v4-to-v5 review-baseline notice. Browser warning/error logs were empty. The original review baseline was preserved, and the public tab was restored to the unfiltered discovery view. The local preview server was stopped before deployment.
+
+Deployment logs, selected authenticated identity fields, public API data, screenshots and browser checks are retained outside Git at `C:/Users/TAE/.codex/visualizations/2026/09/12/01a09451-4088-7c41-be99-45f80414f679/screener-research`: `deployment-2026-09-12.log`, `production-identity.json`, `production-readback.json`, `production-snapshot.json`, `production-browser-verification.json`, `21-production-overview.png` and `22-production-lido-detail.png`. Official holder-policy coverage remains four researched records; unknown payout facts remain explicit. The daily archive is separate from browser observation history, as documented in SCREENER_V5.md.
+
 ## 2026-09-12 — v5 local implementation
 
 The user authorized implementation and a broad UX redesign after the P/S discussion. Current local branch is `codex/ps-research-ux`; version `research-v5-ps-revenue`. No commit, push or production deployment has been performed in this implementation turn. The earlier v4 deployment below remains historical. Governing behavior and research maintenance are documented in [SCREENER_V5.md](./SCREENER_V5.md).

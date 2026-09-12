@@ -1,5 +1,9 @@
 # 작업 이력
 
+## 2026-09-12 — v5 production publication
+
+Published commit `2d3ea81` through the guarded `npm run deploy:production` route after explicit user authorization. Deployment `dpl_FyZxNX4oW7fu5HDFV8Cjyo4UVtTv` is READY on the canonical public URL; authenticated readback confirms the expected project/team and exact source commit. All local gates and public page/API checks passed (700 rows, 3,009,806 API bytes, all 11 sources successful). Live P/S presets, price-first details, weekly revenue interaction, above-reference visibility and the legacy review-baseline notice passed with no browser warnings or errors. Deployment identity, coverage limits and evidence locations are in HANDOFF.md.
+
 ## 2026-09-12 — P/S and revenue UX implementation
 
 Implemented the user-approved v5 research flow on `codex/ps-research-ux`: a soft P/S reference, fixed-cap multi-window multiples, completed-day revenue history, weekly amounts, market-first details, business introductions and explicit holder policy fields. Acknowledgement now has its own persisted baseline. Corrected TVL-as-price-change fallback and the large-payload server cache. 150 application tests, six deployment contract tests, TypeScript, production build and live-data browser QA passed. This is local implementation only; coverage, source limitations and receipts are in HANDOFF.md and SCREENER_V5.md.
