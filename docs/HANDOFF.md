@@ -1,5 +1,15 @@
 # Handoff
 
+## 2026-09-13 — v5.1 production deployment
+
+Published source commit `046a59d997825166f5e40c40a1a24d4e3bbb7d42` through `npm run deploy:production`. Deployment `dpl_6aj6mmk7E9f7zSAnSV4g6o3AuD5p` is READY in production, with unique URL https://crypto-valuation-screener-5vff4xh4x-bodycation.vercel.app and canonical URL https://crypto-valuation-screener.vercel.app. Authenticated readback confirms the exact commit on main, expected project/team and canonical alias. This receipt is a subsequent documentation-only commit, not a new application build.
+
+The guarded route passed clean synchronized canonical main, authenticated identity, 155 application tests, six deployment-contract tests, TypeScript, production build and the pinned CLI dry run. Canonical readback passed after alias propagation: page HTTP 200, 3,701,576 bytes and all seven v5.1 markers; API HTTP 200, 3,173,629 bytes, `research-v5-ps-revenue`, `Cache-Control: no-store`, 708 rows and 708 matching Korean translations. API observation `2026-09-13T02:18:15.019Z` has all 11 sources successful. The catalog contains 692 unique source descriptions; the row count is a dated coverage observation.
+
+Production browser checks passed default 100 rows, 50/100/200 selection, numbered page 2 showing 101–200/708 with results focus, Safe's Korean introduction and original disclosure, its price/24h/7d/30d/market-cap/FDV header, and Escape focus restoration. At document scroll Y=4850.86, table scrollTop stayed 0 and the header stayed at viewport Y=0. Error/warning logs were empty. The public tab was restored to unfiltered discovery, 100 rows and the top of the page. Existing favorites and review acknowledgement were not changed.
+
+Evidence under the v5.1 directory below includes `deployment-2026-09-13.log`, `production-identity.json`, `production-readback.json`, `production-snapshot.json`, `production-browser-verification.json`, `production-overview.png` and `production-safe-detail.png`. Local preview servers were stopped. Translation maintenance and the explicit fallback for new/changed source descriptions are documented in SCREENER_V5.md.
+
 ## 2026-09-13 — v5.1 usability implementation
 
 The user approved Korean project descriptions, a compact header, document-level vertical scrolling, numbered pagination and a default of 100 rows with a 50/100/200 dropdown, and retained the earlier deployment authorization. Numerical rules and review compatibility remain `research-v5-ps-revenue`. The source-paired translation catalog covers all 707 rows in the captured `2026-09-13T02:07:22.486Z` snapshot. New or changed originals display an explicit translation-pending message until reviewed; curated official research and holder-policy verification retain their previous scope.

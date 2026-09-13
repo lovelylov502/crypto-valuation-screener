@@ -1,5 +1,9 @@
 # 작업 이력
 
+## 2026-09-13 — v5.1 production publication
+
+Published `046a59d` through the guarded production command. Deployment `dpl_6aj6mmk7E9f7zSAnSV4g6o3AuD5p` is READY at the canonical URL, with the expected Vercel identity and exact source commit. All local gates and live readback passed: 708/708 Korean descriptions, all 11 sources successful, 155 application tests and six deployment tests. Production default/selector/pagination, Safe detail/original, focus return and document-scrolling checks passed with empty error/warning logs. HANDOFF.md contains deployment identity and evidence locations.
+
 ## 2026-09-13 — Korean introductions and list navigation
 
 Implemented source-paired Korean translations, preserving project names and retaining originals in a disclosure. Condensed the header and removed the table's vertical height cap, with column headers following document scrolling. Added top/bottom numbered pagination, a persisted 50/100/200 native selector with default 100, results focus on page changes and scroll restoration after closing details. Numerical rules remain unchanged. All 155 application tests, six deployment-contract tests, TypeScript, production build and browser checks passed. Dated coverage and evidence are in HANDOFF.md; production publication is recorded separately.
