@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { DEPLOY_CONTRACT } from "./deploy-contract.mjs";
 
-const ADVANCED_UI_MARKERS = ["P/S 참고선", "매출 성장", "P/S · 매출 추이", "확인 후 변화", "최신 자료 확인"];
+const ADVANCED_UI_MARKERS = ["P/S 참고선", "매출 성장", "P/S · 매출 추이", "확인 후 변화", "최신 자료 확인", "page-size-top", "page-size-bottom"];
 const LEGACY_UI_MARKERS = ["저평가 80+", "고평가 20 이하"];
 const MAX_API_BYTES = 4_500_000;
 const MAX_ATTEMPTS = 8;
@@ -66,11 +66,14 @@ function inspectApi(readback) {
     errors.push("API coins array is missing or empty");
   } else {
     const sample = data.coins.find((coin) => coin && typeof coin === "object");
-    for (const field of ["status", "scoreAxes", "holderValue", "opportunities", "peerCounts"]) {
+    for (const field of ["status", "scoreAxes", "holderValue", "opportunities", "peerCounts", "descriptionKo"]) {
       if (!(field in sample)) errors.push(`API advanced field missing: ${field}`);
     }
     if (!data.coins.some((coin) => coin.revenueHistory?.periods?.[30]?.total > 0 && coin.revenueHistory?.weeks?.length === 13)) {
       errors.push("API has no usable completed-day revenue history");
+    }
+    if (!data.coins.some((coin) => typeof coin.descriptionKo === "string" && /[가-힣]/u.test(coin.descriptionKo))) {
+      errors.push("API has no Korean protocol descriptions");
     }
   }
   return { errors, data };

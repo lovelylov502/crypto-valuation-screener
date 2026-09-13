@@ -1,5 +1,6 @@
 import type { CoinRaw, IdentityStatus, SourceObservation } from "./types";
 import { fetchRevenueHistory } from "./revenueSource";
+import { koreanDescription } from "./protocolDescriptions";
 import {
   aggregateHolderValueByGroup,
   emptyHolderValueSummary,
@@ -380,6 +381,7 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       identityStatus,
       identityReason,
       description: str(rep.description),
+      descriptionKo: koreanDescription(str(rep.description)),
       descriptionSource: `https://defillama.com/protocol/${encodeURIComponent(String(rep.slug))}`,
       website: str(rep.url),
       revenueHistory: history,

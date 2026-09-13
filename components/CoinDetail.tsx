@@ -30,13 +30,16 @@ export function CoinDetail({
   useEffect(() => {
     const prior = document.activeElement as HTMLElement | null;
     const panel = dialog.current;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
     panel?.showModal();
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       panel?.close();
       document.body.style.overflow = overflow;
-      prior?.focus();
+      prior?.focus({ preventScroll: true });
+      window.scrollTo(scrollX, scrollY);
     };
   }, []);
   const evidence = MECHANISM_EVIDENCE[c.slug];
@@ -79,8 +82,9 @@ export function CoinDetail({
         </section>
         <section className="detail-section project-introduction">
           <h3>어떤 사업인가요?</h3>
-          <p>{research?.description ?? c.description ?? "프로젝트 소개 자료를 확보하지 못했습니다. 원천 페이지에서 사업과 수익원을 확인해 주세요."}</p>
-          <p className="detail-note muted">{research ? `${research.scope} · 공식 자료 확인 ${research.reviewedAt}` : c.isParent ? "구성 제품의 원문 소개입니다. 이 표의 금액은 그룹 단위로 합산합니다." : "DefiLlama 원문 소개 · 최신 내용은 공식 자료에서 확인"}</p>
+          <p>{research?.description ?? c.descriptionKo ?? (c.description ? "한국어 소개를 준비 중입니다. 아래에서 원문을 확인할 수 있습니다." : "프로젝트 소개 자료를 확보하지 못했습니다. 원천 페이지에서 사업과 수익원을 확인해 주세요.")}</p>
+          <p className="detail-note muted">{research ? `${research.scope} · 공식 자료 확인 ${research.reviewedAt}` : `${c.descriptionKo ? "DefiLlama 소개 한국어 번역" : "DefiLlama 소개"}${c.isParent ? " · 구성 제품의 소개이며, 표의 금액은 그룹 단위로 합산합니다." : " · 최신 내용은 공식 자료에서 확인"}`}</p>
+          {c.description && <details className="description-original"><summary>DefiLlama 원문 보기</summary><p lang="en">{c.description}</p></details>}
           <div className="detail-links">{safeUrl(research?.source ?? c.descriptionSource) && <a href={safeUrl(research?.source ?? c.descriptionSource)} target="_blank" rel="noreferrer">소개 출처 <ExternalLink size={13} /></a>}{safeUrl(c.website) && <a href={safeUrl(c.website)} target="_blank" rel="noreferrer">프로젝트 홈페이지 <ExternalLink size={13} /></a>}<a href={coinUrl(c)} target="_blank" rel="noreferrer">시장 원자료 <ExternalLink size={13} /></a></div>
           {reasons.length > 0 && <div className="detail-reasons">{reasons.map(r => <span key={r}>{r}</span>)}</div>}
         </section>

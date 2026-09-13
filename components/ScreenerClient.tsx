@@ -1,11 +1,9 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
-  ChevronLeft,
-  ChevronRight,
   Columns3,
   Download,
   RefreshCw,
@@ -43,10 +41,13 @@ import {
   UsdRangeFilter,
 } from "./RangeFilters";
 import { useScreenerData } from "./useScreenerData";
+import { Pagination } from "./Pagination";
+import { PAGE_SIZE_KEY, parsePageSize } from "@/lib/pagination";
+import { useWindowTableHeader } from "./useWindowTableHeader";
 
 const FAVORITES_KEY = "crypto-valuation-favorites-v1";
 const COLUMNS_KEY = "crypto-valuation-columns-v5";
-const PAGE_SIZE = 30;
+
 const TRACK_NAMES: Record<OpportunityTrack, string> = {
   business: "매출·수수료 성장",
   holder: "홀더 환원",
@@ -103,6 +104,9 @@ export function ScreenerClient({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const tableRef = useWindowTableHeader();
   const [sortKey, setSortKey] = useState<SortKey>("ps");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
@@ -112,6 +116,7 @@ export function ScreenerClient({
     try {
       setFavoriteSlugs(parseFavoriteSlugs(localStorage.getItem(FAVORITES_KEY)));
       const saved = localStorage.getItem(COLUMNS_KEY);
+      setPageSize(parsePageSize(localStorage.getItem(PAGE_SIZE_KEY)));
       const reference = Number(localStorage.getItem("crypto-ps-reference-v1"));
       if (Number.isFinite(reference) && reference > 0) { setPsReference(reference); setPsReferenceDraft(String(reference)); }
       setVisibleColumns(
@@ -134,11 +139,12 @@ export function ScreenerClient({
         serializeFavoriteSlugs(favoriteSlugs),
       );
       localStorage.setItem(COLUMNS_KEY, JSON.stringify([...visibleColumns]));
+      localStorage.setItem(PAGE_SIZE_KEY, String(pageSize));
       localStorage.setItem("crypto-ps-reference-v1", String(psReference));
     } catch {
       setPreferencesError(true);
     }
-  }, [favoriteSlugs, visibleColumns, storedReady, psReference]);
+  }, [favoriteSlugs, visibleColumns, storedReady, psReference, pageSize]);
 
   const coins = useMemo(() => data?.coins ?? [], [data]);
   const comparisonBaseline =
@@ -317,9 +323,15 @@ export function ScreenerClient({
     minScore,
     maxScore,
   ]);
-  const pages = Math.max(1, Math.ceil(deferredRows.length / PAGE_SIZE));
+  const pages = Math.max(1, Math.ceil(deferredRows.length / pageSize));
   const currentPage = Math.min(page, pages);
-  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageStart = (currentPage - 1) * pageSize;
+  const moveToResults = () => requestAnimationFrame(() => {
+    resultsRef.current?.focus({ preventScroll: true });
+    resultsRef.current?.scrollIntoView({ block: "start" });
+  });
+  const changePage = (next: number) => { setPage(next); moveToResults(); };
+  const changePageSize = (size: number) => { setPageSize(size); setPage(1); moveToResults(); };
   const selectedCols = [...visibleColumns]
     .map((key) => COLS.find((c) => c.key === key))
     .filter((c) => c !== undefined);
@@ -364,14 +376,10 @@ export function ScreenerClient({
       </a>
       <header className="app-header">
         <div>
-          <p className="eyebrow">
-            CRYPTO VALUATION <span>RESEARCH DESK</span>
-          </p>
           <h1>크립토 리서치</h1>
-          <p className="intro">
-            P/S로 찾고, 매출의 규모와 추이로 살펴보세요.
-          </p>
+          <p className="intro">P/S와 매출 추이로 종목 찾기</p>
         </div>
+        <div className="reference-setting"><label htmlFor="ps-reference">P/S 참고선 <input id="ps-reference" type="number" min="0.1" step="1" value={psReferenceDraft} onChange={e => { setPsReferenceDraft(e.target.value); const v = Number(e.target.value); if (Number.isFinite(v) && v > 0) setPsReference(v); }} onBlur={() => setPsReferenceDraft(String(psReference))} /> 배</label></div>
         <div className="update-block">
           <span
             className={`freshness ${snapshotAge > SNAPSHOT_STALE_MS || sourceFailures ? "caution" : ""}`}
@@ -417,6 +425,7 @@ export function ScreenerClient({
       {sourceOpen && (
         <section className="source-details" id="source-details">
           <h2>데이터를 읽는 기준</h2>
+          <p>P/S 참고선 이하인 종목을 강조하며 목록은 유지합니다. 낮은 P/S와 매출 성장을 함께 살펴보세요. 가격 방향에는 가중치를 주지 않습니다.</p>
           <p>
             P/S는 같은 현재 시총에 기간별 매출을 적용합니다. 일별 이력이 있으면 완료된 UTC 날짜만 사용합니다. 홀더 금액은 원천의 최근 30일 집계이며 기간과 구성 범위를 상세창에서 구분합니다.
           </p>
@@ -477,13 +486,6 @@ export function ScreenerClient({
           수 있습니다.
         </p>
       )}
-
-      <section className="research-intro" aria-label="P/S 탐색 기준">
-        <div><p className="eyebrow">REVENUE FIRST</p><h2>매출에 비해, 지금 얼마인가요?</h2>
-          <p>낮은 P/S와 매출 성장을 나란히 확인합니다. 가격 방향에 따른 가중치는 없습니다.</p></div>
-        <div className="reference-setting"><label htmlFor="ps-reference">P/S 참고선 <input id="ps-reference" type="number" min="0.1" step="1" value={psReferenceDraft} onChange={e => { setPsReferenceDraft(e.target.value); const v = Number(e.target.value); if (Number.isFinite(v) && v > 0) setPsReference(v); }} onBlur={() => setPsReferenceDraft(String(psReference))} /> 배</label>
-          <small>참고선 이하인 종목을 강조합니다. 현재 목록은 유지됩니다.</small></div>
-      </section>
 
       <section className="workspace" aria-label="스크리너">
         <div className="view-bar" aria-label="결과 보기">
@@ -784,7 +786,7 @@ export function ScreenerClient({
         )}
         {view === "holder" && <div className="comparison-note"><p>최근 30일 매입·분배 또는 조건부 보상이 관측된 종목입니다. 아래 전환 보기를 켜면 양수 → 0으로 바뀐 종목도 포함합니다.</p><label className="inline-check"><input type="checkbox" checked={tracks.has("transition")} onChange={() => toggleSet<OpportunityTrack>(setTracks, "transition")} /> 홀더 금액이 0↔양수로 바뀐 종목만 보기</label><p className="muted">최근·직전 30일 비교입니다. 매일 한 번의 사건 목록이 아니며, 실제 정책 변경 여부는 추가 확인이 필요합니다.</p></div>}
         {view === "data" && <div className="comparison-note">가격·매출·토큰 연결 등 부족한 항목을 종목 아래에 표시합니다. 보고된 0과 자료 누락은 구분합니다.</div>}
-        <div className="results-heading" id="screener-results" tabIndex={-1}>
+        <div className="results-heading" id="screener-results" ref={resultsRef} tabIndex={-1}>
           <h2>
             프로토콜 <strong>{deferredRows.length}</strong>
             <span>/ {coins.length}</span>
@@ -823,7 +825,9 @@ export function ScreenerClient({
             </button>
           </div>
         </div>
+        <Pagination total={deferredRows.length} page={currentPage} size={pageSize} position="top" onPage={changePage} onSize={changePageSize} />
         <div
+          ref={tableRef}
           className="table-scroll thin-scroll"
           role="region"
           aria-label="프로토콜 비교 표 · 가로 스크롤 가능"
@@ -875,7 +879,7 @@ export function ScreenerClient({
               </tr>
             </thead>
             <tbody>
-              {deferredRows.slice(pageStart, pageStart + PAGE_SIZE).map((c) => (
+              {deferredRows.slice(pageStart, pageStart + pageSize).map((c) => (
                 <tr key={c.slug}>
                   <th scope="row" className="coin-column">
                     <div className="coin-identity">
@@ -963,35 +967,7 @@ export function ScreenerClient({
             </button>
           </div>
         )}
-        <div className="pagination">
-          <span>
-            {deferredRows.length ? pageStart + 1 : 0}–
-            {Math.min(pageStart + PAGE_SIZE, deferredRows.length)} /{" "}
-            {deferredRows.length}개
-          </span>
-          <nav aria-label="결과 페이지">
-            <button
-              className="icon-button"
-              aria-label="이전 페이지"
-              disabled={currentPage === 1}
-              onClick={() => setPage(currentPage - 1)}
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <span>
-              {currentPage} / {pages}
-            </span>
-            <button
-              className="icon-button"
-              aria-label="다음 페이지"
-              disabled={currentPage === pages}
-              onClick={() => setPage(currentPage + 1)}
-            >
-              <ChevronRight size={18} />
-            </button>
-          </nav>
-          <span className="table-help">코인 이름을 눌러 근거 확인</span>
-        </div>
+        <Pagination total={deferredRows.length} page={currentPage} size={pageSize} position="bottom" onPage={changePage} onSize={changePageSize} />
       </section>
       <footer className="app-footer">
         <p>

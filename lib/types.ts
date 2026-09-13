@@ -18,6 +18,7 @@ export interface CoinRaw {
   identityStatus: IdentityStatus;
   identityReason: string;
   description?: string | null;
+  descriptionKo?: string | null;
   descriptionSource?: string | null;
   website?: string | null;
   revenueHistory?: RevenueHistory | null;

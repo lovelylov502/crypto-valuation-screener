@@ -1,5 +1,9 @@
 # 작업 이력
 
+## 2026-09-13 — Korean introductions and list navigation
+
+Implemented source-paired Korean translations, preserving project names and retaining originals in a disclosure. Condensed the header and removed the table's vertical height cap, with column headers following document scrolling. Added top/bottom numbered pagination, a persisted 50/100/200 native selector with default 100, results focus on page changes and scroll restoration after closing details. Numerical rules remain unchanged. All 155 application tests, six deployment-contract tests, TypeScript, production build and browser checks passed. Dated coverage and evidence are in HANDOFF.md; production publication is recorded separately.
+
 ## 2026-09-12 — v5 production publication
 
 Published commit `2d3ea81` through the guarded `npm run deploy:production` route after explicit user authorization. Deployment `dpl_FyZxNX4oW7fu5HDFV8Cjyo4UVtTv` is READY on the canonical public URL; authenticated readback confirms the expected project/team and exact source commit. All local gates and public page/API checks passed (700 rows, 3,009,806 API bytes, all 11 sources successful). Live P/S presets, price-first details, weekly revenue interaction, above-reference visibility and the legacy review-baseline notice passed with no browser warnings or errors. Deployment identity, coverage limits and evidence locations are in HANDOFF.md.

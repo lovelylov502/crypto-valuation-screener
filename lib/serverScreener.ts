@@ -9,7 +9,7 @@ import type { ScreenerResponse } from "./types";
 const cachedSnapshot = unstable_cache(async () => {
   const data = await buildScreener();
   return gzipSync(JSON.stringify(data)).toString("base64");
-}, ["screener", SCORE_VERSION], { revalidate: 1800 });
+}, ["screener", SCORE_VERSION, "ko-descriptions-v2"], { revalidate: 1800 });
 
 export async function getScreener(): Promise<ScreenerResponse> {
   return JSON.parse(gunzipSync(Buffer.from(await cachedSnapshot(), "base64")).toString("utf8"));

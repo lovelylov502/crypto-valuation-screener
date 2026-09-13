@@ -1,5 +1,13 @@
 # Handoff
 
+## 2026-09-13 — v5.1 usability implementation
+
+The user approved Korean project descriptions, a compact header, document-level vertical scrolling, numbered pagination and a default of 100 rows with a 50/100/200 dropdown, and retained the earlier deployment authorization. Numerical rules and review compatibility remain `research-v5-ps-revenue`. The source-paired translation catalog covers all 707 rows in the captured `2026-09-13T02:07:22.486Z` snapshot. New or changed originals display an explicit translation-pending message until reviewed; curated official research and holder-policy verification retain their previous scope.
+
+155 application tests, six deployment-contract tests, TypeScript, production build and whitespace checks passed. Browser QA at desktop and 390×844 verified 100 default, 50/200 selection, reload persistence, top/bottom numbered navigation, last-page and zero-result boundaries, results focus/scroll, Safe's name-preserving Korean default and expandable original, and Escape focus/scroll restoration. At document scroll Y=1440, the table's own scrollTop remained 0 and the column header stayed at viewport Y=0. Mobile horizontal scrolling kept the project header and cells aligned; there was no document horizontal overflow or browser error/warning log. Later local collections had optional source failures, which remained disclosed; the 707-row translation coverage is a dated snapshot check.
+
+Evidence is outside Git at `C:/Users/TAE/.codex/visualizations/2026/09/12/01a09451-4088-7c41-be99-45f80414f679/screener-usability-v51`, including `translation-coverage.json`, `local-build.log`, `desktop-trend.png`, `mobile-top.png` and `mobile-scrolled.png`. Production receipt will be recorded separately after the guarded deployment succeeds.
+
 ## 2026-09-12 — v5 production deployment
 
 V5 is deployed at https://crypto-valuation-screener.vercel.app. The user explicitly authorized deployment after implementation. Source commit: `2d3ea8116514c6204cb0e0fe3c13895e37f74727`; deployment ID: `dpl_FyZxNX4oW7fu5HDFV8Cjyo4UVtTv`; unique URL: https://crypto-valuation-screener-ggr76o5z5-bodycation.vercel.app. The authenticated Vercel API confirms `READY`, production, the expected project/team, this exact commit on `main` and the canonical alias. This receipt is a later documentation-only change, not another application build.

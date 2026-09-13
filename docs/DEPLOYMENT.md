@@ -42,4 +42,6 @@ npm run verify:local
 
 `npm run verify:production` requires both canonical endpoints to return HTTP 200. The page must contain `P/S 참고선`, `매출 성장`, `P/S · 매출 추이`, `확인 후 변화`, and `최신 자료 확인`, and must not contain `저평가 80+` or `고평가 20 이하`. The API must return `scoreVersion=research-v5-ps-revenue`, row fields including `opportunities` and `peerCounts`, a non-empty result, and a payload below 4.5 MB. At least one row must have usable completed-day revenue history with positive 30-day revenue and 13 weekly observations. The source-root, repository, branch, remote, credential, and Vercel identity guards are unchanged.
 
+The v5.1 usability readback also requires both page-size selectors in the page and the `descriptionKo` API field with at least one usable Korean introduction. Numerical rules retain `research-v5-ps-revenue`.
+
 After every production deployment, also retain the Vercel deployment ID and unique URL from CLI output or `vercel inspect`. A successful payload upload alone is not a completed deployment until the canonical alias passes the readback gate.
