@@ -1,5 +1,17 @@
 # Handoff
 
+## 2026-09-20 — v6 production deployment
+
+Published source commit `8c6a078360eed24c362fccef1bb299fc3a5b50b5` through `npm run deploy:production`. Deployment `dpl_DSJkUcD64CafMBtKGavHBVrMLk8s` is READY in production, with unique URL https://crypto-valuation-screener-jbdodl2ct-bodycation.vercel.app and canonical URL https://crypto-valuation-screener.vercel.app. Authenticated Vercel readback confirms this exact main commit, the expected project/team and the canonical alias. This receipt is a subsequent documentation-only commit, not another application build.
+
+The guarded canonical route passed clean synchronized main, remote identity, 164 application tests, six deployment-contract tests, TypeScript, production build and the pinned CLI dry run. Canonical page/API readback passed with HTTP 200; page size 4,572,462 bytes with all eight v6 markers and no legacy P/S markers; API size 3,971,394 bytes, `research-v6-fundamental-scope`, `Cache-Control: no-store`, 723 rows at `2026-09-19T15:13:27.639Z` (2026-09-20 00:13:27 KST). All source observations succeeded. A separate saved readback at 15:18:32 UTC matches the API payload SHA-256 `b35a3054d8086f69a9d6dc1ba68e2b61665dfafc5a66480063bb6433f93f33f7`.
+
+This dated snapshot contains 132 protocol-revenue, five service-sales, seven holder-return, one estimated-trading-PnL, 19 mixed and 559 unknown rows; 142 have usable typed 30-day multiples. Unknown includes absent or unresolved definitions, not 559 proven data errors. VVV's completed 30-day buy/burn amount is 797,709 USD and typed multiple 140.587042576; business growth is false, P/F and inferred holder share are null, capture score is 43. The 365-day multiple remains unavailable with 285 reported days.
+
+Production browser QA confirms the VVV typed row, off-chain sales exclusion, expandable definitions, distinct Revenue/Fees accounting labels, withheld holder-share explanation, incomplete-year handling and zero results for VVV under business growth. Warning/error logs are empty; the desktop detail screenshot was inspected. The deliverable tab remains on VVV detail. Earlier local live-data QA also covered kind/reference interaction, unknown-definition withholding and incompatible historical baselines. Local preview servers were stopped.
+
+Evidence is outside Git under `C:/Users/TAE/Documents/Codex/2026-09-19/dot-plugin-browser-openai-bundled-mention/work/vvv-audit`: `deployment-v6.log`, `production-v6/readback.json`, `production-v6/snapshot.json`, and `production-v6/browser-verification.json`. User-facing report and compact verification receipt are in the task's `outputs` directory. The existing daily capture workflow uses the new source contracts and rule hashes; this receipt does not claim a new hosted daily-run result. Methodology text drift is detected; silent upstream implementation changes or incorrect source amounts still need source audit, as documented in SCREENER_V6.md.
+
 ## 2026-09-20 — v6 economic scope correction
 
 The user authorized the project-wide VVV/P/S correction and related omissions. Current code contract is `research-v6-fundamental-scope`; [SCREENER_V6.md](./SCREENER_V6.md) supersedes generic Revenue-as-sales assumptions in historical entries below. This entry records pre-production validation; the production receipt is recorded separately after deployment.
