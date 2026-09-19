@@ -80,7 +80,7 @@ interface HolderAccumulator {
 }
 
 const amount = (value: unknown): number | null =>
-  typeof value === "number" && Number.isFinite(value) && value >= 0
+  typeof value === "number" && Number.isFinite(value)
     ? value
     : null;
 
@@ -293,10 +293,6 @@ function createAccumulator(): HolderAccumulator {
   };
 }
 
-function positiveOrNull(value: number): number | null {
-  return value > 0 ? value : null;
-}
-
 export function emptyHolderValueSummary(): HolderValueSummary {
   return {
     sourceStatus: "defillama-derived",
@@ -320,6 +316,7 @@ export function emptyHolderValueSummary(): HolderValueSummary {
 
 function finalize(accumulator: HolderAccumulator): HolderValueSummary {
   const eligible = accumulator.components.filter(component => component.eligible);
+  const excluded = accumulator.components.filter(component => !component.eligible);
   const currentComplete = eligible.length > 0 && eligible.every(c => c.current30d !== null);
   const previousComplete = eligible.length > 0 && eligible.every(c => c.previous30d !== null);
   const eligibleCurrent30d = accumulator.eligibleCurrentObserved && currentComplete
@@ -332,22 +329,20 @@ function finalize(accumulator: HolderAccumulator): HolderValueSummary {
     eligibleCurrent30d !== null && eligibleCurrent30d > 0
       ? (eligibleCurrent30d * 365) / 30
       : null;
-  const rawCurrent30d = accumulator.rawCurrentObserved
+  const rawCurrent30d = accumulator.rawCurrentObserved && accumulator.components.every(c => c.current30d !== null)
     ? accumulator.rawCurrent
     : null;
-  const rawPrevious30d = accumulator.rawPreviousObserved
+  const rawPrevious30d = accumulator.rawPreviousObserved && accumulator.components.every(c => c.previous30d !== null)
     ? accumulator.rawPrevious
     : null;
-  const rawTtm = positiveOrNull(accumulator.rawTtm);
-  const excludedCurrent30d = accumulator.excludedCurrentObserved
+  const rawTtm = accumulator.components.length > 0 && accumulator.components.every(c => c.ttm !== null) ? accumulator.rawTtm : null;
+  const excludedCurrent30d = accumulator.excludedCurrentObserved && excluded.every(c => c.current30d !== null)
     ? accumulator.excludedCurrent
     : null;
-  const excludedTtm = positiveOrNull(accumulator.excludedTtm);
-  const eligibleTtm = positiveOrNull(accumulator.eligibleTtm);
-  const currentVsEligibleTtmRatio =
-    eligibleRunRate !== null && eligibleTtm !== null
-      ? eligibleRunRate / eligibleTtm
-      : null;
+  const excludedTtm = excluded.length > 0 && excluded.every(c => c.ttm !== null) ? accumulator.excludedTtm : null;
+  const eligibleTtm = eligible.length > 0 && eligible.every(c => c.ttm !== null) ? accumulator.eligibleTtm : null;
+  // No dated 365-day holder series is available. Never treat total1y as confirmed TTM.
+  const currentVsEligibleTtmRatio = null;
 
   let availability: HolderValueAvailability = "none";
   let warning: string | null = null;
@@ -363,7 +358,7 @@ function finalize(accumulator: HolderAccumulator): HolderValueSummary {
     }
   } else if (accumulator.eligibleTtm > 0) {
     availability = "stale";
-    warning = "최근 30일 적격 흐름이 0/누락됐지만 TTM은 양수 — 중단·불연속 가능";
+    warning = "최근 30일 적격 흐름이 0/누락됐지만 원천 1년 집계는 양수 · 중단·불연속 가능";
     phrUnavailableReason = "최근 30일 적격 holder value가 0/누락";
   } else if ((rawCurrent30d ?? 0) > 0 || (rawTtm ?? 0) > 0) {
     availability = "excluded";
@@ -400,6 +395,7 @@ function finalize(accumulator: HolderAccumulator): HolderValueSummary {
 export function aggregateHolderValueByGroup(
   rows: Json[],
   groupKey: (slug: string) => string,
+  reviewed: (row: Json) => boolean = () => true,
 ): Map<string, HolderValueSummary> {
   const accumulators = new Map<string, HolderAccumulator>();
   const getAccumulator = (key: string) => {
@@ -423,22 +419,14 @@ export function aggregateHolderValueByGroup(
     const current30d = amount(row.total30d);
     const previous30d = amount(row.total60dto30d);
     const ttm = amount(row.total1y);
-    if (
-      current30d === null &&
-      previous30d === null &&
-      ttm === null
-    ) {
-      continue;
-    }
-
-    const classification = classifyHolderMethodology(row.methodology);
+    const classification: HolderMethodologyClassification = reviewed(row) ? classifyHolderMethodology(row.methodology) : { economicType: "unclear_other", eligible: false, reason: "원천 집계 정의 신규·변경 · 재검토 필요" };
     const component: HolderValueComponent = {
       slug,
       name: text(row.name) ?? slug,
       ...classification,
       current30d,
       previous30d,
-      ttm: positiveOrNull(ttm ?? 0),
+      ttm,
     };
     accumulator.components.push(component);
 

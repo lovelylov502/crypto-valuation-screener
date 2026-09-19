@@ -12,19 +12,20 @@ import { researchReasons } from "@/lib/research";
 import { RevenuePanel } from "./RevenuePanel";
 import type { Snapshot, SnapshotChange } from "@/lib/snapshotHistory";
 import { coinUrl } from "./ScreenerCells";
+import { revenueLabel, feeLabel, multipleLabel } from "@/lib/fundamentals";
 
 export function CoinDetail({
   coin: c,
   change,
   onClose,
   history,
-  psReference,
+  multipleReference,
 }: {
   coin: CoinScored;
   change: SnapshotChange;
   onClose: () => void;
   history: Snapshot[];
-  psReference: number;
+  multipleReference: number | null;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -44,7 +45,7 @@ export function CoinDetail({
   }, []);
   const evidence = MECHANISM_EVIDENCE[c.slug];
   const research = protocolResearch(c);
-  const reasons = researchReasons(c, psReference);
+  const reasons = researchReasons(c, multipleReference);
   const safeUrl = (v: string | null | undefined) => v && /^https?:\/\//i.test(v) ? v : undefined;
   const share = c.valueCapture.eligibleHolderValueShare;
   return (
@@ -88,7 +89,7 @@ export function CoinDetail({
           <div className="detail-links">{safeUrl(research?.source ?? c.descriptionSource) && <a href={safeUrl(research?.source ?? c.descriptionSource)} target="_blank" rel="noreferrer">소개 출처 <ExternalLink size={13} /></a>}{safeUrl(c.website) && <a href={safeUrl(c.website)} target="_blank" rel="noreferrer">프로젝트 홈페이지 <ExternalLink size={13} /></a>}<a href={coinUrl(c)} target="_blank" rel="noreferrer">시장 원자료 <ExternalLink size={13} /></a></div>
           {reasons.length > 0 && <div className="detail-reasons">{reasons.map(r => <span key={r}>{r}</span>)}</div>}
         </section>
-        <RevenuePanel coin={c} history={history} reference={psReference} />
+        <RevenuePanel coin={c} history={history} reference={multipleReference} />
         <section className="detail-section">
           <h3>홀더에게 어떻게 귀속되나요?</h3>
           {research?.holder && <div className="holder-facts"><strong>{research.holder.route}</strong><dl>{[["재원", research.holder.funding], ["지급·소각 자산", research.holder.asset], ["수령 대상", research.holder.recipient], ["참여 조건", research.holder.condition], ["시행·검증 상태", research.holder.status]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><a href={research.holder.source} target="_blank" rel="noreferrer">공식 근거 <ExternalLink size={13} /></a><small>문서 확인 {research.reviewedAt} · 아래 금액은 원천 집계이며 정책 비율로 재계산하지 않습니다.</small></div>}
@@ -158,13 +159,13 @@ export function CoinDetail({
               <tbody>
                 {[
                   [
-                    "프로토콜 매출",
+                    `Revenue · ${revenueLabel(c)}`,
                     c.revenuePrev30d,
                     c.revenue30d,
                     flowLabel(compareFlow(c.revenue30d, c.revenuePrev30d)),
                   ],
                   [
-                    "전체 수수료",
+                    `Fees · ${feeLabel(c)}`,
                     c.feesPrev30d,
                     c.fees30d,
                     flowLabel(c.opportunities.fees),
@@ -187,7 +188,7 @@ export function CoinDetail({
             </table>
           </div>
           <p className="muted detail-note">
-            이 표는 매출·수수료·홀더 금액 모두 원천의 최근·직전 30일 집계입니다. 위의 완료된 UTC 날짜 기준 매출과 기간 경계가 다를 수 있습니다. 누락은 ‘–’, 보고된 0은 ‘$0’입니다.
+            이 표는 집계액·수수료·홀더 금액 모두 원천의 최근·직전 30일 집계입니다. 위의 완료된 UTC 날짜 기준 집계액과 기간 경계가 다를 수 있습니다. 누락은 ‘–’, 보고된 0은 ‘$0’입니다.
           </p>
           <dl className="detail-metrics">
             <div>
@@ -195,21 +196,20 @@ export function CoinDetail({
               <dd>{fmtMult(c.multiples.phr)}</dd>
             </div>
             <div>
-              <dt>P/S · 원천 집계 30일</dt>
-              <dd>{fmtMult(c.multiples.ps)}</dd>
+              <dt>{multipleLabel(c)} · 30일 연환산</dt>
+              <dd>{fmtMult(c.multiples.revenueMultiple)}</dd>
             </div>
             <div>
               <dt>
                 홀더 금액 /{" "}
-                {c.valueCapture.shareBasis === "fees30d" ? "수수료" : "매출"} ·
+                {revenueLabel(c)} ·
                 30일
               </dt>
               <dd>{share === null ? "–" : `${(share * 100).toFixed(1)}%`}</dd>
             </div>
           </dl>
           <p className="muted detail-note">
-            같은 원천 집계의 홀더 금액을 매출 또는 수수료로 나눈 비율입니다. 사용한 분모는 위 항목에 표시합니다. 위의 완료일 매출과 섞지 않습니다. 금액 비율은 공식 배분율과 다를 수 있습니다. 재원·집계 범위·지급
-            시차의 영향을 받습니다.
+            같은 원천 30일 집계에서 재원·구성 범위가 검토된 경우에만 비율을 계산합니다. 금액이 같다는 이유만으로 100% 환원으로 판단하지 않습니다. 공식 배분율과 지급 시차는 별도 확인이 필요합니다.
           </p>
           {c.valueCapture.risks
             .filter((r) => r.includes("분모"))
@@ -251,15 +251,15 @@ export function CoinDetail({
           {change.state === "comparable" ? (
             <dl className="detail-metrics">
               <div>
-                <dt>P/S 변화 · 기록 시점 기준</dt>
+                <dt>시총/집계액 변화 · 기록 시점 기준</dt>
                 <dd>
-                  {change.psDelta === null
+                  {change.multipleDelta === null
                     ? "–"
-                    : `${change.psDelta > 0 ? "+" : ""}${change.psDelta.toFixed(2)}배`}
+                    : `${change.multipleDelta > 0 ? "+" : ""}${change.multipleDelta.toFixed(2)}배`}
                 </dd>
               </div>
               <div>
-                <dt>매출 30일 금액 변화</dt>
+                <dt>집계액 30일 금액 변화</dt>
                 <dd>{fmtUsd(change.revenueDelta)}</dd>
               </div>
               <div>
@@ -277,7 +277,7 @@ export function CoinDetail({
             </dl>
           ) : (
             <p className="muted">
-              {change.state === "rules_changed"
+              {change.state === "definition_changed" ? "집계 정의 또는 기간 기준이 바뀌어 이전 기록과 비교하지 않습니다." : change.state === "rules_changed"
                 ? "계산 규칙이 바뀌어 이전 기록과 비교하지 않습니다."
                 : change.state === "identity_changed"
                   ? "토큰 연결이 바뀌어 이전 자료와 비교하지 않습니다."
@@ -296,8 +296,8 @@ export function CoinDetail({
             미발견 {c.scoreAxes.discovery}/25 · 품질 {c.scoreAxes.quality}/20
           </p>
           <p>
-            P/HR 표본 {c.peerCounts.phr} · P/S {c.peerCounts.ps} · P/F{" "}
-            {c.peerCounts.pf}. 같은 섹터 표본 8개 미만이면 해당 상대점수를
+            P/HR 표본 {c.peerCounts.phr} · 시총/집계액 {c.peerCounts.revenueMultiple} · P/F{" "}
+            {c.peerCounts.pf}. 같은 섹터·집계 종류·기간 기준의 표본 8개 미만이면 해당 상대점수를
             산출하지 않습니다.
           </p>
           <p className="muted">

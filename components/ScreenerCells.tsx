@@ -1,6 +1,6 @@
 import type { CoinScored } from "@/lib/types";
 import { fmtUsd, fmtMult, fmtPct, fmtPrice } from "@/lib/format";
-import { researchPs } from "@/lib/research";
+import { researchMultiple } from "@/lib/research";
 import { revenueAmount } from "@/lib/revenueHistory";
 import { protocolResearch } from "@/lib/protocolResearch";
 import { holderEconomicTypeLabel } from "@/lib/holderValue";
@@ -8,6 +8,7 @@ import { flowLabel } from "@/lib/signals";
 import type { SortKey } from "@/lib/screenerColumns";
 import { ScoreBadge } from "./ScoreBadge";
 import { TriangleAlert } from "lucide-react";
+import { multipleLabel, feeLabel, knownRevenue } from "@/lib/fundamentals";
 
 // 코인 외부 링크: canonical CMC 우선, 없으면 CoinGecko/DefiLlama 폴백
 export function coinUrl(c: CoinScored): string {
@@ -20,9 +21,9 @@ export function sortValue(c: CoinScored, key: SortKey): number | string | null {
   switch (key) {
     case "price": return c.price;
     case "change1d": return c.change1d;
-    case "ps7d": return researchPs(c, 7);
-    case "ps90d": return researchPs(c, 90);
-    case "ps1y": return researchPs(c, 365);
+    case "multiple7d": return researchMultiple(c, 7);
+    case "multiple90d": return researchMultiple(c, 90);
+    case "multiple1y": return researchMultiple(c, 365);
     case "revenue7d": return revenueAmount(c, 7);
     case "revenue90d": return revenueAmount(c, 90);
     case "revenue1y": return revenueAmount(c, 365);
@@ -36,7 +37,7 @@ export function sortValue(c: CoinScored, key: SortKey): number | string | null {
         Number(c.opportunities.transition)
       );
     case "revenueGrowth":
-      return c.opportunities.revenue.changePct;
+      return knownRevenue(c) ? c.opportunities.revenue.changePct : null;
     case "holderGrowth":
       return c.opportunities.eligibleHolder.changePct;
     case "name":
@@ -53,8 +54,8 @@ export function sortValue(c: CoinScored, key: SortKey): number | string | null {
       return c.gates.passed ? 1 : 0;
     case "captureScore":
       return c.valueCapture.score;
-    case "ps":
-      return researchPs(c);
+    case "revenueMultiple":
+      return researchMultiple(c);
     case "phr":
       return c.multiples.phr;
     case "revenueAnnual":
@@ -123,12 +124,12 @@ export function holderTypeSummary(c: CoinScored): string {
 function holderValueDetail(c: CoinScored): string {
   const componentDetail = c.holderValue.components.map(
     (component) =>
-      `${component.name}: ${holderEconomicTypeLabel(component.economicType)} · ${component.eligible ? "P/HR 포함" : "제외"} · 30d ${fmtUsd(component.current30d)} · TTM ${fmtUsd(component.ttm)} · ${component.reason}`,
+      `${component.name}: ${holderEconomicTypeLabel(component.economicType)} · ${component.eligible ? "P/HR 포함" : "제외"} · 30d ${fmtUsd(component.current30d)} · 1년 원천 집계 ${fmtUsd(component.ttm)} · ${component.reason}`,
   );
   return [
     "DefiLlama-derived 분류 (공식·온체인 검증 아님)",
     c.holderValue.currentVsEligibleTtmRatio !== null
-      ? `현재 run-rate / 적격 TTM ${c.holderValue.currentVsEligibleTtmRatio.toFixed(2)}x`
+      ? `현재 run-rate / 적격 1년 원천 집계 ${c.holderValue.currentVsEligibleTtmRatio.toFixed(2)}x`
       : null,
     c.holderValue.excludedDoublecountedCount > 0
       ? `doublecounted ${c.holderValue.excludedDoublecountedCount}개 제외`
@@ -145,9 +146,9 @@ export function renderCell(c: CoinScored, key: SortKey) {
   switch (key) {
     case "price": return fmtPrice(c.price);
     case "change1d": return <span className={changeClass(c.change1d)}>{fmtPct(c.change1d)}</span>;
-    case "ps1y": return fmtMult(researchPs(c, 365));
-    case "ps90d": return fmtMult(researchPs(c, 90));
-    case "ps7d": return fmtMult(researchPs(c, 7));
+    case "multiple1y": return fmtMult(researchMultiple(c, 365));
+    case "multiple90d": return fmtMult(researchMultiple(c, 90));
+    case "multiple7d": return fmtMult(researchMultiple(c, 7));
     case "revenue7d": return fmtUsd(revenueAmount(c, 7));
     case "revenue90d": return fmtUsd(revenueAmount(c, 90));
     case "revenue1y": return fmtUsd(revenueAmount(c, 365));
@@ -159,7 +160,7 @@ export function renderCell(c: CoinScored, key: SortKey) {
         <span className="signal-cell">
           <span className="signal-tags">
             {c.opportunities.business && (
-              <span className="tag business">매출·수수료 성장</span>
+              <span className="tag business">사업 수익·수수료 성장</span>
             )}
             {c.opportunities.holder && (
               <span className="tag holder">홀더 환원</span>
@@ -281,8 +282,8 @@ export function renderCell(c: CoinScored, key: SortKey) {
           </span>
         </span>
       );
-    case "ps":
-      return <span className="metric-cell"><strong>{fmtMult(researchPs(c))}</strong>{!c.revenueHistory && researchPs(c) !== null && <span className="muted">원천 기간 집계</span>}</span>;
+    case "revenueMultiple":
+      return <span className="metric-cell" title={multipleLabel(c)}><strong>{fmtMult(researchMultiple(c))}</strong>{researchMultiple(c) === null && !knownRevenue(c) && <span className="muted">정의 확인 필요</span>}{!c.revenueHistory && researchMultiple(c) !== null && <span className="muted">원천 기간 집계</span>}</span>;
     case "phr":
       return (
         <span className="inline-flex min-w-[120px] flex-col items-end gap-0.5">
@@ -338,7 +339,7 @@ export function renderCell(c: CoinScored, key: SortKey) {
           <span className="text-[10px] text-[var(--color-muted)]">
             {(c.holderValue.excludedTtm ?? 0) > 0
               ? "제외 유형 포함"
-              : "raw TTM"}
+              : "365일 확보 미확인"}
           </span>
         </span>
       );
@@ -412,7 +413,8 @@ export function renderCell(c: CoinScored, key: SortKey) {
       );
     case "feesChange7d":
       return (
-        <span className="inline-flex flex-col items-end gap-0.5">
+        <span className="inline-flex flex-col items-end gap-0.5" title={feeLabel(c)}>
+          <small>{feeLabel(c)}</small>
           <span className={changeClass(c.feesChange7dover7d)}>
             {fmtPct(c.feesChange7dover7d)}
           </span>

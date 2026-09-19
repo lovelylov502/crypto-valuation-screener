@@ -1,5 +1,6 @@
 import type { CoinRaw, ScoreGates } from "./types";
-import { revenueAmount } from "./revenueHistory";
+import { revenueAmount, historyMatches } from "./revenueHistory";
+import { businessRevenue, businessFees, revenueLabel, feeLabel, definitionIssue, sourceDefinitionsChanged } from "./fundamentals";
 
 export type FlowState =
   "growing" | "declining" | "flat" | "from_zero" | "to_zero" | "unknown";
@@ -69,7 +70,7 @@ export function deriveOpportunities(
   coin: CoinRaw,
   gates: ScoreGates,
 ): OpportunitySignals {
-  const revenue = compareFlow(revenueAmount(coin, 30), coin.revenueHistory ? coin.revenueHistory.previous30.total : coin.revenuePrev30d);
+  const revenue = historyMatches(coin) ? compareFlow(revenueAmount(coin, 30), coin.revenueHistory ? coin.revenueHistory.previous30.total : coin.revenuePrev30d) : compareFlow(null, null);
   const fees = compareFlow(coin.fees30d, coin.feesPrev30d);
   const eligibleHolder = compareFlow(
     coin.holderValue.eligibleCurrent30d,
@@ -91,8 +92,8 @@ export function deriveOpportunities(
     f.state === "growing" || f.state === "from_zero";
   // Discovery signals are observations, independent of experimental score and investment-risk gates.
   // Identity still fails closed: uncertain token joins cannot become an opportunity.
-  const verified = coin.identityStatus === "verified";
-  const business = verified && (improving(revenue) || improving(fees));
+  const verified = coin.identityStatus === "verified" && !sourceDefinitionsChanged(coin);
+  const business = verified && ((businessRevenue(coin) && improving(revenue)) || (businessFees(coin) && improving(fees)));
   const holder =
     verified &&
     ((coin.holderValue.eligibleCurrent30d ?? 0) > 0 ||
@@ -103,8 +104,11 @@ export function deriveOpportunities(
       (f) => f.state === "from_zero" || f.state === "to_zero",
     );
   const dataIssues: string[] = [];
+  const issue = definitionIssue(coin);
+  if (issue) dataIssues.push(issue);
+  if (!historyMatches(coin)) dataIssues.push("일별 이력과 현재 집계 정의 불일치 · 배수·변화 비교 보류");
   const risks: string[] = [];
-  if (!verified) dataIssues.push(coin.identityReason);
+  if (coin.identityStatus !== "verified") dataIssues.push(coin.identityReason);
   if (!gates.marketData)
     dataIssues.push("시세·60일 가격·거래량 누락 또는 지연");
   if ([revenue, fees, eligibleHolder].every(f => f.state === "unknown"))
@@ -112,11 +116,11 @@ export function deriveOpportunities(
   const currentRevenue = revenueAmount(coin, 30);
   const previousRevenue = coin.revenueHistory ? coin.revenueHistory.previous30.total : coin.revenuePrev30d;
   if (currentRevenue !== null && previousRevenue === null)
-    dataIssues.push("직전 30일 매출 누락");
+    dataIssues.push("직전 30일 집계액 누락");
   if (currentRevenue === null)
-    dataIssues.push("최근 30일 매출 누락");
+    dataIssues.push("최근 30일 집계액 누락");
   if (coin.revenueHistory && coin.revenueHistory.periods[365].reportedDays < 365)
-    dataIssues.push(`1년 매출 이력 ${coin.revenueHistory.periods[365].reportedDays}/365일`);
+    dataIssues.push(`1년 집계 이력 ${coin.revenueHistory.periods[365].reportedDays}/365일`);
   if (coin.holderValue.warning?.includes("이력 누락"))
     dataIssues.push("홀더 구성요소 일부 이력 누락");
   if (coin.fdv === null) dataIssues.push("FDV 미확인");
@@ -127,8 +131,8 @@ export function deriveOpportunities(
     risks.push("상장 90일 미만");
   if (!gates.activity) risks.push("낮은 최근 활동");
   const reasons: string[] = [];
-  if (improving(revenue)) reasons.push(`매출 ${flowLabel(revenue)}`);
-  if (improving(fees)) reasons.push(`수수료 ${flowLabel(fees)}`);
+  if (businessRevenue(coin) && improving(revenue)) reasons.push(`${revenueLabel(coin)} ${flowLabel(revenue)}`);
+  if (businessFees(coin) && improving(fees)) reasons.push(`${feeLabel(coin)} ${flowLabel(fees)}`);
   if ((coin.holderValue.eligibleCurrent30d ?? 0) > 0)
     reasons.push(`홀더 흐름 ${flowLabel(eligibleHolder)}`);
   if ((conditionalCurrent30d ?? 0) > 0) reasons.push("락업·투표 조건부 배분");
@@ -146,7 +150,7 @@ export function deriveOpportunities(
     risks,
     reasons: verified
       ? reasons
-      : ["토큰 매칭 미확인 · 금액의 귀속 대상을 먼저 확인해 주세요"],
+      : [sourceDefinitionsChanged(coin) ? "원천 정의 변경 · 재검토 필요" : "토큰 매칭 미확인 · 금액의 귀속 대상을 먼저 확인해 주세요"],
     marketAhead:
       (coin.priceChange30d ?? 0) > 20 || (coin.priceChange60d ?? 0) > 30,
   };

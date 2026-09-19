@@ -8,12 +8,15 @@ import type {
   ValueCapture,
 } from "./types";
 import { compareFlow, deriveOpportunities } from "./signals";
+import { businessRevenue, businessFees, revenueKind, RULE_VERSION, sourceDefinitionsChanged } from "./fundamentals";
+import { revenueAmount, historyMatches, revenueBasis } from "./revenueHistory";
+import { researchMultiple } from "./research";
 
 export const MIN_ACTIVITY_USD = 100_000;
 export const MIN_MCAP_USD = 1_000_000;
 export const MIN_SECTOR_SAMPLE = 8;
 export const NEW_PROJECT_DAYS = 90;
-export const SCORE_VERSION = "research-v5-ps-revenue";
+export const SCORE_VERSION = RULE_VERSION;
 
 const MULTIPLE_CAP = 1000;
 const DILUTION_WARN = 1 / 0.3;
@@ -90,18 +93,17 @@ function median(values: number[]): number | null {
 }
 
 function computeMultiples(c: CoinRaw): CoinScored["multiples"] {
-  const mcap = isPositive(c.mcap) ? c.mcap : null;
-  const fees = isPositive(c.fees30d) ? c.fees30d * 365 / 30 : null;
-  const revenue = isPositive(c.revenue30d) ? c.revenue30d * 365 / 30 : null;
-  const holderValue = isPositive(c.holderValue.eligibleRunRate)
+  const mcap = c.identityStatus === "verified" && isPositive(c.mcap) ? c.mcap : null;
+  const fees = businessFees(c) && isPositive(c.fees30d) ? c.fees30d * 365 / 30 : null;
+  const holderValue = !sourceDefinitionsChanged(c) && isPositive(c.holderValue.eligibleRunRate)
     ? c.holderValue.eligibleRunRate
     : null;
   const tvl = isPositive(c.tvl) ? c.tvl : null;
-  const fdv = isPositive(c.fdv) ? c.fdv : null;
+  const fdv = c.identityStatus === "verified" && isPositive(c.fdv) ? c.fdv : null;
 
   return {
     pf: mcap !== null && fees !== null ? mcap / fees : null,
-    ps: mcap !== null && revenue !== null ? mcap / revenue : null,
+    revenueMultiple: researchMultiple(c),
     phr: mcap !== null && holderValue !== null ? mcap / holderValue : null,
     mcapTvl: mcap !== null && tvl !== null ? mcap / tvl : null,
     fdvTvl: fdv !== null && tvl !== null ? fdv / tvl : null,
@@ -110,12 +112,8 @@ function computeMultiples(c: CoinRaw): CoinScored["multiples"] {
 }
 
 function computeEligibleHolderValueShare(c: CoinRaw): number | null {
-  if (c.holderValue.eligibleCurrent30d === null) return null;
-  const denominator = isPositive(c.revenue30d)
-    ? c.revenue30d
-    : isPositive(c.fees30d)
-      ? c.fees30d
-      : null;
+  if (c.identityStatus !== "verified" || !c.fundamentals.holderShareReviewed || !businessRevenue(c) || c.holderValue.eligibleCurrent30d === null) return null;
+  const denominator = isPositive(c.revenue30d) ? c.revenue30d : null;
   if (denominator === null) return null;
   return c.holderValue.eligibleCurrent30d / denominator;
 }
@@ -123,38 +121,41 @@ function computeEligibleHolderValueShare(c: CoinRaw): number | null {
 function computeValueCapture({
   coin,
   pctPhr,
-  pctPs,
+  pctRevenue,
   dilution,
   lowActivity,
 }: {
   coin: CoinRaw;
   pctPhr: number | null;
-  pctPs: number | null;
+  pctRevenue: number | null;
   dilution: number | null;
   lowActivity: boolean;
 }): ValueCapture {
   const eligibleHolderValueShare = computeEligibleHolderValueShare(coin);
   const hasEligibleCapture =
+    coin.identityStatus === "verified" &&
+    !sourceDefinitionsChanged(coin) &&
     (coin.holderValue.eligibleRunRate ?? 0) >= MIN_ACTIVITY_USD &&
     (coin.holderValue.eligibleCurrent30d ?? 0) > 0;
   const hasRevenueOrFees =
-    (coin.revenueAnnual ?? 0) >= MIN_ACTIVITY_USD ||
-    (coin.feesAnnual ?? 0) >= MIN_ACTIVITY_USD;
+    (businessRevenue(coin) && (coin.revenueAnnual ?? 0) >= MIN_ACTIVITY_USD) ||
+    (businessFees(coin) && (coin.feesAnnual ?? 0) >= MIN_ACTIVITY_USD);
   const signals: string[] = [];
   const risks: string[] = [];
+  if (eligibleHolderValueShare === null) risks.push("환원 비율 보류 · 분모 범위와 재원 일치 미확인");
   if ((eligibleHolderValueShare ?? 0) > 1) risks.push("30일 홀더 금액이 분모를 초과 · 재원·집계 범위·시차 확인 필요");
 
   if (coin.identityStatus !== "verified") risks.push(coin.identityReason);
-  if (hasEligibleCapture) signals.push("적격 holder value 실측");
+  if (hasEligibleCapture) signals.push("적격 홀더 금액 관측");
   else if (hasRevenueOrFees) {
-    signals.push("매출/수수료 실측");
+    signals.push("정의가 확인된 사업 수익·수수료 관측");
     risks.push(coin.holderValue.phrUnavailableReason ?? "적격 holder value 없음");
   } else {
     risks.push("현금흐름 불명확");
   }
   if (coin.holderValue.warning) risks.push(coin.holderValue.warning);
   if (pctPhr !== null && pctPhr >= 70) signals.push("P/HR 섹터 상위");
-  if (pctPs !== null && pctPs >= 70) signals.push("P/S 섹터 상위");
+  if (pctRevenue !== null && pctRevenue >= 70) signals.push("동일 수익 종류·기간 기준 섹터 배수 상위");
   if (lowActivity) risks.push("저활동/신선도 낮음");
   if (dilution !== null && dilution > DILUTION_WARN) risks.push("고희석");
 
@@ -178,24 +179,26 @@ function computeValueCapture({
     label = score >= 70 ? "강한 가치포획" : "가치포획 후보";
   }
 
-  return { score, label, eligibleHolderValueShare, shareBasis: isPositive(coin.revenue30d) ? "revenue30d" : isPositive(coin.fees30d) ? "fees30d" : null, signals, risks };
+  return { score, label, eligibleHolderValueShare, shareBasis: eligibleHolderValueShare !== null ? "revenue30d" : null, signals, risks };
 }
 
 interface Staged {
   coin: CoinRaw;
+  raw: CoinRaw;
   multiples: CoinScored["multiples"];
   lowActivity: boolean;
   insufficientScale: boolean;
 }
 
-type Pool = { pf: number[]; ps: number[]; phr: number[]; mcapTvl: number[] };
+type Pool = { pf: number[]; revenueMultiple: number[]; phr: number[]; mcapTvl: number[] };
+const poolKey = (coin: CoinRaw) => `${coin.category}:${revenueKind(coin)}:${revenueBasis(coin)}`;
 
 function buildPools(rows: Staged[]): Map<string, Pool> {
   const pools = new Map<string, Pool>();
   const getPool = (category: string) => {
     const existing = pools.get(category);
     if (existing) return existing;
-    const created: Pool = { pf: [], ps: [], phr: [], mcapTvl: [] };
+    const created: Pool = { pf: [], revenueMultiple: [], phr: [], mcapTvl: [] };
     pools.set(category, created);
     return created;
   };
@@ -209,9 +212,9 @@ function buildPools(rows: Staged[]): Map<string, Pool> {
     ) {
       continue;
     }
-    const pool = getPool(coin.category);
+    const pool = getPool(poolKey(coin));
     if (isPositive(multiples.pf) && multiples.pf <= MULTIPLE_CAP) pool.pf.push(multiples.pf);
-    if (isPositive(multiples.ps) && multiples.ps <= MULTIPLE_CAP) pool.ps.push(multiples.ps);
+    if (businessRevenue(coin) && isPositive(multiples.revenueMultiple) && multiples.revenueMultiple <= MULTIPLE_CAP) pool.revenueMultiple.push(multiples.revenueMultiple);
     if (isPositive(multiples.phr) && multiples.phr <= MULTIPLE_CAP) pool.phr.push(multiples.phr);
     if (
       isMcapTvlSector(coin.category) &&
@@ -223,7 +226,7 @@ function buildPools(rows: Staged[]): Map<string, Pool> {
 
   for (const pool of pools.values()) {
     pool.pf.sort((a, b) => a - b);
-    pool.ps.sort((a, b) => a - b);
+    pool.revenueMultiple.sort((a, b) => a - b);
     pool.phr.sort((a, b) => a - b);
     pool.mcapTvl.sort((a, b) => a - b);
   }
@@ -267,30 +270,38 @@ function cashflowValue(coin: CoinRaw): number {
   if (isPositive(coin.holderValue.eligibleRunRate)) {
     return coin.holderValue.eligibleRunRate;
   }
-  if (isPositive(coin.revenueAnnual)) return coin.revenueAnnual;
-  if (isPositive(coin.feesAnnual)) return coin.feesAnnual * 0.25;
   return 0;
 }
 
-function buildCashflowRanks(rows: Staged[]): Map<string, number> {
+function buildCashflowRanks(rows: Staged[]): Map<string, { flow: number; mcap: number }> {
   const ranked = rows
-    .filter(({ coin }) => coin.identityStatus === "verified" && cashflowValue(coin) > 0)
+    .filter(({ coin }) => coin.identityStatus === "verified" && isPositive(coin.mcap) && cashflowValue(coin) > 0)
     .sort((a, b) => cashflowValue(b.coin) - cashflowValue(a.coin));
-  return new Map(ranked.map(({ coin }, index) => [coin.slug, index + 1]));
+  const caps = [...ranked].sort((a,b) => b.coin.mcap! - a.coin.mcap!);
+  return new Map(ranked.map(({ coin }) => [coin.slug, {
+    flow: ranked.findIndex(r => cashflowValue(r.coin) === cashflowValue(coin)) + 1,
+    mcap: caps.findIndex(r => r.coin.mcap === coin.mcap) + 1,
+  }]));
 }
 
 function persistenceScore(coin: CoinRaw): number | null {
-  const series: [number | null, number | null][] = [
-    [coin.holderValue.eligibleCurrent30d, coin.holderValue.eligibleTtm],
-    [coin.revenue30d, coin.revenue1y],
-    [coin.fees30d, coin.fees1y],
-  ];
-  for (const [recent, yearly] of series) {
-    if (!isPositive(recent) || !isPositive(yearly)) continue;
-    const ratioToMonthlyAverage = recent / (yearly / 12);
-    return clamp(ratioToMonthlyAverage * 50, 0, 100);
-  }
-  return null;
+  if (!businessRevenue(coin) || !historyMatches(coin)) return null;
+  const recent = revenueAmount(coin, 30), yearly = revenueAmount(coin, 365);
+  return isPositive(recent) && isPositive(yearly) ? clamp(recent * 365 / 30 / yearly * 50, 0, 100) : null;
+}
+
+/** Scoring gets only verified economic inputs; the response preserves original source amounts. */
+function scoringInput(raw: CoinRaw): CoinRaw {
+  const revenue = businessRevenue(raw) && historyMatches(raw);
+  const recent = revenue ? revenueAmount(raw, 30) : null;
+  const fees = businessFees(raw);
+  return { ...raw,
+    holderValue: sourceDefinitionsChanged(raw) ? { ...raw.holderValue, eligibleCurrent30d: null, eligiblePrevious30d: null, eligibleRunRate: null, eligibleTtm: null } : raw.holderValue,
+    revenue30d: recent, revenuePrev30d: revenue ? (raw.revenueHistory ? raw.revenueHistory.previous30.total : raw.revenuePrev30d) : null,
+    revenueAnnual: recent !== null ? recent * 365 / 30 : null,
+    revenue1y: revenue ? revenueAmount(raw, 365) : null,
+    fees30d: fees ? raw.fees30d : null, feesPrev30d: fees ? raw.feesPrev30d : null,
+    feesAnnual: fees && raw.fees30d !== null ? raw.fees30d * 365 / 30 : null, fees1y: null };
 }
 
 function absoluteYieldScore(coin: CoinRaw): number | null {
@@ -364,8 +375,9 @@ export function scoreCoins(
   referenceIso = new Date().toISOString(),
 ): CoinScored[] {
   const referenceMs = Date.parse(referenceIso);
-  const staged: Staged[] = coins.map((coin) => {
-    const multiples = computeMultiples(coin);
+  const staged: Staged[] = coins.map((raw) => {
+    const coin = scoringInput(raw);
+    const multiples = computeMultiples(raw);
     const lowActivity =
       (
         (coin.feesAnnual ?? 0) < MIN_ACTIVITY_USD &&
@@ -378,17 +390,17 @@ export function scoreCoins(
         (coin.holderValue.eligibleCurrent30d ?? 0) <= 0
       );
     const insufficientScale = coin.mcap === null || coin.mcap < MIN_MCAP_USD;
-    return { coin, multiples, lowActivity, insufficientScale };
+    return { coin, raw, multiples, lowActivity, insufficientScale };
   });
 
   const pools = buildPools(staged);
   const priceMedians = buildPriceMedians(staged);
   const cashflowRanks = buildCashflowRanks(staged);
 
-  return staged.map(({ coin, multiples, lowActivity, insufficientScale }): CoinScored => {
-    const pool = coin.category ? pools.get(coin.category) : undefined;
+  return staged.map(({ coin, raw, multiples, lowActivity, insufficientScale }): CoinScored => {
+    const pool = coin.category ? pools.get(poolKey(coin)) : undefined;
     const pctPf = lowActivity ? null : peerPercentile(multiples.pf, pool?.pf);
-    const pctPs = lowActivity ? null : peerPercentile(multiples.ps, pool?.ps);
+    const pctRevenue = lowActivity || !businessRevenue(coin) ? null : peerPercentile(multiples.revenueMultiple, pool?.revenueMultiple);
     const pctPhr = lowActivity ? null : peerPercentile(multiples.phr, pool?.phr);
     const pctMcapTvl =
       !lowActivity && isMcapTvlSector(coin.category)
@@ -442,6 +454,7 @@ export function scoreCoins(
 
     const gateReasons: string[] = [];
     if (coin.identityStatus !== "verified") gateReasons.push(coin.identityReason);
+    if (sourceDefinitionsChanged(coin)) gateReasons.push("원천 집계 정의 변경 · 재검토 필요");
     if (!marketData) gateReasons.push("CMC 시세·60일·거래량 데이터 부족/지연");
     if (!fundamentalHistory) gateReasons.push("최근·직전 30일 펀더멘털 비교 불가");
     if (!liquidity) gateReasons.push("24시간 거래량이 유동성 기준 미달");
@@ -468,16 +481,16 @@ export function scoreCoins(
     };
 
     const capture = computeValueCapture({
-      coin,
+      coin: raw,
       pctPhr,
-      pctPs,
+      pctRevenue,
       dilution: multiples.dilution,
       lowActivity,
     });
 
     const valueAxis = round1(
       points(pctPhr, 15) +
-        points(pctPs, 5) +
+        points(pctRevenue, 5) +
         points(pctPf, 3) +
         points(pctMcapTvl, 2) +
         points(absoluteYieldScore(coin), 5),
@@ -512,12 +525,12 @@ export function scoreCoins(
           ) / 2
         : 0;
     const attentionScore =
-      cashflowRank !== null && coin.marketCapRank !== null
+      cashflowRank !== null
         ? clamp(
             50 +
               (
-                Math.log10(coin.marketCapRank + 1) -
-                Math.log10(cashflowRank + 1)
+                Math.log10(cashflowRank.mcap + 1) -
+                Math.log10(cashflowRank.flow + 1)
               ) *
                 50,
             0,
@@ -547,7 +560,7 @@ export function scoreCoins(
       marketData,
       coin.fdv !== null,
       pctPhr !== null,
-      pctPs !== null,
+      pctRevenue !== null,
       pctPf !== null,
       holderChange !== null,
       revenueChange !== null,
@@ -596,13 +609,13 @@ export function scoreCoins(
     if (coin.cmcId !== null) scoreNotes.push(`CMC ID ${coin.cmcId}`);
 
     return {
-      ...coin,
-      opportunities: deriveOpportunities(coin, gates),
-      peerCounts: { phr: pool?.phr.length ?? 0, ps: pool?.ps.length ?? 0, pf: pool?.pf.length ?? 0 },
+      ...raw,
+      opportunities: deriveOpportunities(raw, gates),
+      peerCounts: { phr: pool?.phr.length ?? 0, revenueMultiple: pool?.revenueMultiple.length ?? 0, pf: pool?.pf.length ?? 0 },
       multiples,
       sectorPercentiles: {
         pf: pctPf,
-        ps: pctPs,
+        revenueMultiple: pctRevenue,
         phr: pctPhr,
         mcapTvl: pctMcapTvl,
       },

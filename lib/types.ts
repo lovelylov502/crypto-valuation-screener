@@ -1,9 +1,11 @@
 import type { HolderValueSummary } from "./holderValue";
 import type { OpportunitySignals } from "./signals";
 import type { RevenueHistory } from "./revenueHistory";
+import type { Fundamentals } from "./fundamentals";
 
 // 조인된 코인 1건의 원천 데이터 (밸류에이션 계산 전)
 export interface CoinRaw {
+  fundamentals: Fundamentals;
   slug: string;
   name: string;
   symbol: string | null;
@@ -44,7 +46,7 @@ export interface CoinRaw {
   athChangePercentage: number | null; // 현재가의 사상 최고가 대비 변화율
   atlChangePercentage: number | null; // 현재가의 사상 최저가 대비 변화율
 
-  // 수수료/매출 (DefiLlama /overview/fees)
+  // Provider Fees amounts: scope and classification travel in fundamentals.
   feesAnnual: number | null; // 연율화 수수료
   fees1y: number | null;
   fees7d: number | null;
@@ -53,14 +55,14 @@ export interface CoinRaw {
   feesChange7dover7d: number | null; // 최근 7일 vs 직전 7일 변화율(%)
   feesChange30dover30d: number | null; // 최근 30일 vs 직전 30일 변화율(%)
 
-  // 매출 (DefiLlama dataType=dailyRevenue)
+  // Provider Revenue amount: economic meaning is in fundamentals, never assumed sales.
   revenueAnnual: number | null;
   revenue1y: number | null;
   revenue30d: number | null;
   revenuePrev30d: number | null;
 
   // DefiLlama holder revenue를 component 경제유형별로 분리한 보수적 요약.
-  // primary는 적격 최근 30일 연환산이며 raw TTM은 별도 보존한다.
+  // primary는 적격 최근 30일 연환산. total1y 원천값은 365일 확보 여부 미확인.
   holderValue: HolderValueSummary;
 
   // 거래량 (DefiLlama /overview/dexs)
@@ -86,10 +88,10 @@ export interface ValueCapture {
 
 export interface CoinScored extends CoinRaw {
   opportunities: OpportunitySignals;
-  peerCounts: { phr: number; ps: number; pf: number };
+  peerCounts: { phr: number; revenueMultiple: number; pf: number };
   multiples: {
     pf: number | null; // P/F = mcap / (fees30d * 365 / 30)
-    ps: number | null; // P/S = mcap / (revenue30d * 365 / 30)
+    revenueMultiple: number | null; // Current token mcap / typed 30-day amount annualized. Not generic P/S.
     phr: number | null; // P/HR = mcap / holderValue.eligibleRunRate
     mcapTvl: number | null; // mcap / tvl
     fdvTvl: number | null; // fdv / tvl
@@ -98,7 +100,7 @@ export interface CoinScored extends CoinRaw {
   // 같은 섹터 내 "싼 정도" 백분위 (0~100, 높을수록 저평가)
   sectorPercentiles: {
     pf: number | null;
-    ps: number | null;
+    revenueMultiple: number | null;
     phr: number | null;
     mcapTvl: number | null;
   };

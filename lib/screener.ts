@@ -1,6 +1,7 @@
 import { fetchCoins } from "./sources";
 import { MIN_MCAP_USD, SCORE_VERSION, scoreCoins } from "./valuation";
 import type { CoinRaw, MarketDataFreshness, ScreenerResponse, SourceObservation } from "./types";
+import { fundamentalErrors } from "./fundamentalContract";
 
 export function filterScreenableCoins<T extends { mcap: number | null }>(
   coins: T[],
@@ -37,6 +38,10 @@ export function assembleScreener(raw: CoinRaw[], updatedAt: string, sources: Sou
   // 이 경계를 공유해야 API ISR 응답이 Vercel Function 4.5MB 한도를 넘지 않는다.
   const coins = filterScreenableCoins(scoreCoins(raw, updatedAt));
   if (coins.length === 0) throw new Error("스크리닝 가능한 데이터 없음");
+  for (const coin of coins) {
+    const errors = fundamentalErrors(coin);
+    if (errors.length) throw new Error(`Fundamental contract: ${coin.slug}: ${errors.join(", ")}`);
+  }
 
   const categories = Array.from(
     new Set(coins.map((c) => c.category).filter((c): c is string => !!c)),

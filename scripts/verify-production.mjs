@@ -1,8 +1,8 @@
 import { Buffer } from "node:buffer";
 import { DEPLOY_CONTRACT } from "./deploy-contract.mjs";
 
-const ADVANCED_UI_MARKERS = ["P/S 참고선", "매출 성장", "P/S · 매출 추이", "확인 후 변화", "최신 자료 확인", "page-size-top", "page-size-bottom"];
-const LEGACY_UI_MARKERS = ["저평가 80+", "고평가 20 이하"];
+const ADVANCED_UI_MARKERS = ["배수 참고선", "사업 수익 성장", "시총/집계액 · 집계액 추이", "집계 종류", "확인 후 변화", "최신 자료 확인", "page-size-top", "page-size-bottom"];
+const LEGACY_UI_MARKERS = ["저평가 80+", "고평가 20 이하", "P/S 참고선", "P/S · 30일"];
 const MAX_API_BYTES = 4_500_000;
 const MAX_ATTEMPTS = 8;
 const RETRY_DELAY_MS = 5_000;
@@ -75,6 +75,18 @@ function inspectApi(readback) {
     if (!data.coins.some((coin) => typeof coin.descriptionKo === "string" && /[가-힣]/u.test(coin.descriptionKo))) {
       errors.push("API has no Korean protocol descriptions");
     }
+    for (const coin of data.coins) {
+      const f = coin.fundamentals;
+      if (!f || f.version !== "fundamental-definitions-v1" || !Array.isArray(f.revenue?.components) || !Array.isArray(f.fees?.components) || !Array.isArray(f.holders)) {
+        errors.push(`definition metadata missing: ${coin.slug}`); break;
+      }
+      if (Object.hasOwn(coin.multiples, "ps")) errors.push(`legacy P/S: ${coin.slug}`);
+      if (["unknown", "mixed"].includes(f.revenue.kind) && coin.multiples.revenueMultiple !== null) errors.push(`unreviewed multiple: ${coin.slug}`);
+      if (!f.holderShareReviewed && coin.valueCapture.eligibleHolderValueShare !== null) errors.push(`unreviewed holder share: ${coin.slug}`);
+      if (!["protocol_revenue", "service_sales"].includes(f.revenue.kind) && f.fees.kind !== "user_fees" && coin.opportunities.business) errors.push(`non-business growth: ${coin.slug}`);
+    }
+    const venice = data.coins.find(c => c.slug === "venice");
+    if (!venice || venice.fundamentals?.revenue.kind !== "holder_return" || venice.fundamentals?.fees.kind !== "holder_return" || venice.opportunities.business || venice.valueCapture.eligibleHolderValueShare !== null || venice.multiples.pf !== null) errors.push("VVV scope regression");
   }
   return { errors, data };
 }

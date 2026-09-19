@@ -1,15 +1,18 @@
 import type { ScreenerResponse } from "./types";
+import { RULE_VERSION } from "./fundamentals";
+import { fundamentalErrors } from "./fundamentalContract";
 
 export const SNAPSHOT_STALE_MS = 12 * 3_600_000;
 export const REVALIDATE_MS = 30 * 60_000;
 
 export function isScreenerResponse(value: unknown): value is ScreenerResponse {
+  try {
   if (!value || typeof value !== "object") return false;
   const s = value as ScreenerResponse;
   return (
     typeof s.updatedAt === "string" &&
     Number.isFinite(Date.parse(s.updatedAt)) &&
-    typeof s.scoreVersion === "string" &&
+    s.scoreVersion === RULE_VERSION &&
     Array.isArray(s.coins) &&
     s.coins.length > 0 &&
     s.coins.every(
@@ -22,12 +25,13 @@ export function isScreenerResponse(value: unknown): value is ScreenerResponse {
         c.holderValue &&
         Array.isArray(c.holderValue.components) &&
         c.multiples &&
-        c.gates,
+        c.gates && fundamentalErrors(c).length === 0,
     ) &&
     Array.isArray(s.categories) &&
     Array.isArray(s.sources) &&
     !!s.marketDataFreshness
   );
+  } catch { return false; }
 }
 
 /** ISR may return the previous snapshot while rebuilding; give it bounded follow-up reads. */

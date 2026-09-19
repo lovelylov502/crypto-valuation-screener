@@ -63,7 +63,7 @@ describe("aggregateOverviewByGroup", () => {
     );
 
     expect(aggregate).toEqual({
-      annual: 1_200,
+      annual: 300 * 365 / 30,
       y1: 1_200,
       d7: 70,
       prev7: 60,

@@ -8,6 +8,7 @@ export interface RevenuePeriod {
   reportedDays: number;
 }
 export interface RevenueHistory {
+  definitionFingerprint?: string;
   periods: Record<RevenueWindowDays, RevenuePeriod>;
   previous30: RevenuePeriod;
   weeks: RevenuePeriod[];
@@ -18,18 +19,26 @@ type Protocol = { slug?: unknown; name?: unknown; parentProtocol?: unknown; doub
 const DAY = 86400;
 const date = (timestamp: number) => new Date(timestamp * 1000).toISOString().slice(0, 10);
 
-export function psMultiple(mcap: number | null | undefined, revenue: number | null | undefined, days: number): number | null {
+export function annualizedMultiple(mcap: number | null | undefined, revenue: number | null | undefined, days: number): number | null {
   if (mcap == null || revenue == null || !Number.isFinite(mcap) || !Number.isFinite(revenue) || mcap <= 0 || revenue <= 0 || days <= 0) return null;
   return mcap / (revenue * 365 / days);
 }
 
 export function revenueAmount(c: { revenueHistory?: RevenueHistory | null; revenue7d?: number | null; revenue90d?: number | null; revenue30d: number | null; revenue1y: number | null }, days: RevenueWindowDays): number | null {
   if (c.revenueHistory) return c.revenueHistory.periods[days].total;
-  return ({ 7: c.revenue7d, 30: c.revenue30d, 90: c.revenue90d, 365: c.revenue1y })[days] ?? null;
+  // Provider total1y can be a partial year. Only dated 365/365 observations are TTM.
+  return ({ 7: c.revenue7d, 30: c.revenue30d, 90: c.revenue90d, 365: null })[days] ?? null;
+}
+
+export function historyMatches(c: { fundamentals?: { revenue: { fingerprint: string } }; revenueHistory?: RevenueHistory | null }): boolean {
+  return !c.revenueHistory || (!!c.fundamentals && c.revenueHistory.definitionFingerprint === c.fundamentals.revenue.fingerprint);
+}
+export function revenueBasis(c: { revenueHistory?: RevenueHistory | null }): string {
+  return c.revenueHistory ? "completed_utc" : "provider_rolling";
 }
 
 export function summarizeRevenueHistory(
-  protocols: Protocol[], chart: unknown[], now: number, source: string,
+  protocols: Protocol[], chart: unknown[], now: number, source: string, fingerprints: ReadonlyMap<string, { fingerprint: string }> = new Map(),
 ): Record<string, RevenueHistory> {
   const end = Math.floor(now / 1000 / DAY) * DAY - DAY;
   const groups = new Map<string, string[]>();
@@ -65,6 +74,7 @@ export function summarizeRevenueHistory(
       return { days, start: date(last - (days - 1) * DAY), end: date(last), total: reportedDays === days ? total : null, reportedDays };
     };
     output[key] = {
+      definitionFingerprint: fingerprints.get(key)?.fingerprint,
       periods: { 7: period(7), 30: period(30), 90: period(90), 365: period(365) },
       previous30: period(30, 30),
       weeks: Array.from({ length: 13 }, (_, i) => period(7, (12 - i) * 7)),

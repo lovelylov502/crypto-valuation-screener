@@ -1,6 +1,8 @@
 import type { CoinRaw, IdentityStatus, SourceObservation } from "./types";
 import { fetchRevenueHistory } from "./revenueSource";
 import { koreanDescription } from "./protocolDescriptions";
+import { aggregateDefinitions, combineFundamentals, definitionReviewed } from "./fundamentalSource";
+import type { MetricDefinition, RevenueKind, FeeKind } from "./fundamentals";
 import {
   aggregateHolderValueByGroup,
   emptyHolderValueSummary,
@@ -232,9 +234,9 @@ export function aggregateOverviewByGroup(
     for (const key of Object.keys(fields) as (keyof typeof fields)[]) {
       const value = num(p[fields[key]]);
       // A partial parent sum is not a complete period. Preserve reported zeros.
-      a[key] = a[key] !== null && value !== null && value >= 0 ? a[key]! + value : null;
+      a[key] = a[key] !== null && value !== null ? a[key]! + value : null;
     }
-    a.annual = a.y1 !== null && a.y1 > 0 ? a.y1 : a.d30 !== null ? a.d30 * 365 / 30 : null;
+    a.annual = a.d30 !== null ? a.d30 * 365 / 30 : null;
     a.hit = true;
   }
   return m;
@@ -269,7 +271,9 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
 
   const feesAgg = aggregateOverviewByGroup(feesL, groupKey);
   const revAgg = aggregateOverviewByGroup(revL, groupKey);
-  const holderValues = aggregateHolderValueByGroup(hrL, groupKey);
+  const holderValues = aggregateHolderValueByGroup(hrL, groupKey, definitionReviewed);
+  const revenueDefinitions = aggregateDefinitions(revL, groupKey, "Revenue");
+  const feeDefinitions = aggregateDefinitions(feesL, groupKey, "Fees");
   const volAgg = aggregateOverviewByGroup(dexsL, groupKey);
 
   // protocols를 그룹키로 묶기
@@ -367,6 +371,7 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       fees && fees.prev30 !== null && fees.prev30 > 0 && fees.d30 !== null ? ((fees.d30 - fees.prev30) / fees.prev30) * 100 : null;
 
     coins.push({
+      fundamentals: combineFundamentals(revenueDefinitions.get(k) as MetricDefinition<RevenueKind> | undefined, feeDefinitions.get(k) as MetricDefinition<FeeKind> | undefined, hrL.filter(h => typeof h.slug === "string" && h.doublecounted !== true && groupKey(h.slug) === k)),
       slug: k,
       name,
       symbol,
@@ -412,8 +417,8 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       feesChange7dover7d: feesChange7,
       feesChange30dover30d: feesChange,
 
-      // Preserve overview amounts for the existing same-window holder/revenue ratio.
-      // Research P/S uses the separate completed-day history, including explicit coverage.
+      // Preserve overview amounts. Research uses compatible completed-day history when available.
+      // Holder share requires separately reviewed denominator scope and the same source window.
       revenueAnnual: rev?.annual ?? null,
       revenue1y: rev?.y1 ?? null,
       revenue7d: rev?.d7 ?? null,

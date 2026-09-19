@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import type { ScreenerResponse } from "@/lib/types";
 import type { OpportunityTrack } from "@/lib/signals";
-import { PS_REFERENCE, researchPs, researchReasons, revenueGrowing, holderTransitionReasons } from "@/lib/research";
+import { MULTIPLE_REFERENCE, researchMultiple, researchReasons, revenueGrowing, holderTransitionReasons } from "@/lib/research";
 import { fmtKstMinute } from "@/lib/format";
 import {
   hasEligibleCurrentHolderValue,
@@ -44,12 +44,14 @@ import { useScreenerData } from "./useScreenerData";
 import { Pagination } from "./Pagination";
 import { PAGE_SIZE_KEY, parsePageSize } from "@/lib/pagination";
 import { useWindowTableHeader } from "./useWindowTableHeader";
+import { REVENUE_LABELS, KIND_ORDER, revenueKind, revenueLabel, type RevenueKind } from "@/lib/fundamentals";
+import { revenueBasis } from "@/lib/revenueHistory";
 
 const FAVORITES_KEY = "crypto-valuation-favorites-v1";
-const COLUMNS_KEY = "crypto-valuation-columns-v5";
+const COLUMNS_KEY = "crypto-valuation-columns-v6";
 
 const TRACK_NAMES: Record<OpportunityTrack, string> = {
-  business: "매출·수수료 성장",
+  business: "사업 수익·수수료 성장",
   holder: "홀더 환원",
   transition: "홀더 0↔양수",
 };
@@ -74,10 +76,12 @@ export function ScreenerClient({
     now,
     history,
   } = useScreenerData(initialData);
-  const [psReference, setPsReference] = useState(PS_REFERENCE);
-  const [psReferenceDraft, setPsReferenceDraft] = useState(String(PS_REFERENCE));
+  const [multipleReference, setMultipleReference] = useState(MULTIPLE_REFERENCE);
+  const [psReferenceDraft, setPsReferenceDraft] = useState(String(MULTIPLE_REFERENCE));
   const [search, setSearch] = useState("");
   const [view, setView] = useState<View>("all");
+  const [kind, setKind] = useState<RevenueKind | "all">("all");
+  const activeReference = kind !== "all" && kind !== "unknown" && kind !== "mixed" ? multipleReference : null;
   const [tracks, setTracks] = useState<Set<OpportunityTrack>>(new Set());
   const [cats, setCats] = useState<Set<string>>(new Set());
   const [minMcap, setMinMcap] = useState(0);
@@ -86,8 +90,8 @@ export function ScreenerClient({
   const [maxTvl, setMaxTvl] = useState(0);
   const [minPhr, setMinPhr] = useState(0);
   const [maxPhr, setMaxPhr] = useState(0);
-  const [minPs, setMinPs] = useState(0);
-  const [maxPs, setMaxPs] = useState(0);
+  const [minMultiple, setMinPs] = useState(0);
+  const [maxMultiple, setMaxPs] = useState(0);
   const [minScore, setMinScore] = useState(0);
   const [maxScore, setMaxScore] = useState(0);
   const [hideInactive, setHideInactive] = useState(false);
@@ -107,7 +111,7 @@ export function ScreenerClient({
   const [pageSize, setPageSize] = useState(100);
   const resultsRef = useRef<HTMLDivElement>(null);
   const tableRef = useWindowTableHeader();
-  const [sortKey, setSortKey] = useState<SortKey>("ps");
+  const [sortKey, setSortKey] = useState<SortKey>("revenueMultiple");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [sourceOpen, setSourceOpen] = useState(false);
@@ -117,8 +121,8 @@ export function ScreenerClient({
       setFavoriteSlugs(parseFavoriteSlugs(localStorage.getItem(FAVORITES_KEY)));
       const saved = localStorage.getItem(COLUMNS_KEY);
       setPageSize(parsePageSize(localStorage.getItem(PAGE_SIZE_KEY)));
-      const reference = Number(localStorage.getItem("crypto-ps-reference-v1"));
-      if (Number.isFinite(reference) && reference > 0) { setPsReference(reference); setPsReferenceDraft(String(reference)); }
+      const reference = Number(localStorage.getItem("crypto-revenueMultiple-reference-v1"));
+      if (Number.isFinite(reference) && reference > 0) { setMultipleReference(reference); setPsReferenceDraft(String(reference)); }
       setVisibleColumns(
         parseStoredSelection(
           saved,
@@ -140,11 +144,11 @@ export function ScreenerClient({
       );
       localStorage.setItem(COLUMNS_KEY, JSON.stringify([...visibleColumns]));
       localStorage.setItem(PAGE_SIZE_KEY, String(pageSize));
-      localStorage.setItem("crypto-ps-reference-v1", String(psReference));
+      localStorage.setItem("crypto-revenueMultiple-reference-v1", String(multipleReference));
     } catch {
       setPreferencesError(true);
     }
-  }, [favoriteSlugs, visibleColumns, storedReady, psReference, pageSize]);
+  }, [favoriteSlugs, visibleColumns, storedReady, multipleReference, pageSize]);
 
   const coins = useMemo(() => data?.coins ?? [], [data]);
   const comparisonBaseline =
@@ -185,13 +189,14 @@ export function ScreenerClient({
     if (key === sortKey) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
     else {
       setSortKey(key);
-      setSortDir(key === "name" || key === "category" || key.startsWith("ps") ? "asc" : "desc");
+      setSortDir(key === "name" || key === "category" || key.startsWith("revenueMultiple") ? "asc" : "desc");
     }
     setPage(1);
   };
   const reset = () => {
     setSearch("");
     setView("all");
+    setKind("all");
     setTracks(new Set());
     setCats(new Set());
     setMinMcap(0);
@@ -209,16 +214,17 @@ export function ScreenerClient({
     setExcludeRisk(false);
     setCompleteOnly(false);
     setNewOnly(false);
-    setSortKey("ps");
+    setSortKey("revenueMultiple");
     setSortDir("asc");
     setPage(1);
   };
   const activeCount = [
+    kind !== "all",
     cats.size > 0,
     minMcap > 0 || maxMcap > 0,
     minTvl > 0 || maxTvl > 0,
     minPhr > 0 || maxPhr > 0,
-    minPs > 0 || maxPs > 0,
+    minMultiple > 0 || maxMultiple > 0,
     minScore > 0 || maxScore > 0,
     hideInactive,
     holderOnly,
@@ -231,6 +237,7 @@ export function ScreenerClient({
     return coins
       .filter((c) => {
         const o = c.opportunities;
+        if (kind !== "all" && revenueKind(c) !== kind) return false;
         if (q && !`${c.name} ${c.symbol ?? ""}`.toLowerCase().includes(q))
           return false;
         if (tracks.size && ![...tracks].some((t) => o[t])) return false;
@@ -243,7 +250,7 @@ export function ScreenerClient({
         if (cats.size > 0 && (!c.category || !cats.has(c.category)))
           return false;
         if (hideInactive && c.lowActivity) return false;
-        if (holderOnly && !hasEligibleCurrentHolderValue(c.holderValue))
+        if (holderOnly && (!hasEligibleCurrentHolderValue(c.holderValue) || c.multiples.phr === null))
           return false;
         if (excludeRisk && c.highDilution) return false;
         if (completeOnly && c.confidenceGrade === "C") return false;
@@ -252,11 +259,17 @@ export function ScreenerClient({
           matchesRange(c.mcap, minMcap, maxMcap) &&
           matchesRange(c.tvl, minTvl, maxTvl) &&
           matchesRange(c.multiples.phr, minPhr, maxPhr) &&
-          matchesRange(researchPs(c), minPs, maxPs) &&
+          (["all", "unknown", "mixed"].includes(kind) || matchesRange(researchMultiple(c), minMultiple, maxMultiple)) &&
           matchesRange(c.valueScore, minScore, maxScore)
         );
       })
       .sort((a, b) => {
+        if (["revenueMultiple", "multiple7d", "multiple90d", "multiple1y", "revenue7d", "revenue30d", "revenue90d", "revenue1y", "revenueAnnual", "revenueGrowth"].includes(sortKey)) {
+          const group = KIND_ORDER.indexOf(revenueKind(a)) - KIND_ORDER.indexOf(revenueKind(b));
+          if (group) return group;
+          const basis = revenueBasis(a).localeCompare(revenueBasis(b));
+          if (basis) return basis;
+        }
         const av = sortValue(a, sortKey),
           bv = sortValue(b, sortKey);
         if (av === null && bv === null) return a.name.localeCompare(b.name);
@@ -275,6 +288,7 @@ export function ScreenerClient({
       });
   }, [
     coins,
+    kind,
     search,
     tracks,
     view,
@@ -292,8 +306,8 @@ export function ScreenerClient({
     maxTvl,
     minPhr,
     maxPhr,
-    minPs,
-    maxPs,
+    minMultiple,
+    maxMultiple,
     minScore,
     maxScore,
     sortKey,
@@ -304,6 +318,7 @@ export function ScreenerClient({
     setPage(1);
   }, [
     search,
+    kind,
     tracks,
     view,
     cats,
@@ -318,8 +333,8 @@ export function ScreenerClient({
     maxTvl,
     minPhr,
     maxPhr,
-    minPs,
-    maxPs,
+    minMultiple,
+    maxMultiple,
     minScore,
     maxScore,
   ]);
@@ -358,7 +373,7 @@ export function ScreenerClient({
     ) : null;
   const exportSnapshot = () => {
     if (!data) return;
-    const blob = new Blob([JSON.stringify(makeSnapshot(data), null, 2)], {
+    const blob = new Blob([JSON.stringify({ ...makeSnapshot(data), definitions: Object.fromEntries(data.coins.map(c => [c.slug, c.fundamentals])) }, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -370,16 +385,16 @@ export function ScreenerClient({
   };
 
   return (
-    <main className="research-app ps-workspace">
+    <main className="research-app revenueMultiple-workspace">
       <a className="skip-link" href="#screener-results">
         결과 표로 이동
       </a>
       <header className="app-header">
         <div>
           <h1>크립토 리서치</h1>
-          <p className="intro">P/S와 매출 추이로 종목 찾기</p>
+          <p className="intro">집계의 의미를 확인하고 같은 종류끼리 비교합니다</p>
         </div>
-        <div className="reference-setting"><label htmlFor="ps-reference">P/S 참고선 <input id="ps-reference" type="number" min="0.1" step="1" value={psReferenceDraft} onChange={e => { setPsReferenceDraft(e.target.value); const v = Number(e.target.value); if (Number.isFinite(v) && v > 0) setPsReference(v); }} onBlur={() => setPsReferenceDraft(String(psReference))} /> 배</label></div>
+        <div className="reference-setting"><label htmlFor="revenueMultiple-reference">배수 참고선 <input id="revenueMultiple-reference" type="number" min="0.1" step="1" disabled={activeReference === null} value={psReferenceDraft} onChange={e => { setPsReferenceDraft(e.target.value); const v = Number(e.target.value); if (Number.isFinite(v) && v > 0) setMultipleReference(v); }} onBlur={() => setPsReferenceDraft(String(multipleReference))} /> 배</label><small>{activeReference === null ? "집계 종류를 선택하면 적용" : REVENUE_LABELS[kind as RevenueKind]}</small></div>
         <div className="update-block">
           <span
             className={`freshness ${snapshotAge > SNAPSHOT_STALE_MS || sourceFailures ? "caution" : ""}`}
@@ -425,14 +440,14 @@ export function ScreenerClient({
       {sourceOpen && (
         <section className="source-details" id="source-details">
           <h2>데이터를 읽는 기준</h2>
-          <p>P/S 참고선 이하인 종목을 강조하며 목록은 유지합니다. 낮은 P/S와 매출 성장을 함께 살펴보세요. 가격 방향에는 가중치를 주지 않습니다.</p>
+          <p>프로토콜 수익·서비스 매출·홀더 환원·추정 손익을 구분합니다. 집계액 관련 정렬은 종류와 기간 기준별로 묶으며, 참고선과 배수 범위는 한 종류를 선택했을 때 적용됩니다.</p>
           <p>
-            P/S는 같은 현재 시총에 기간별 매출을 적용합니다. 일별 이력이 있으면 완료된 UTC 날짜만 사용합니다. 홀더 금액은 원천의 최근 30일 집계이며 기간과 구성 범위를 상세창에서 구분합니다.
+            각 배수는 현재 토큰 시총을 해당 집계액의 연환산 값으로 나눕니다. 정의 미확인·혼합·변경 항목의 배수는 보류합니다. 토큰 시총과 FDV를 회사 지분 가치로 해석할 수 없으며, 원천 집계가 사업 전체 매출을 뜻하지는 않습니다.
           </p>
           <div className="source-grid">
             <div>
               <strong>DefiLlama</strong>
-              <p>수수료·매출·홀더 금액. 원천 생성 시각은 제공되지 않습니다.</p>
+              <p>수수료·집계액·홀더 금액. 원천 생성 시각은 제공되지 않습니다.</p>
             </div>
             <div>
               <strong>CoinMarketCap</strong>
@@ -492,7 +507,7 @@ export function ScreenerClient({
           {(
             [
               { key: "all", label: "전체", count: coins.length },
-              { key: "signals", label: "매출 성장", count: counts.signals },
+              { key: "signals", label: "사업 수익 성장", count: counts.signals },
               { key: "holder", label: "홀더 환원", count: counts.holder },
               { key: "favorites", label: "관심종목", count: counts.favorites },
               {
@@ -517,8 +532,9 @@ export function ScreenerClient({
         <div className="preset-bar" aria-label="보기 프리셋">
           {COLUMN_PRESETS.filter(p => p.label !== "점수 근거").map(p => <button key={p.label} className={`preset-button ${p.keys.length === visibleColumns.size && p.keys.every(k => visibleColumns.has(k)) ? "selected" : ""}`} aria-pressed={p.keys.length === visibleColumns.size && p.keys.every(k => visibleColumns.has(k))} onClick={() => setVisibleColumns(new Set(p.keys))}>{p.label}</button>)}
         </div>
-        {["ps1y", "ps90d", "ps7d"].some(key => visibleColumns.has(key as SortKey)) && <div className="reading-guide"><strong>현재 시총 고정</strong><span>1년은 실제 매출 합계 · 90/30/7일은 연환산 · 기간별 P/S는 과거 가격 이력이 아닙니다.</span></div>}
+        {["multiple1y", "multiple90d", "multiple7d"].some(key => visibleColumns.has(key as SortKey)) && <div className="reading-guide"><strong>현재 시총 고정</strong><span>1년은 원천 집계액 합계 · 90/30/7일은 연환산 · 기간별 시총/집계액 배수는 과거 가격 이력이 아닙니다.</span></div>}
         <div className="toolbar">
+          <label className="sort-select">집계 종류 <select aria-label="집계 종류" value={kind} onChange={e => setKind(e.target.value as RevenueKind | "all")}><option value="all">전체 · 종류별로 묶기</option>{KIND_ORDER.map(k => <option key={k} value={k}>{REVENUE_LABELS[k]}</option>)}</select></label>
           <label className="search-box">
             <Search size={17} />
             <span className="sr-only">코인 또는 심볼 검색</span>
@@ -634,13 +650,13 @@ export function ScreenerClient({
                 onMinChange={setMinPhr}
                 onMaxChange={setMaxPhr}
               />
-              <MultipleRangeFilter
-                label="P/S 범위"
-                min={minPs}
-                max={maxPs}
+              {activeReference !== null && <MultipleRangeFilter
+                label="시총/집계액 범위"
+                min={minMultiple}
+                max={maxMultiple}
                 onMinChange={setMinPs}
                 onMaxChange={setMaxPs}
-              />
+              />}
               <UsdRangeFilter
                 label="TVL 범위"
                 minUsd={minTvl}
@@ -753,7 +769,7 @@ export function ScreenerClient({
                     ? "이전 기록과 비교"
                     : view === "data"
                       ? "자료 확인 필요"
-                      : view === "holder" ? "홀더 환원" : "매출 성장"}
+                      : view === "holder" ? "홀더 환원" : "사업 수익 성장"}
               </span>
             )}
             {search && (
@@ -773,7 +789,7 @@ export function ScreenerClient({
               {baseline && data && baseline.scoreVersion !== data.scoreVersion
                 ? "계산 기준이 바뀌어 이전 버전의 기록과 비교하지 않습니다. 아래 확인 완료를 누르면 현재 자료가 새 비교 기준이 됩니다."
                 : baseline
-                ? `확인 기준 ${fmtKstMinute(baseline.at)} · 조건 진입·이탈, 매출·홀더 금액 5% 및 $100 이상 변화. 다시 방문해도 기준은 유지됩니다.`
+                ? `확인 기준 ${fmtKstMinute(baseline.at)} · 조건 진입·이탈, 집계액·홀더 금액 5% 및 $100 이상 변화. 다시 방문해도 기준은 유지됩니다.`
                 : "첫 방문입니다. 이번 자료를 저장한 뒤 다음 확인부터 변화를 표시합니다."}
             </p>
             {baseline && (
@@ -785,7 +801,7 @@ export function ScreenerClient({
           </div>
         )}
         {view === "holder" && <div className="comparison-note"><p>최근 30일 매입·분배 또는 조건부 보상이 관측된 종목입니다. 아래 전환 보기를 켜면 양수 → 0으로 바뀐 종목도 포함합니다.</p><label className="inline-check"><input type="checkbox" checked={tracks.has("transition")} onChange={() => toggleSet<OpportunityTrack>(setTracks, "transition")} /> 홀더 금액이 0↔양수로 바뀐 종목만 보기</label><p className="muted">최근·직전 30일 비교입니다. 매일 한 번의 사건 목록이 아니며, 실제 정책 변경 여부는 추가 확인이 필요합니다.</p></div>}
-        {view === "data" && <div className="comparison-note">가격·매출·토큰 연결 등 부족한 항목을 종목 아래에 표시합니다. 보고된 0과 자료 누락은 구분합니다.</div>}
+        {view === "data" && <div className="comparison-note">가격·집계액·토큰 연결 등 부족한 항목을 종목 아래에 표시합니다. 보고된 0과 자료 누락은 구분합니다.</div>}
         <div className="results-heading" id="screener-results" ref={resultsRef} tabIndex={-1}>
           <h2>
             프로토콜 <strong>{deferredRows.length}</strong>
@@ -921,16 +937,17 @@ export function ScreenerClient({
                         </span>
                       </button>
                     </div>
-                    <div className="row-reasons">{(view === "holder" && tracks.has("transition") ? holderTransitionReasons(c) : researchReasons(c, psReference)).slice(0, 2).map(r => <span key={r}>{r}</span>)}</div>
+                    <div className="row-definition">{revenueLabel(c)} · {revenueBasis(c) === "completed_utc" ? "완료일 집계" : "원천 기간 집계"}</div>
+                    <div className="row-reasons">{(view === "holder" && tracks.has("transition") ? holderTransitionReasons(c) : researchReasons(c, activeReference)).slice(0, 2).map(r => <span key={r}>{r}</span>)}</div>
                     {view === "data" && <p className="row-data-issue">{c.opportunities.dataIssues.join(" · ")}</p>}
-                    {view === "changes" && <p className="row-data-issue">매출 변화 {changes.get(c.slug)?.revenueDelta == null ? "–" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(changes.get(c.slug)!.revenueDelta!)} · 기준 이후</p>}
+                    {view === "changes" && <p className="row-data-issue">집계액 변화 {changes.get(c.slug)?.revenueDelta == null ? "–" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(changes.get(c.slug)!.revenueDelta!)} · 기준 이후</p>}
                   </th>
                   {selectedCols.map((col) => (
                     <td
                       key={col.key}
                       className={col.key === "signals" ? "signal-column" : ""}
                     >
-                      <span className={col.key === "ps" && researchPs(c) !== null && researchPs(c)! <= psReference ? "ps-highlight" : undefined}>{renderCell(c, col.key)}</span>
+                      <span className={activeReference !== null && col.key === "revenueMultiple" && researchMultiple(c) !== null && researchMultiple(c)! <= activeReference ? "revenueMultiple-highlight" : undefined}>{renderCell(c, col.key)}</span>
                     </td>
                   ))}
                 </tr>
@@ -985,7 +1002,7 @@ export function ScreenerClient({
         <CoinDetail
           coin={selectedCoin}
           history={history}
-          psReference={psReference}
+          multipleReference={activeReference}
           change={changes.get(selectedCoin.slug)!}
           onClose={() => setSelectedSlug(null)}
         />

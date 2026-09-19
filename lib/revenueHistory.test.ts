@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { psMultiple, summarizeRevenueHistory } from "./revenueHistory";
+import { annualizedMultiple, summarizeRevenueHistory } from "./revenueHistory";
 
 const now = Date.parse("2026-09-12T13:00:00Z");
 const end = Date.parse("2026-09-11T00:00:00Z") / 1000;
@@ -8,13 +8,13 @@ const series = (): [number, Record<string, number>][] => Array.from({ length: 36
 
 describe("revenue research periods", () => {
   it("uses a fixed cap and annualizes every short window with the actual day count", () => {
-    expect(psMultiple(120, 12, 365)).toBe(10);
-    expect(psMultiple(120, 6, 90)).toBeCloseTo(4.931506849);
-    expect(psMultiple(120, 3, 30)).toBeCloseTo(3.287671233);
-    expect(psMultiple(120, 1, 7)).toBeCloseTo(2.301369863);
-    expect(psMultiple(120, 0, 30)).toBeNull();
-    expect(psMultiple(120, -1, 30)).toBeNull();
-    expect(psMultiple(120, null, 30)).toBeNull();
+    expect(annualizedMultiple(120, 12, 365)).toBe(10);
+    expect(annualizedMultiple(120, 6, 90)).toBeCloseTo(4.931506849);
+    expect(annualizedMultiple(120, 3, 30)).toBeCloseTo(3.287671233);
+    expect(annualizedMultiple(120, 1, 7)).toBeCloseTo(2.301369863);
+    expect(annualizedMultiple(120, 0, 30)).toBeNull();
+    expect(annualizedMultiple(120, -1, 30)).toBeNull();
+    expect(annualizedMultiple(120, null, 30)).toBeNull();
   });
   it("sums matched children, excludes partial today and keeps all windows at the same endpoint", () => {
     const history = summarizeRevenueHistory([...protocols, { slug: "dup", name: "Dup", doublecounted: true, parentProtocol: "parent#x" }], [...series(), [end + 86400, { A: 9999999, B: 9999999 }]], now, "source")["parent#x"];

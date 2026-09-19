@@ -1,5 +1,7 @@
 # V5 P/S and revenue research contract
 
+> Superseded by [SCREENER_V6.md](./SCREENER_V6.md). This historical contract incorrectly generalized DefiLlama Revenue as sales. Do not use its P/S terminology, cross-kind comparison, share or history assumptions for current behavior.
+
 Implementation version: `research-v5-ps-revenue`. Publication uses the existing guarded deployment route. See [HANDOFF.md](./HANDOFF.md) for dated validation and deployment receipts. Older receipts remain historical.
 
 ## Research decisions

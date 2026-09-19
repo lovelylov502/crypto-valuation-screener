@@ -473,7 +473,7 @@ describe("aggregateHolderValueByGroup", () => {
       excludedDoublecountedCount: 1,
       phrUnavailableReason: null,
     });
-    expect(result?.currentVsEligibleTtmRatio).toBeCloseTo(3_650 / 3_000);
+    expect(result?.currentVsEligibleTtmRatio).toBeNull();
     expect(result?.components.map((component) => component.slug)).toEqual([
       "mixed-buyback",
       "mixed-fee-burn",
@@ -506,7 +506,7 @@ describe("aggregateHolderValueByGroup", () => {
       rawTtm: 25_657_324,
       currentVsEligibleTtmRatio: null,
     });
-    expect(result?.warning).toContain("TTM");
+    expect(result?.warning).toContain("원천 1년");
     expect(result?.phrUnavailableReason).toContain("최근 30일");
   });
 

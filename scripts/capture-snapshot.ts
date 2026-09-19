@@ -52,6 +52,10 @@ async function main() {
     "lib/revenueSource.ts",
     "lib/research.ts",
     "lib/protocolResearch.ts",
+    "lib/fundamentals.ts",
+    "lib/fundamentalSource.ts",
+    "lib/fundamentalDefinitions.json",
+    "lib/fundamentalContract.ts",
   ]) {
     ruleHashes[name] = createHash("sha256")
       .update(await readFile(resolve(name)))

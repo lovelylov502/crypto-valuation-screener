@@ -12,20 +12,20 @@ import { compareFlow } from "./signals";
 import { appendSnapshot, compareSnapshot, makeSnapshot, parseHistory } from "./snapshotHistory";
 import { assembleScreener } from "./screener";
 import { fetchLatestSnapshot } from "./screenerRefresh";
-import { researchPs, researchReasons, revenueGrowing } from "./research";
+import { researchMultiple, researchReasons, revenueGrowing } from "./research";
 import { matchesRange } from "./screenerFilters";
 import { summarizeRevenueHistory } from "./revenueHistory";
 
 const REFERENCE = "2026-07-28T05:00:00.000Z";
-const OLD_LISTING = Date.parse("2025-01-01T00:00:00.000Z") / 1000;
+import { sample, make, fixtureFundamentals } from './testFixtures';
 
-describe("P/S research rules", () => {
+describe("Typed denominator research rules", () => {
   it("uses 20 as an optional highlight while leaving higher multiples screenable", () => {
     const [c] = scoreCoins([sample({ revenue30d: 100_000 })], REFERENCE);
-    expect(researchPs(c)).toBeGreaterThan(20);
-    expect(matchesRange(researchPs(c), 0, 0)).toBe(true);
-    expect(researchReasons(c, 20)).not.toContain("P/S 20배 이하");
-    expect(researchReasons(c, 100)).toContain("P/S 100배 이하");
+    expect(researchMultiple(c)).toBeGreaterThan(20);
+    expect(matchesRange(researchMultiple(c), 0, 0)).toBe(true);
+    expect(researchReasons(c, 20)).not.toContain("시총/프로토콜 수익 20배 이하");
+    expect(researchReasons(c, 100)).toContain("시총/프로토콜 수익 100배 이하");
   });
   it("keeps the same research reasons for rising and falling price histories", () => {
     const rows = scoreCoins([
@@ -35,17 +35,17 @@ describe("P/S research rules", () => {
     expect(rows.every(revenueGrowing)).toBe(true);
     expect(researchReasons(rows[0])).toEqual(researchReasons(rows[1]));
     const [uncertain] = scoreCoins([sample({ identityStatus: "ambiguous" })], REFERENCE);
-    expect(researchPs(uncertain)).toBeNull();
+    expect(researchMultiple(uncertain)).toBeNull();
     expect(revenueGrowing(uncertain)).toBe(false);
   });
   it("uses completed-day revenue in discovery without mixing the holder accounting denominator", () => {
     const end = Math.floor(Date.parse(REFERENCE) / 86400000) * 86400 - 86400;
     const chart: [number, Record<string, number>][] = Array.from({ length: 60 }, (_, i) => [end - i * 86400, { Sample: i < 30 ? 2000 : 1000 }]);
-    const history = summarizeRevenueHistory([{ slug: "sample", name: "Sample" }], chart, Date.parse(REFERENCE), "fixture").sample;
+    const history = summarizeRevenueHistory([{ slug: "sample", name: "Sample" }], chart, Date.parse(REFERENCE), "fixture", new Map([["sample", fixtureFundamentals.revenue]])).sample;
     const raw = sample({ revenue30d: 100_000, revenuePrev30d: 200_000, revenueHistory: history });
     const [c] = scoreCoins([raw], REFERENCE);
     expect(c.opportunities.revenue.changePct).toBe(100);
-    expect(researchPs(c)).toBeCloseTo(raw.mcap! / (60_000 * 365 / 30));
+    expect(researchMultiple(c)).toBeCloseTo(raw.mcap! / (60_000 * 365 / 30));
     expect(c.valueCapture.eligibleHolderValueShare).toBe(3);
     expect(makeSnapshot(assembleScreener([raw], REFERENCE, [])).coins.sample.revenue30d).toBe(60_000);
   });
@@ -56,7 +56,7 @@ describe("P/S research rules", () => {
     ], REFERENCE);
     expect(zero.opportunities.revenue.state).toBe("flat");
     expect(zero.opportunities.dataIssues).not.toContain("실적 비교 자료 부족 · 누락 또는 음수 금액 확인");
-    expect(researchPs(zero)).toBeNull();
+    expect(researchMultiple(zero)).toBeNull();
     expect(stopped.opportunities.holder).toBe(false);
     expect(stopped.opportunities.transition).toBe(true);
   });
@@ -67,7 +67,7 @@ describe("independent opportunity signals and same-period accounting", () => {
     const raw = sample({ revenue30d: 97_363, revenueAnnual: 7_138_646, holderValue: { eligibleCurrent30d: 48_685, eligibleRunRate: 48_685 * 365 / 30 } });
     const [c] = scoreCoins([raw], REFERENCE);
     expect(c.valueCapture.eligibleHolderValueShare).toBeCloseTo(48_685 / 97_363);
-    expect(c.multiples.ps).toBeCloseTo(raw.mcap! / (97_363 * 365 / 30));
+    expect(c.multiples.revenueMultiple).toBeCloseTo(raw.mcap! / (97_363 * 365 / 30));
     expect(c.multiples.pf).toBeCloseTo(raw.mcap! / (raw.fees30d! * 365 / 30));
   });
   it("preserves ratios above 100% and warns about incompatible scope or funding", () => {
@@ -132,16 +132,16 @@ describe("local observations and refresh recovery", () => {
   });
   it("retains pre-v5 history and rejects malformed optional valuation fields", () => {
     const snapshot = makeSnapshot(payload());
-    delete snapshot.coins.sample.ps;
+    delete snapshot.coins.sample.revenueMultiple;
     delete snapshot.coins.sample.mcap;
     expect(parseHistory(JSON.stringify([snapshot]))).toEqual([snapshot]);
-    expect(parseHistory(JSON.stringify([{ ...snapshot, coins: { sample: { ...snapshot.coins.sample, ps: "20" } } }]))).toEqual([]);
+    expect(parseHistory(JSON.stringify([{ ...snapshot, coins: { sample: { ...snapshot.coins.sample, revenueMultiple: "20" } } }]))).toEqual([]);
   });
   it("does not classify price or experimental score movement alone as a research change", () => {
     const data = payload(); const c = data.coins[0]; const baseline = makeSnapshot(data);
     const changed = { ...c, mcap: c.mcap! * 2, price: c.price! * 2, valueScore: 99 };
     const comparison = compareSnapshot(changed, baseline, data.scoreVersion);
-    expect(comparison.psDelta).toBeGreaterThan(0);
+    expect(comparison.multipleDelta).toBeGreaterThan(0);
     expect(comparison.meaningful).toBe(false);
     const later = appendSnapshot([baseline], makeSnapshot({ ...data, updatedAt: "2026-07-29T05:00:00.000Z" }));
     expect(later).toHaveLength(2);
@@ -172,85 +172,6 @@ describe("local observations and refresh recovery", () => {
     }
   });
 });
-
-type CoinOverrides = Omit<Partial<CoinRaw>, "holderValue"> & {
-  slug: string;
-  holderValue?: Partial<HolderValueSummary>;
-};
-
-function sample(partial: Partial<CoinOverrides> = {}): CoinRaw { return make({ slug: "sample", ...partial }); }
-
-function make(partial: CoinOverrides): CoinRaw {
-  const { holderValue, ...rest } = partial;
-  return {
-    name: partial.slug,
-    symbol: "TST",
-    category: "Dexs",
-    chains: [],
-    geckoId: "test-token",
-    cmcId: 100,
-    cmcSlug: "test-token",
-    logo: null,
-    listedAt: OLD_LISTING,
-    isParent: false,
-    identityStatus: "verified",
-    identityReason: "test verified",
-    mcap: 100_000_000,
-    tvl: 50_000_000,
-    change1d: 0,
-    change7d: 0,
-    price: 1,
-    marketCapRank: 500,
-    totalVolume: 2_000_000,
-    numMarketPairs: 20,
-    marketDataUpdatedAt: "2026-07-28T04:00:00.000Z",
-    priceChange7d: 0,
-    priceChange14d: 0,
-    priceChange30d: -5,
-    priceChange60d: -10,
-    priceChange90d: -10,
-    priceChange1y: -20,
-    athChangePercentage: -80,
-    atlChangePercentage: 100,
-    feesAnnual: 12_000_000,
-    fees1y: 12_000_000,
-    fees7d: 250_000,
-    fees30d: 1_200_000,
-    feesPrev30d: 1_000_000,
-    feesChange7dover7d: 10,
-    feesChange30dover30d: 20,
-    revenueAnnual: 6_000_000,
-    revenue1y: 6_000_000,
-    revenue30d: 600_000,
-    revenuePrev30d: 500_000,
-    holderValue: {
-      sourceStatus: "defillama-derived",
-      availability: "eligible",
-      eligibleCurrent30d: 300_000,
-      eligiblePrevious30d: 250_000,
-      eligibleRunRate: 3_650_000,
-      eligibleTtm: 3_000_000,
-      currentVsEligibleTtmRatio: 3_650_000 / 3_000_000,
-      rawCurrent30d: 300_000,
-      rawPrevious30d: 250_000,
-      rawTtm: 3_000_000,
-      excludedCurrent30d: null,
-      excludedTtm: null,
-      excludedDoublecountedCount: 0,
-      phrUnavailableReason: null,
-      warning: null,
-      components: [],
-      ...holderValue,
-    },
-    volumeAnnual: null,
-    volume30d: null,
-    fdv: 120_000_000,
-    circulatingSupply: 100_000_000,
-    totalSupply: 120_000_000,
-    maxSupply: 120_000_000,
-    ...rest,
-  };
-}
 
 function fillSector(count = MIN_SECTOR_SAMPLE + 2): CoinRaw[] {
   return Array.from({ length: count }, (_, index) =>
@@ -323,7 +244,7 @@ describe("scoreCoins discovery model", () => {
     const [scored] = scoreCoins([current], REFERENCE);
 
     expect(scored.multiples.phr).toBeCloseTo(120_000_000 / 12_166_666.666666666);
-    expect(SCORE_VERSION).toBe("research-v5-ps-revenue");
+    expect(SCORE_VERSION).toBe("research-v6-fundamental-scope");
   });
 
   it("leaves current P/HR unavailable when TTM is positive but current 30d is zero", () => {
@@ -486,7 +407,7 @@ describe("scoreCoins discovery model", () => {
     const scored = result.find((coin) => coin.slug === "rare")!;
 
     expect(scored.sectorPercentiles.phr).toBeNull();
-    expect(scored.sectorPercentiles.ps).toBeNull();
+    expect(scored.sectorPercentiles.revenueMultiple).toBeNull();
     expect(scored.sectorPercentiles.pf).toBeNull();
   });
 

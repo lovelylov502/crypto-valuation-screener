@@ -1,5 +1,6 @@
 import { summarizeRevenueHistory, type RevenueHistory } from "./revenueHistory";
 import type { SourceObservation } from "./types";
+import { aggregateDefinitions } from "./fundamentalSource";
 
 const URL = "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false";
 let cached: { at: number; value: Record<string, RevenueHistory> } | undefined;
@@ -15,7 +16,9 @@ export async function fetchRevenueHistory(observations: SourceObservation[]): Pr
         const data = await response.json();
         if (!Array.isArray(data.protocols) || !Array.isArray(data.totalDataChartBreakdown) || data.totalDataChartBreakdown.length === 0) throw new Error("Revenue history missing");
         const at = Date.now();
-        const value = summarizeRevenueHistory(data.protocols, data.totalDataChartBreakdown, at, URL);
+        const parents = new Map<string, string>(data.protocols.map((p: { slug: string; parentProtocol?: string }) => [p.slug, p.parentProtocol ?? p.slug]));
+        const definitions = aggregateDefinitions(data.protocols, slug => parents.get(slug) ?? slug, "Revenue");
+        const value = summarizeRevenueHistory(data.protocols, data.totalDataChartBreakdown, at, URL, definitions);
         cached = { at, value };
         return value;
       })().finally(() => { pending = undefined; });

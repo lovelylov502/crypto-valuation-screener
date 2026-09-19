@@ -1,15 +1,17 @@
 import type { CoinScored, ScreenerResponse } from "./types";
 import type { OpportunityTrack } from "./signals";
-import { researchPs } from "./research";
-import { revenueAmount } from "./revenueHistory";
+import { researchMultiple } from "./research";
+import { revenueAmount, revenueBasis, historyMatches } from "./revenueHistory";
 
 export const HISTORY_STORAGE_KEY = "crypto-screener-history-v1";
 export const REVIEW_BASELINE_KEY = "crypto-screener-review-baseline-v1";
 export interface SnapshotCoin {
+  definition?: string;
+  basis?: string;
   identity: string;
   price: number | null;
   mcap?: number | null;
-  ps?: number | null;
+  revenueMultiple?: number | null;
   score: number | null;
   phr: number | null;
   revenue30d: number | null;
@@ -17,7 +19,7 @@ export interface SnapshotCoin {
   tracks: OpportunityTrack[];
 }
 export interface Snapshot {
-  schema: 1;
+  schema: 1 | 2;
   at: string;
   scoreVersion: string;
   coins: Record<string, SnapshotCoin>;
@@ -26,9 +28,10 @@ export interface Snapshot {
 function identity(coin: CoinScored) {
   return `${coin.identityStatus}:${coin.cmcId ?? ""}:${coin.geckoId ?? ""}:${coin.symbol ?? ""}`;
 }
+const observationBasis = (coin: CoinScored) => `${revenueBasis(coin)}:${coin.revenueHistory?.definitionFingerprint ?? "none"}`;
 export function makeSnapshot(data: ScreenerResponse): Snapshot {
   return {
-    schema: 1,
+    schema: 2,
     at: data.updatedAt,
     scoreVersion: data.scoreVersion,
     coins: Object.fromEntries(
@@ -36,9 +39,11 @@ export function makeSnapshot(data: ScreenerResponse): Snapshot {
         c.slug,
         {
           identity: identity(c),
+          definition: c.fundamentals.fingerprint,
+          basis: observationBasis(c),
           price: c.price,
           mcap: c.mcap,
-          ps: researchPs(c),
+          revenueMultiple: researchMultiple(c),
           score: c.valueScore,
           phr: c.multiples.phr,
           revenue30d: revenueAmount(c, 30),
@@ -60,7 +65,7 @@ export function parseHistory(raw: string | null): Snapshot[] {
       .filter((s): s is Snapshot => {
         if (
           !s ||
-          s.schema !== 1 ||
+          ![1, 2].includes(s.schema) ||
           !Number.isFinite(Date.parse(s.at)) ||
           typeof s.scoreVersion !== "string" ||
           !s.coins ||
@@ -73,11 +78,12 @@ export function parseHistory(raw: string | null): Snapshot[] {
           const c = v as SnapshotCoin;
           return (
             typeof c.identity === "string" &&
+            (s.schema === 1 || (typeof c.definition === "string" && typeof c.basis === "string")) &&
             [c.price, c.score, c.phr, c.revenue30d, c.holder30d].every(
               (n) =>
                 n === null || (typeof n === "number" && Number.isFinite(n)),
             ) &&
-            [c.ps, c.mcap].every(n => n === undefined || n === null || (typeof n === "number" && Number.isFinite(n))) &&
+            [c.revenueMultiple, c.mcap].every(n => n === undefined || n === null || (typeof n === "number" && Number.isFinite(n))) &&
             Array.isArray(c.tracks) &&
             c.tracks.every((t) =>
               ["business", "holder", "transition"].includes(t),
@@ -109,11 +115,11 @@ export function appendSnapshot(
 }
 
 export interface SnapshotChange {
-  state: "first" | "new" | "rules_changed" | "identity_changed" | "comparable";
+  state: "first" | "new" | "rules_changed" | "identity_changed" | "definition_changed" | "comparable";
   added: OpportunityTrack[];
   scoreDelta: number | null;
   phrDelta: number | null;
-  psDelta: number | null;
+  multipleDelta: number | null;
   revenueDelta: number | null;
   holderDelta: number | null;
   meaningful: boolean;
@@ -128,13 +134,13 @@ export function compareSnapshot(
     added: [],
     scoreDelta: null,
     phrDelta: null,
-    psDelta: null,
+    multipleDelta: null,
     revenueDelta: null,
     holderDelta: null,
     meaningful: false,
   };
   if (!baseline) return empty;
-  if (baseline.scoreVersion !== version)
+  if (baseline.schema !== 2 || baseline.scoreVersion !== version)
     return { ...empty, state: "rules_changed" };
   const previous = Object.hasOwn(baseline.coins, coin.slug)
     ? baseline.coins[coin.slug]
@@ -142,6 +148,8 @@ export function compareSnapshot(
   if (!previous) return { ...empty, state: "new", meaningful: true };
   if (previous.identity !== identity(coin))
     return { ...empty, state: "identity_changed" };
+  if (!historyMatches(coin) || previous.definition !== coin.fundamentals.fingerprint || previous.basis !== observationBasis(coin))
+    return { ...empty, state: "definition_changed" };
   const delta = (a: number | null, b: number | null) =>
     a !== null && b !== null ? a - b : null;
   const added = (["business", "holder", "transition"] as const).filter(
@@ -165,7 +173,7 @@ export function compareSnapshot(
     added,
     scoreDelta,
     phrDelta,
-    psDelta: delta(researchPs(coin), previous.ps ?? null),
+    multipleDelta: delta(researchMultiple(coin), previous.revenueMultiple ?? null),
     revenueDelta,
     holderDelta,
     meaningful:

@@ -1,22 +1,22 @@
 # 크립토 밸류에이션 리서치
 
-P/S와 실제 매출의 규모·추이를 비교해 추가 조사할 크립토 종목을 찾는 단일 화면 스크리너.
+프로토콜 수익·서비스 매출·홀더 환원·추정 손익을 구분하고, 같은 종류의 집계액과 토큰 시총을 비교하는 스크리너.
 주식·일반 기업 리서치, 조사노트, 후보 큐 같은 별도 워크플로는 다루지 않는다.
 
 **🌐 라이브: https://crypto-valuation-screener.vercel.app**
 데이터: [DefiLlama](https://defillama.com) · [CoinMarketCap Keyless](https://coinmarketcap.com/api/documentation/pro-api-reference/keyless-public-api) · [CoinGecko](https://coingecko.com)
 
-## Current v5.1
+## Current v6
 
-- Current market cap stays fixed across P/S based on actual 365-day revenue and annualized rolling 90/30/7-day revenue. The 20x reference is editable and highlights rows without excluding higher multiples. Price direction does not control research inclusion.
-- The main presets are discovery, P/S and revenue trend, holder return mechanisms, and price/supply. Legacy experimental scores are optional.
+- Each amount carries reviewed source definitions and an economic kind. Unknown, mixed, changed or missing definitions fail closed for multiples; generic P/S is removed.
+- The main presets compare typed amounts and holder returns. Amount sorting groups by kind and window basis; reference highlighting and multiple ranges require a selected kind. Business growth excludes buyback/burn aliases and estimated trading PnL.
 - Details begin with token price, 24h/7d/30d changes, market cap and FDV, then business descriptions, dated revenue windows, 13 non-overlapping weekly totals and holder policy evidence.
 - Official research records distinguish buybacks, burning, distributions, payout assets, recipients, conditions and policy status. Unknown facts stay explicit. Korean translations of provider descriptions fill uncovered projects, with the original available in a disclosure.
 - The list defaults to 100 rows. A native dropdown offers 50/100/200 and remembers the choice. Numbered pagination appears above and below the table; vertical scrolling follows the document with column headers held in view.
 - The review baseline moves only when explicitly acknowledged. Browser observations retain up to 60 days; unattended daily archives remain separate.
 - Large source responses bypass the 2MB fetch-cache limit. The server caches a compressed joined snapshot for 30 minutes; the refresh API adds no second response cache.
 
-Current rule version: `research-v5-ps-revenue`. See [HANDOFF.md](./docs/HANDOFF.md) for dated validation and deployment receipts, and [SCREENER_V5.md](./docs/SCREENER_V5.md) for calculation rules, coverage and research maintenance. [SCREENER_V4.md](./docs/SCREENER_V4.md) preserves the earlier contract. Production safety remains in [DEPLOYMENT.md](./docs/DEPLOYMENT.md).
+Current rule version: `research-v6-fundamental-scope`. See [HANDOFF.md](./docs/HANDOFF.md) for dated validation and deployment receipts, and [SCREENER_V6.md](./docs/SCREENER_V6.md) for calculation rules, coverage and research maintenance. [SCREENER_V4.md](./docs/SCREENER_V4.md) preserves the earlier contract. Production safety remains in [DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
 ## 개발
 
