@@ -1,5 +1,13 @@
 # Handoff
 
+## 2026-09-21 — column usability production receipt
+
+Application commit `1e2d59a1cad051539fffad3088dc151b1aaff8c2` is live through the guarded canonical `npm run deploy:production` route. Deployment `dpl_DBqEECRAyrhEuP3T2GiLvWyauRnW`, unique URL https://crypto-valuation-screener-moq1w1bgv-bodycation.vercel.app, is READY in production. Authenticated deployment readback confirms the exact main commit, expected project and https://crypto-valuation-screener.vercel.app alias.
+
+184 application tests, six deployment-contract tests, TypeScript, build and whitespace checks passed. Canonical HTML and API returned HTTP 200, including both new column/persistence UI markers. The API retained `research-v7-sales-and-holder-windows`: 581 rows, 3,362,105 bytes at `2026-09-20T15:23:06.191Z`. Production browser checks verified pointer reordering, reload persistence, keyboard reordering and the published P/R/P-HR explanation; browser error/warning logs were empty. The original public-tab columns were restored after testing, with the columns panel visible. Local preview was stopped and viewport overrides cleared.
+
+Deployment log, authenticated identity and current-run screenshots are outside Git in `C:/Users/TAE/Documents/Codex/2026-09-19/dot-plugin-browser-openai-bundled-mention/outputs/ux-columns`. This is a documentation-only receipt after the application deployment.
+
 ## 2026-09-21 — column ordering and remembered workspace
 
 The user reported repeated dropdown interaction, unnecessary preset emphasis, undiscoverable column settings and scattered added columns. Whole-universe/watchlist, numerator and available-metric choices are now visible buttons. Secondary signal views remain under filters. A prominent table-side column button opens the saved columns panel.
