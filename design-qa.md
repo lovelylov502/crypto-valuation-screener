@@ -53,4 +53,4 @@ The source and implementation were supplied together in the same image-review ca
 - [x] Reference comparison, including typography, spacing, tokens, images and copy.
 - [x] Responsive and primary interaction checks.
 - [x] Regression tests and production build.
-- [ ] Canonical deployed readback: see the subsequent deployment receipt in `docs/HANDOFF.md`.
+- [x] Canonical deployed readback and browser smoke: deployment `dpl_1335g2ys2cLtRL55GMUzgYeMowtY`, application commit `80eec7ef0865ba452cc92668ecda6a5564904742`. `production-main.png` and `production-columns.png` confirm the live table and popup. Prior personal columns survive except the retired P/S column, including after reload; header sorting works, removed controls are absent, overflow is zero, and warning/error logs are empty. See the receipt in `docs/HANDOFF.md`.

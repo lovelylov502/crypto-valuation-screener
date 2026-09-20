@@ -1,5 +1,15 @@
 # Handoff
 
+## 2026-09-21 — CoinMarketCap-informed UI production receipt
+
+Application commit `80eec7ef0865ba452cc92668ecda6a5564904742` is live through the canonical `npm run deploy:production` route. Deployment `dpl_1335g2ys2cLtRL55GMUzgYeMowtY`, unique URL https://crypto-valuation-screener-8y44uf0kx-bodycation.vercel.app, is READY in production. Authenticated readback confirms that commit, the expected project/team, and https://crypto-valuation-screener.vercel.app. This is a subsequent documentation-only receipt.
+
+The guarded route passed clean synchronized canonical main, remote identity, six deployment-contract probes, 202 application tests, TypeScript, build, whitespace and the pinned CLI dry run. The first canonical HTML read briefly reached the prior alias version; the next automatic attempt passed all thirteen required UI markers and found no legacy controls. Both canonical endpoints returned HTTP 200. The API readback was 3,446,404 bytes and 579 rows, with `research-v8-coverage-and-holder-types` and observation `2026-09-20T23:24:02.539Z`. The later browser snapshot was 581 rows at 2026-09-21 08:44 KST; changing collected rows are not a UI coverage-recovery claim.
+
+Production browser smoke verified the new palette/table, top reset action, one-list display popup, header-click P/R ascending order, and Escape focus return. Existing columns `price / mcap / psSales / pr / phr / phr90d` migrated to exactly `price / mcap / pr / phr / phr90d`; all remaining order and circulating-cap selection survived a further reload. P/S table text and sort dropdown count are both zero, document horizontal overflow is zero, and warning/error logs are empty. The public tab is left on all rows with its preserved columns, market-cap descending sort and closed popups; viewport overrides are cleared and local servers are stopped.
+
+Deployment log, authenticated identity and production screenshots are outside Git in the task's `outputs/cmc-ui-v9`: `deployment.log`, `deployment-identity.json`, `production-main.png`, and `production-columns.png`. [design-qa.md](../design-qa.md) records the local reference comparison and responsive/interaction checks.
+
 ## 2026-09-21 — CoinMarketCap-informed UI implementation
 
 The user authorized a plan and implementation using CoinMarketCap's dark interface while preserving the previously specified interaction rules. The compact navy/blue table removes the sort dropdown, separate direction button and persistent sidebar. Column headers sort directly; nulls stay last in either direction and a hidden sort falls back to a visible column. Display settings now use one ordered list, addable metrics below, and a fixed top reset action. P/S is absent from table/defaults/filter options and remains separate business-sales evidence in coin details.
