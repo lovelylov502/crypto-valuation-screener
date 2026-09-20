@@ -3,7 +3,7 @@ import registry from "./fundamentalDefinitions.json";
 import { FUNDAMENTAL_VERSION, type Fundamentals, type RevenueKind, type FeeKind, type MetricDefinition, type DefinitionComponent } from "./fundamentals";
 
 type Row = Record<string, unknown>;
-type Review = { methodology: Record<string, string | null>; revenueKind: RevenueKind; feeKind: FeeKind; holderShareReviewed: boolean; reviewedAt: string };
+type Review = { methodology: Record<string, string | null>; revenueKind: RevenueKind; feeKind: FeeKind; holderShareReviewed: boolean; reviewedAt: string; reviewNote?: string };
 const reviews = registry as Record<string, Review>;
 const text = (v: unknown) => typeof v === "string" && v.trim() ? v.trim().replace(/\s+/g, " ") : null;
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -26,7 +26,7 @@ export function aggregateDefinitions(rows: Row[], groupKey: (slug: string) => st
     const definitions: DefinitionComponent[] = components.map(row => {
       const slug = String(row.slug), review = reviews[slug], definition = text(method(row)[field]);
       const matched = definitionReviewed(row);
-      return { slug, definition, kind: matched ? (field === "Revenue" ? review.revenueKind : review.feeKind) : "unknown", reviewedAt: matched ? review.reviewedAt : null, source: `https://defillama.com/protocol/${encodeURIComponent(slug)}`, status: matched ? "matched" : !definition ? "missing" : review ? "changed" : "unreviewed" };
+      return { slug, definition, kind: matched ? (field === "Revenue" ? review.revenueKind : review.feeKind) : "unknown", reviewedAt: matched ? review.reviewedAt : null, reviewNote: matched ? review.reviewNote : undefined, source: `https://defillama.com/protocol/${encodeURIComponent(slug)}`, status: matched ? "matched" : !definition ? "missing" : review ? "changed" : "unreviewed" };
     });
     const kinds = new Set(definitions.map(d => d.kind));
     const duplicate = new Set(components.map(c => c.slug)).size !== components.length;

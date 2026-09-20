@@ -13,6 +13,7 @@ export interface RevenueHistory {
   previous30: RevenuePeriod;
   weeks: RevenuePeriod[];
   source: string;
+  supplementalSources?: string[];
   observedAt: string;
 }
 type Protocol = { slug?: unknown; name?: unknown; parentProtocol?: unknown; doublecounted?: unknown };

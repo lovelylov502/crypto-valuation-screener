@@ -28,9 +28,9 @@ describe("personal comparison layout", () => {
   });
   it("restores an old v7 layout without losing its filters or exact column order", () => {
     const old = { columns: ["phr", "psSales", "price"], view: "holder", capital: "fdv", available: "holder", minMcap: 50_000_000, sortKey: "phr", sortDir: "asc" };
-    expect(parseWorkspace(JSON.stringify(old))).toMatchObject({ ...old, panel: "columns", sidebarOpen: true });
+    expect(parseWorkspace(JSON.stringify(old))).toMatchObject({ ...old, panel: "columns", sidebarOpen: false });
   });
-  it("round-trips the last workspace, including panel and collapsed sidebar", () => {
+  it("round-trips the last workspace, without reopening a settings popup", () => {
     const saved = { ...defaultPreferences(), panel: "filters" as const, sidebarOpen: false, search: "VVV", columns: ["phr", "psSales"] as SortKey[] };
     expect(parseWorkspace(JSON.stringify(saved))).toEqual(saved);
     expect(resetWorkspaceFilters(saved)).toMatchObject({ panel: "filters", sidebarOpen: false, columns: saved.columns, search: "" });

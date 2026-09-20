@@ -6,17 +6,18 @@
 **🌐 라이브: https://crypto-valuation-screener.vercel.app**
 데이터: [DefiLlama](https://defillama.com) · [CoinMarketCap Keyless](https://coinmarketcap.com/api/documentation/pro-api-reference/keyless-public-api) · [CoinGecko](https://coingecko.com)
 
-## Current v7
+## Current v8
 
-- P/S uses separately sourced business sales, with scope, estimate status, date and expiry. P/R uses protocol-retained revenue. P/HR uses dated, eligible holder returns. Missing evidence stays unavailable.
-- The left control panel changes filters and columns independently. Drag handles on the selected-column list and table headers reorder columns; arrow keys and move buttons are also supported. Column order, numerator choice, watchlist, filters, last settings panel and desktop sidebar visibility persist in the same browser. Details open on the right without replacing the table.
-- Whole-universe/watchlist, MCap/FDV and metric availability use visible buttons. Additional signal views are secondary filters. New period columns stay beside their metric; the four-period action groups 1 year / 90 / 30 / 7 days without resetting other columns.
+- P/S uses separately sourced business sales, with scope, estimate status, date and expiry. P/R uses reviewed protocol revenue or service receipts. P/HR includes reviewed buybacks, distributions, native fee burns and conditional staking/lock/voter distributions, with mechanisms and recipient conditions shown separately. Missing evidence stays unavailable.
+- A full-width table replaces the permanent left panel. Filter and display buttons open separate accessible dialogs. Drag handles, arrow keys and move buttons reorder columns. Column order, numerator choice, watchlist and filters persist in the same browser, including existing V7 preferences; dialogs start closed. Details open on the right without replacing the table.
+- Whole-universe/watchlist and MCap/FDV remain visible buttons. Availability can use one period or any supported period. Coverage shows distinct rows, overlapping metric counts, source-present withheld rows and missing sources separately. New period columns stay beside their metric; the four-period action groups 1 year / 90 / 30 / 7 days without resetting other columns.
 - MCap/FDV selection applies consistently to all three multiples. Holder and protocol multiples offer 7/30/90/365-day windows; incomplete 365-day coverage is never TTM.
 - Exact asset IDs and symbol agreement replace substring ticker matching. Protocol-directory parent links eliminate duplicate child rows. Stablecoin issued supply cannot produce investment-token multiples or scores.
-- Every response checks the valuation contract. Definition drift, missing daily observations and expired sales evidence hold the affected metrics. Daily archives add a quality report and calculation-source hashes.
+- Missing FDV stays blank. A separately labeled circulating-cap multiple is a reference only and never enters FDV filtering, sorting or coverage.
+- Every response checks the valuation contract. Definition drift, missing daily observations and expired sales evidence hold the affected metrics. Reviewed component histories recover explicit days omitted by overview charts; missing dates are never filled as zero. Daily archives include coverage by period and numerator, a definition-review queue and calculation-source hashes.
 - The server caches a compressed joined snapshot for 30 minutes. Browser observations retain up to 60 days and the review baseline moves only when acknowledged.
 
-Current rule version: `research-v7-sales-and-holder-windows`. See [SCREENER_V7.md](./docs/SCREENER_V7.md) for definitions, coverage, audit and design research; [HANDOFF.md](./docs/HANDOFF.md) for deployment receipts; [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for production guards. V6 documentation is historical.
+Current rule version: `research-v8-coverage-and-holder-types`. See [SCREENER_V8.md](./docs/SCREENER_V8.md) for definitions, coverage and audit; [HANDOFF.md](./docs/HANDOFF.md) for deployment receipts; [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for production guards. Earlier version documents are historical where superseded.
 
 ## 개발
 

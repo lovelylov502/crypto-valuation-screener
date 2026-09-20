@@ -1,10 +1,10 @@
 # 재발견 후보 점수 방법론
 
-> Current contract: [SCREENER_V6.md](./SCREENER_V6.md), `research-v6-fundamental-scope`. The sections below are the historical v3 baseline and are superseded where they conflict with v6.
+> Current contract: [SCREENER_V8.md](./SCREENER_V8.md), `research-v8-coverage-and-holder-types`. The sections below preserve the historical v3 baseline. V8 includes reviewed native fee burns and conditional staking/lock/voter distributions with explicit conditions; its eligibility, sales/revenue distinction and dated-window rules supersede conflicting statements below.
 
 목표는 단순히 멀티플이 낮은 코인이 아니라 **토큰에 귀속되는 펀더멘털은 개선되지만 가격에는 아직 충분히 반영되지 않은 프로젝트**를 찾는 것이다.
 
-현재 점수 버전은 `rediscovery-v3-holder-classifier`다.
+아래에 기록된 당시 점수 버전은 `rediscovery-v3-holder-classifier`다.
 
 ## Holder value 정규화와 적격성
 

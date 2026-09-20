@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process";
 import { fetchCoins } from "../lib/sources";
 import { assembleScreener } from "../lib/screener";
 import { fundamentalErrors } from "../lib/fundamentalContract";
-import { holderMultiple } from "../lib/valuationMetrics";
+import { metricCoverage, definitionReviewQueue } from "../lib/metricCoverage";
 import { makeSnapshot } from "../lib/snapshotHistory";
 import type { SourceObservation } from "../lib/types";
 
@@ -27,8 +27,8 @@ async function main() {
     "snapshot.json": Buffer.from(JSON.stringify(makeSnapshot(data))),
     "quality.json": Buffer.from(JSON.stringify({
       at, rows: data.coins.length,
-      coverage: { sales: data.coins.filter(c => c.multiples.psSales !== null).length, protocolRevenue: data.coins.filter(c => c.multiples.pr !== null).length, holder: Object.fromEntries(([7,30,90,365] as const).map(n => [n, data.coins.filter(c => holderMultiple(c,n) !== null).length])) },
-      review: data.coins.filter(c => c.sales?.status === "expired" || [...c.fundamentals.revenue.components,...c.fundamentals.fees.components,...c.fundamentals.holders].some(p => p.status === "changed")).map(c => ({slug:c.slug,issues:c.opportunities.dataIssues})),
+      coverage: Object.fromEntries((["mcap","fdv"] as const).map(basis=>[basis,Object.fromEntries(([7,30,90,365,"any"] as const).map(window=>[window,metricCoverage(data.coins,basis,window)]))])),
+      review: definitionReviewQueue(data.coins),
       errors: data.coins.flatMap(c => fundamentalErrors(c).map(error => ({slug:c.slug,error}))),
     }, null, 2)),
   };
@@ -68,6 +68,8 @@ async function main() {
     "lib/salesSource.ts",
     "lib/salesEvidence.json",
     "lib/holderHistorySource.ts",
+    "lib/completeHistorySource.ts",
+    "lib/metricCoverage.ts",
     "lib/capitalEligibility.ts",
   ]) {
     ruleHashes[name] = createHash("sha256")
@@ -104,6 +106,10 @@ async function main() {
       scoreVersion: data.scoreVersion,
     }),
   );
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    const c = metricCoverage(data.coins,"fdv","any"), queue=definitionReviewQueue(data.coins);
+    await writeFile(process.env.GITHUB_STEP_SUMMARY,`FDV coverage: ${c.unique}/${c.total} distinct rows; P/R ${c.revenue}, P/HR ${c.holder}, P/S ${c.sales} (overlapping).\n\nWithheld with source data: ${c.review}. Missing period sources: ${c.missing}. Review queue: ${queue.length} rows; details in quality.json.\n`,{flag:"a"});
+  }
   if (data.coins.some(c => fundamentalErrors(c).length)) throw new Error("Valuation contract failed; diagnostic snapshot retained");
   if (data.cmcCoverage === 0)
     throw new Error(

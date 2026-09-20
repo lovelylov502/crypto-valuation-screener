@@ -1,5 +1,13 @@
 # Handoff
 
+## 2026-09-21 — v8 coverage and popup implementation
+
+The user authorized the project-wide coverage correction and replacing the permanent sidebar with CoinGecko-style filter/display popups. Current contract is `research-v8-coverage-and-holder-types`; [SCREENER_V8.md](./SCREENER_V8.md) records definitions, source recovery, retained exclusions and exact comparison counts. Existing browser preferences migrate without resetting columns, numerator or filters. All confirmed holder mechanisms include explicit conditions; absent FDV stays unavailable with a separately labeled circulating-cap reference.
+
+The frozen 581-row comparison changes displayed P/R/P-HR results for 41 rows with no market-numerator or universe changes. FDV 30-day P/R moves 101→108, P/HR 34→54 and distinct coverage 116→135. Across any supported period, FDV coverage is 142 and circulating-cap coverage 163. 6,192 raw rows and all 581 screened rows pass formula/schema checks; 48 archived sources pass HTTP and semantic validation. Definitions retain unknown/mixed outcomes and daily histories retain genuine gaps. Full methodology review was not an independent audit of every project's finances.
+
+Local validation includes 194 application tests, TypeScript and production build; popup keyboard focus, desktop/mobile layout, pointer/keyboard column ordering and reload persistence, Aave's positive historical/zero-30-day case, and explicit FDV-unavailable reference behavior were checked in the browser. Daily capture smoke at 2026-09-20T17:42:16.980Z produced 581 rows with zero source failures. Evidence is outside Git under the task's `outputs/coverage-v8`. The final guarded production checks and receipt are recorded separately after deployment.
+
 ## 2026-09-21 — column usability production receipt
 
 Application commit `1e2d59a1cad051539fffad3088dc151b1aaff8c2` is live through the guarded canonical `npm run deploy:production` route. Deployment `dpl_DBqEECRAyrhEuP3T2GiLvWyauRnW`, unique URL https://crypto-valuation-screener-moq1w1bgv-bodycation.vercel.app, is READY in production. Authenticated deployment readback confirms the exact main commit, expected project and https://crypto-valuation-screener.vercel.app alias.

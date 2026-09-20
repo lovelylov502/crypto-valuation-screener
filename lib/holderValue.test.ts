@@ -51,12 +51,12 @@ describe("classifyHolderMethodology", () => {
     [
       "native_fee_burn",
       "All the collected fees are burned.",
-      false,
+      true,
     ],
     [
       "ve_voter_locker_distribution",
       "Fees are forwarded to FeeVotingReward for distribution to veAERO voters.",
-      false,
+      true,
     ],
     [
       "unclear_other",
@@ -111,12 +111,12 @@ describe("classifyHolderMethodology", () => {
     [
       "ve_voter_locker_distribution",
       "72% of swap fees allocated to token holders, plus all bribes paid to holders who vote.",
-      false,
+      true,
     ],
     [
       "ve_voter_locker_distribution",
       "The protocol's 50% share of swap fees plus external bribes, all distributed to AQUA holders who voted for the markets where they were collected.",
-      false,
+      true,
     ],
     [
       "market_buyback",
@@ -356,13 +356,13 @@ describe("classifyHolderMethodology", () => {
       "Ramses CL",
       "72% of swap fees allocated to token holders, plus all bribes paid to holders who vote.",
       "ve_voter_locker_distribution",
-      false,
+      true,
     ],
     [
       "Aquarius",
       "The protocol's 50% share of swap fees plus external bribes, all distributed to AQUA holders who voted for the markets where they were collected.",
       "ve_voter_locker_distribution",
-      false,
+      true,
     ],
     [
       "Pump",
@@ -462,14 +462,14 @@ describe("aggregateHolderValueByGroup", () => {
     expect(result).toMatchObject({
       sourceStatus: "defillama-derived",
       availability: "mixed",
-      eligibleCurrent30d: 300,
-      eligiblePrevious30d: 200,
-      eligibleRunRate: 3_650,
+      eligibleCurrent30d: 400,
+      eligiblePrevious30d: 280,
+      eligibleRunRate: 400 * 365 / 30,
       rawCurrent30d: 450,
       rawPrevious30d: 320,
       rawTtm: 4_500,
-      excludedCurrent30d: 150,
-      excludedTtm: 1_500,
+      excludedCurrent30d: 50,
+      excludedTtm: 500,
       excludedDoublecountedCount: 1,
       phrUnavailableReason: null,
     });
@@ -510,7 +510,7 @@ describe("aggregateHolderValueByGroup", () => {
     expect(result?.phrUnavailableReason).toContain("최근 30일");
   });
 
-  it("keeps current excluded flows visible without making them P/HR eligible", () => {
+  it("includes native fee burns as a distinct non-cash holder mechanism", () => {
     const result = aggregateHolderValueByGroup(
       [
         {
@@ -526,13 +526,11 @@ describe("aggregateHolderValueByGroup", () => {
     ).get("canton");
 
     expect(result).toMatchObject({
-      availability: "excluded",
-      eligibleCurrent30d: null,
-      eligibleRunRate: null,
-      rawCurrent30d: 50_700_736,
-      rawTtm: 554_426_081,
-      excludedCurrent30d: 50_700_736,
+      availability: "eligible", eligibleCurrent30d: 50_700_736,
+      eligibleRunRate: 50_700_736 * 365 / 30,
+      rawCurrent30d: 50_700_736, rawTtm: 554_426_081, excludedCurrent30d: null,
     });
-    expect(result?.phrUnavailableReason).toContain("제외");
+    expect(result?.components[0].condition).toContain("현금 지급 없음");
+
   });
 });

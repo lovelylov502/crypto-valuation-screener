@@ -95,7 +95,9 @@
     "revenueKind": "mixed",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/badger-dao"
   },
   "lido": {
     "methodology": {
@@ -221,7 +223,11 @@
     "revenueKind": "protocol_revenue",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-19",
+    "holderType": "market_buyback",
+    "holderReason": "시장 매입한 ORCA를 xORCA 금고에 지급",
+    "holderCondition": "xORCA 스테이킹",
+    "reviewSource": "https://forums.orca.so/t/council-update-increased-xorca-buyback-rewards-fueled-by-protocol-fee-revenue-20-to-40-and-r-d-grant/1129"
   },
   "quickswap-dex": {
     "methodology": {
@@ -249,7 +255,12 @@
     "revenueKind": "mixed",
     "feeKind": "mixed",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Rewards and external voting incentives coexist; visible conditional return only after exact recipient review.",
+    "reviewSource": "https://defillama.com/protocol/convex-finance",
+    "holderType": "unclear_other",
+    "holderReason": "CVX 홀더와 cvxCRV/cvxFXS 수령자의 집계가 혼합 · CVX 귀속액 분리 필요",
+    "holderCondition": "CVX 락업과 다른 자산 스테이킹을 분리 확인"
   },
   "pendle-v2": {
     "methodology": {
@@ -333,7 +344,9 @@
     "revenueKind": "unknown",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/illuvium"
   },
   "save": {
     "methodology": {
@@ -403,7 +416,9 @@
     "revenueKind": "unknown",
     "feeKind": "mixed",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Aggregate includes delegates as well as protocol; supplier/manager share cannot be separated from this series.",
+    "reviewSource": "https://defillama.com/protocol/maple"
   },
   "reserve-protocol": {
     "methodology": {
@@ -543,7 +558,9 @@
     "revenueKind": "unknown",
     "feeKind": "asset_yield",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/api3"
   },
   "benqi-staked-avax": {
     "methodology": {
@@ -851,7 +868,9 @@
     "revenueKind": "mixed",
     "feeKind": "asset_yield",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/veno-finance"
   },
   "thena-v1": {
     "methodology": {
@@ -879,7 +898,9 @@
     "revenueKind": "mixed",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/inverse-finance-firm"
   },
   "liqwid": {
     "methodology": {
@@ -907,7 +928,9 @@
     "revenueKind": "mixed",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/rarible"
   },
   "ens": {
     "methodology": {
@@ -949,7 +972,9 @@
     "revenueKind": "unknown",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/frax-fpi"
   },
   "streamflow": {
     "methodology": {
@@ -1005,7 +1030,9 @@
     "revenueKind": "unknown",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/chainlink-requests"
   },
   "ether.fi-stake": {
     "methodology": {
@@ -1131,7 +1158,9 @@
     "revenueKind": "unknown",
     "feeKind": "asset_yield",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/sui-foundation"
   },
   "stusdt": {
     "methodology": {
@@ -1187,7 +1216,9 @@
     "revenueKind": "unknown",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/fx-protocol"
   },
   "lista-liquid-staking": {
     "methodology": {
@@ -1215,7 +1246,9 @@
     "revenueKind": "mixed",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/hydration-dex"
   },
   "thena-perps": {
     "methodology": {
@@ -1271,7 +1304,9 @@
     "revenueKind": "mixed",
     "feeKind": "mixed",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/hipo"
   },
   "hopr": {
     "methodology": {
@@ -1285,7 +1320,9 @@
     "revenueKind": "unknown",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/hopr"
   },
   "kamino-lend": {
     "methodology": {
@@ -1313,7 +1350,9 @@
     "revenueKind": "unknown",
     "feeKind": "unknown",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/frankencoin"
   },
   "solana-name-service": {
     "methodology": {
@@ -1341,7 +1380,9 @@
     "revenueKind": "unknown",
     "feeKind": "unknown",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Transfers to reserve/staking establish token purchases, not complete service sales. Use holder series separately.",
+    "reviewSource": "https://defillama.com/protocol/chainlink-staking"
   },
   "renzo": {
     "methodology": {
@@ -1520,10 +1561,12 @@
       "SupplySideRevenue": null,
       "UserFees": null
     },
-    "revenueKind": "unknown",
+    "revenueKind": "protocol_revenue",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Access-service fees retained for the foundation and governance-token repurchases. Do not add the repurchase amount again.",
+    "reviewSource": "https://defillama.com/protocol/geodnet"
   },
   "river-omni-cdp": {
     "methodology": {
@@ -1775,7 +1818,9 @@
     "revenueKind": "unknown",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/goplus-security-app"
   },
   "velo-finance": {
     "methodology": {
@@ -1845,7 +1890,9 @@
     "revenueKind": "unknown",
     "feeKind": "asset_yield",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/tether"
   },
   "limitless-exchange": {
     "methodology": {
@@ -1990,7 +2037,7 @@
   "virtuals-protocol": {
     "methodology": {
       "Revenue": "Fees collected by the Protocol.",
-      "Fees": "Revenue from Virtual Protocol across several streams: 1) Base Virtual-fun (legacy buy/sell transactions), 2) Base Virtual-app (legacy non-trading), 3) Base CBBTC-prototype (direct transfers to prototype wallet), 4) Base CBBTC-sentient (outflows from tax manager representing agent treasury distributions), 5) the new 1% platform fee collected in USD stablecoins (USDC on Base, USDG on Robinhood) to the platform tax wallet, and 6) Solana, in two parts: the pre-DBC bonding tax collected as VIRTUAL from 2025-02, and from 2026-08-21 the trading tax distributed in JupUSD, the Solana analogue of the USDC and USDG legs and likewise covering bonding and post-graduation trading alike. Also includes Ethereum VIRTUAL transfers to the protocol dev/ecosystem wallet. Individual ecosystem and treasury transfers are replaced by the tax manager outflow method to avoid double counting.",
+      "Fees": "Revenue from Virtual Protocol across several streams: 1) Base Virtual-fun (legacy buy/sell transactions), 2) Base Virtual-app (legacy non-trading), 3) Base CBBTC-prototype (direct transfers to prototype wallet), 4) Base CBBTC-sentient (outflows from tax manager representing agent treasury distributions), 5) the new 1% platform fee collected in USD stablecoins (USDC on Base, USDG on Robinhood) to the platform tax wallet, 6) Arc, where the current-generation bonding stack went live 2026-09-14 and the FRouter pushes its 1% buy/sell tax into the FFactory tax vault as VIRTUAL, accrued at trade time and read from chain logs rather than Dune, together with the flat launch fee paid in VIRTUAL to the same Virtuals fee wallet Base uses, and 7) Solana, in two parts: the pre-DBC bonding tax collected as VIRTUAL from 2025-02, and from 2026-08-21 the trading tax distributed in JupUSD, the Solana analogue of the USDC and USDG legs and likewise covering bonding and post-graduation trading alike. Also includes Ethereum VIRTUAL transfers to the protocol dev/ecosystem wallet. Individual ecosystem and treasury transfers are replaced by the tax manager outflow method to avoid double counting.",
       "HoldersRevenue": null,
       "ProtocolRevenue": "Revenue from all sources to the Protocol.",
       "SupplySideRevenue": null,
@@ -1999,7 +2046,9 @@
     "revenueKind": "mixed",
     "feeKind": "mixed",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Current methodology combines platform fees, token taxes, agent-treasury distributions and other wallet transfers. Complete protocol-retained earned-revenue attribution is unresolved; retain source amounts without P/R.",
+    "reviewSource": "https://defillama.com/protocol/virtuals-protocol"
   },
   "trust-wallet-wallet": {
     "methodology": {
@@ -2069,7 +2118,9 @@
     "revenueKind": "mixed",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/liquity-v2"
   },
   "kaio": {
     "methodology": {
@@ -2083,7 +2134,9 @@
     "revenueKind": "unknown",
     "feeKind": "unknown",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/kaio"
   },
   "hyperliquid-spot-orderbook": {
     "methodology": {
@@ -2097,7 +2150,12 @@
     "revenueKind": "mixed",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Trading-fee purchases plus native deployment-fee burns. Holder mechanisms shown together without adding the same flow twice.",
+    "reviewSource": "https://defillama.com/protocol/hyperliquid-spot-orderbook",
+    "holderType": "mixed_holder_return",
+    "holderReason": "수수료 재원의 HYPE 매입과 HIP-1 HYPE 수수료 소각을 원천 합계로 한 번만 집계",
+    "holderCondition": "시장매입·토큰 소각; 현금 지급 없음"
   },
   "infrared-finance": {
     "methodology": {
@@ -2136,10 +2194,12 @@
       "SupplySideRevenue": null,
       "UserFees": null
     },
-    "revenueKind": "unknown",
+    "revenueKind": "protocol_revenue",
     "feeKind": "unknown",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Explicit fee collections retained by protocol; other GoPlus components without definitions still block the grouped multiple.",
+    "reviewSource": "https://defillama.com/protocol/goplus-locker-v2"
   },
   "jupiter-dca": {
     "methodology": {
@@ -2279,7 +2339,9 @@
     "revenueKind": "unknown",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Prepaid storage fees distributed over time to storage providers; not protocol-retained earned revenue.",
+    "reviewSource": "https://defillama.com/protocol/walrus-protocol"
   },
   "lista-lending": {
     "methodology": {
@@ -2293,7 +2355,9 @@
     "revenueKind": "mixed",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Protocol fees plus own-position investment yield are mixed; do not treat both as comparable sales.",
+    "reviewSource": "https://defillama.com/protocol/lista-lending"
   },
   "arbitrum-timeboost": {
     "methodology": {
@@ -2472,10 +2536,12 @@
       "SupplySideRevenue": "Gross fees minus NEAR's captured revenue - the affiliate fees kept by solvers and third-party distribution channels (e.g. SwapKit).",
       "UserFees": null
     },
-    "revenueKind": "unknown",
+    "revenueKind": "protocol_revenue",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Net captured Intents fees, internal wallet transfers excluded; buybacks are an allocation of this revenue.",
+    "reviewSource": "https://defillama.com/protocol/near-intents"
   },
   "smardex-p2p-lending": {
     "methodology": {
@@ -2503,7 +2569,9 @@
     "revenueKind": "unknown",
     "feeKind": "asset_yield",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Curator receipts cannot be attributed wholly to this governance token without a recipient bridge.",
+    "reviewSource": "https://defillama.com/protocol/yearn-curating"
   },
   "bonk.fun-launchpad": {
     "methodology": {
@@ -2642,8 +2710,10 @@
     },
     "revenueKind": "service_sales",
     "feeKind": "user_fees",
-    "holderShareReviewed": true,
-    "reviewedAt": "2026-09-19"
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/tree-news"
   },
   "basedapp": {
     "methodology": {
@@ -2671,7 +2741,9 @@
     "revenueKind": "unknown",
     "feeKind": "asset_yield",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/gaib"
   },
   "boros": {
     "methodology": {
@@ -2783,7 +2855,12 @@
     "revenueKind": "unknown",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Orchestrators/delegators provide the network service; fees are not established as governance-holder return.",
+    "reviewSource": "https://defillama.com/protocol/livepeer",
+    "holderType": "unclear_other",
+    "holderReason": "오케스트레이터·서비스 공급자 보상과 홀더 귀속 분리 미확인",
+    "holderCondition": "서비스 공급·위임 조건"
   },
   "sport.fun": {
     "methodology": {
@@ -2839,7 +2916,9 @@
     "revenueKind": "mixed",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Net gacha sales and marketplace fee mix; card inventory, returns and timing are not separately established.",
+    "reviewSource": "https://defillama.com/protocol/collector-crypt"
   },
   "lighter-perps": {
     "methodology": {
@@ -2979,7 +3058,12 @@
     "revenueKind": "unknown",
     "feeKind": "unknown",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/ore-protocol",
+    "holderType": "mixed_holder_return",
+    "holderReason": "사용 수수료의 ORE 매입·소각 및 스테이커 분배",
+    "holderCondition": "스테이킹 분배·토큰 소각"
   },
   "rain": {
     "methodology": {
@@ -3186,10 +3270,12 @@
       "SupplySideRevenue": null,
       "UserFees": "All fees are paid by end-users either to purchase AI credits or to create datanets within the protocol."
     },
-    "revenueKind": "service_sales",
+    "revenueKind": "unknown",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Credit purchases include prepaid deposits; earned-revenue timing is not separated. Withhold comparable revenue multiple.",
+    "reviewSource": "https://defillama.com/protocol/openledger"
   },
   "o1.exchange-trading-terminal": {
     "methodology": {
@@ -3231,7 +3317,9 @@
     "revenueKind": "unknown",
     "feeKind": "unknown",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/groypfi"
   },
   "rhea-cross-chain": {
     "methodology": {
@@ -3245,7 +3333,9 @@
     "revenueKind": "unknown",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/rhea-cross-chain"
   },
   "flying-tulip-yield": {
     "methodology": {
@@ -3259,7 +3349,9 @@
     "revenueKind": "unknown",
     "feeKind": "mixed",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/flying-tulip-yield"
   },
   "flock.io": {
     "methodology": {
@@ -3326,10 +3418,12 @@
       "SupplySideRevenue": null,
       "UserFees": null
     },
-    "revenueKind": "service_sales",
+    "revenueKind": "unknown",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Membership bookings/card purchases do not establish earned revenue timing; retain receipts but withhold comparable multiple.",
+    "reviewSource": "https://defillama.com/protocol/tria-card"
   },
   "arena-perps": {
     "methodology": {
@@ -3357,7 +3451,9 @@
     "revenueKind": "unknown",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/hyperlane"
   },
   "minswap-aggregator": {
     "methodology": {
@@ -3427,7 +3523,9 @@
     "revenueKind": "unknown",
     "feeKind": "asset_yield",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/world-liberty-financial"
   },
   "kinetiq-markets": {
     "methodology": {
@@ -3595,7 +3693,9 @@
     "revenueKind": "mixed",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/ready-cards"
   },
   "apriori": {
     "methodology": {
@@ -3623,7 +3723,9 @@
     "revenueKind": "unknown",
     "feeKind": "mixed",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/fidelity-digital-interest-token"
   },
   "openchat": {
     "methodology": {
@@ -3637,7 +3739,9 @@
     "revenueKind": "service_sales",
     "feeKind": "user_fees",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Membership charges in CHAT are service receipts. Eligible for labeled service-revenue P/R; not independently reported business P/S.",
+    "reviewSource": "https://defillama.com/protocol/openchat"
   },
   "venice": {
     "methodology": {
@@ -3749,7 +3853,12 @@
     "revenueKind": "unknown",
     "feeKind": "unknown",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Burn-mint service model includes node-operator compensation and offchain fee estimate; burn alone does not establish net holder return.",
+    "reviewSource": "https://defillama.com/protocol/render-network-bme",
+    "holderType": "unclear_other",
+    "holderReason": "서비스 공급자 보상과 결합한 Burn-Mint 구조 · 순환원 확인 필요",
+    "holderCondition": "노드 보상·발행량 별도 확인"
   },
   "near-perps": {
     "methodology": {
@@ -3791,7 +3900,9 @@
     "revenueKind": "unknown",
     "feeKind": "asset_yield",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/ripple-usd"
   },
   "avici": {
     "methodology": {
@@ -3805,7 +3916,9 @@
     "revenueKind": "unknown",
     "feeKind": "unknown",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Interchange is estimated as 1.25% of spend, not directly measured retained fee receipts.",
+    "reviewSource": "https://defillama.com/protocol/avici"
   },
   "kinetiq-launch": {
     "methodology": {
@@ -3970,10 +4083,12 @@
       "SupplySideRevenue": "Actual swap credits allocated to creators and referrers, including amounts still unclaimed.",
       "UserFees": null
     },
-    "revenueKind": "unknown",
+    "revenueKind": "protocol_revenue",
     "feeKind": "unknown",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Retained platform fees, not gross swap value; source-valued stock-leg convention requires separate source disclosure.",
+    "reviewSource": "https://defillama.com/protocol/o1-launchpad"
   },
   "jupiter-lend-dex": {
     "methodology": {
@@ -4001,7 +4116,9 @@
     "revenueKind": "unknown",
     "feeKind": "unknown",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Investment income origin/timing is not established by the methodology.",
+    "reviewSource": "https://defillama.com/protocol/lista-pre-ipo"
   },
   "pons-v2": {
     "methodology": {
@@ -4071,7 +4188,9 @@
     "revenueKind": "mixed",
     "feeKind": "mixed",
     "holderShareReviewed": false,
-    "reviewedAt": "2026-09-19"
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Token-tax funded stock distributions coexist with protocol fees; do not combine them as comparable service revenue.",
+    "reviewSource": "https://defillama.com/protocol/the-index"
   },
   "prizm": {
     "methodology": {
@@ -4226,5 +4345,1306 @@
       "SupplySideRevenue": null,
       "UserFees": null
     }
+  },
+  "spark-liquidity-layer": {
+    "methodology": {
+      "Revenue": "Fees collected minus the Sky Base Rate (vault stability fee) plus the monthly offchain rebate calculation for things like idle USDS.",
+      "Fees": "Total interest earned on all loans.",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "All revenue are collected by Spark protocol.",
+      "SupplySideRevenue": "Fees collected distributed to supply-side depositors.",
+      "UserFees": null
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Protocol spread after Sky base-rate expense, including documented offchain rebates. Provider estimate, not audited company sales.",
+    "reviewSource": "https://defillama.com/protocol/spark-liquidity-layer"
+  },
+  "sparklend": {
+    "methodology": {
+      "Revenue": "Amount of fees go to Spark treasury.",
+      "Fees": "Include borrow interest, flashloan fee, liquidation fee and penalty paid by borrowers.",
+      "HoldersRevenue": "SPK tokens bought back by Spark treasury using protocol surplus.",
+      "ProtocolRevenue": "Amount of fees go to Spark treasury.",
+      "SupplySideRevenue": "Amount of fees distributed to suppliers.",
+      "UserFees": "Interest paid by borrowers"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/sparklend"
+  },
+  "pancakeswap-amm": {
+    "methodology": {
+      "Revenue": "All revenue generated comes from user fees.",
+      "Fees": "All fees comes from the user.",
+      "HoldersRevenue": "0.0575% is used to facilitate CAKE buyback and burn.",
+      "ProtocolRevenue": "Treasury receives 0.0225% of each swap.",
+      "SupplySideRevenue": "LPs receive 0.17% of the fees.",
+      "UserFees": "User pays 0.25% fees on each swap."
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/pancakeswap-amm"
+  },
+  "pancakeswap-amm-v3": {
+    "methodology": {
+      "Revenue": "Pancakeswap collects amount of swap fees for Treasury and buy back CAKE.",
+      "Fees": "Total trading fees - sum of LP fees and protocol fees. LP fees vary by pool type (0.25% for most pools, with some special pools having different rates). Protocol fees are 0.05% for most pools.",
+      "HoldersRevenue": "Swap fees collected to buyback and burn CAKE: 15% fees in 0.01%, 0.05% tier pools, 23% fees in 0.25%, 1% tier pools",
+      "ProtocolRevenue": "Swap fees collected by Pancakeswap - distribute to Treasury",
+      "SupplySideRevenue": "Fees distributed to LPs",
+      "UserFees": "All trading fees paid by users"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/pancakeswap-amm-v3"
+  },
+  "pancakeswap-infinity": {
+    "methodology": {
+      "Revenue": "Share of swap fees to protocol and holders.",
+      "Fees": "Total swap fees paid by users.",
+      "HoldersRevenue": "50% of revenue are used to buy back and burn CAKE",
+      "ProtocolRevenue": "50% of revenue are collected by protocol.",
+      "SupplySideRevenue": "Share of swap fees to LPs.",
+      "UserFees": "Swap fees paid by users"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/pancakeswap-infinity"
+  },
+  "pancakeswap-lottery": {
+    "methodology": {
+      "Revenue": "20% of the lottery amount goes to CAKE buy-back and burn",
+      "Fees": "20% of the lottery amount goes to CAKE buy-back and burn",
+      "HoldersRevenue": "20% of the lottery amount goes to CAKE buy-back and burn",
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": null
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/pancakeswap-lottery"
+  },
+  "pancakeswap-prediction": {
+    "methodology": {
+      "Revenue": "All of the fee is kept. Winners are paid out of the losing stakes, so there are no liquidity providers or market makers taking a share.",
+      "Fees": "3% of each round's total pot, counting both the winning and the losing stakes, taken when the round settles. When a round ends with nobody to pay out - the price finishes exactly where it started, or every bet was on the losing side — the whole pot goes to the treasury instead.",
+      "HoldersRevenue": "All the revenue goes to CAKE buyback and burn",
+      "ProtocolRevenue": "Zero. Everything the treasury collects is spent on buying back and burning CAKE, so none of it is retained.",
+      "SupplySideRevenue": null,
+      "UserFees": null
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/pancakeswap-prediction"
+  },
+  "pancakeswap-stableswap": {
+    "methodology": {
+      "Revenue": "Half of the swap fees (the pool admin fee); the other half stays with liquidity providers.",
+      "Fees": "Total swap fees charged to traders, using each pool's on-chain fee rate.",
+      "HoldersRevenue": "40% of swap fees (80% of the admin fee) funds CAKE buyback and burn.",
+      "ProtocolRevenue": "Treasury keeps 10% of swap fees (20% of the admin fee).",
+      "SupplySideRevenue": "Liquidity providers keep 50% of swap fees (the non-admin half).",
+      "UserFees": "Traders pay each pool's configured swap fee, read on-chain per pool (ranges roughly 0.01%–0.25%)."
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/pancakeswap-stableswap"
+  },
+  "uniswap-v1": {
+    "methodology": {
+      "Revenue": "Protocol makes no revenue.",
+      "Fees": "User pays 0.3% fees on each swap.",
+      "HoldersRevenue": "No revenue for UNI holders.",
+      "ProtocolRevenue": "Protocol makes no revenue.",
+      "SupplySideRevenue": "All fees are distributed to LPs.",
+      "UserFees": "User pays 0.3% fees on each swap."
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/uniswap-v1"
+  },
+  "uniswap-v2": {
+    "methodology": {
+      "Revenue": "From 28 Dec 2025, 17% (0% before) fees on Ethereum, From 8 Mar 2026, 17% (0% before) fees on Optimism, Arbitrum, Base, Zora, XLayer chains shared to buy back and burn UNI. (Tracked combined in Uniswap V3 adapter)",
+      "Fees": "User pays 0.3% fees on each swap.",
+      "HoldersRevenue": "From 28 Dec 2025, 17% (0% before) fees on Ethereum shared to buy back and burn UNI, From 8 Mar 2026, 17% (0% before) fees on Optimism, Arbitrum, Base, Zora, XLayer chains shared to buy back and burn UNI (Tracked combined in Uniswap V3 adapter)",
+      "ProtocolRevenue": "Protocol make no revenue.",
+      "SupplySideRevenue": "83% (100% before fee switch) of fees are distributed to liquidity providers.",
+      "UserFees": "User pays 0.3% fees on each swap."
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "V2 fee-switch flow is tracked in the V3 series; preserve provider zero/absence and doublecount flags, never add a derived V2 estimate.",
+    "reviewSource": "https://defillama.com/protocol/uniswap-v2"
+  },
+  "uniswap-v3": {
+    "methodology": {
+      "Revenue": "From 28 Dec 2025, a portion of fees a collected to buy back and burn UNI on Ethereum, From 8 Mar 2026, on Optimism, Arbitrum, Base, WC, Zora, XLayer, From 2 Jun 2026, on Polygon, BSC, Celo, From 27 Jul 2026, on Robinhood",
+      "Fees": "Swap fees from paid by users.",
+      "HoldersRevenue": "From 28 Dec 2025, a portion of fees a collected to buy back and burn UNI on Ethereum, From 8 Mar 2026, on Optimism, Arbitrum, Base, WC, Zora, XLayer, From 2 Jun 2026, on Polygon, BSC, Celo, From 27 Jul 2026, on Robinhood",
+      "ProtocolRevenue": "Protocol make no revenue.",
+      "SupplySideRevenue": "Fees distributed to LPs post protocol fee collection",
+      "UserFees": "User pays fees on each swap."
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/uniswap-v3"
+  },
+  "uniswap-v4": {
+    "methodology": {
+      "Revenue": "Fee switch enabled on 27 Jul 2026 (tracked in uniswap-v3 adapter), a part of fees collected to buy back and burn UNI.",
+      "Fees": "Swap fees paid by users.",
+      "HoldersRevenue": "Fee switch enabled on 27 Jul 2026 (tracked in uniswap-v3 adapter), a part of fees collected to buy back and burn UNI.",
+      "ProtocolRevenue": "Protocol makes no revenue.",
+      "SupplySideRevenue": "Part of fees distributed to LPs after protocol cut. (It was 100% of fees before fee switch(27 Jul 2026)).",
+      "UserFees": "Swap fees paid by users."
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "V4 fee-switch flow is tracked in the V3 series; no synthetic reconstruction.",
+    "reviewSource": "https://defillama.com/protocol/uniswap-v4"
+  },
+  "meth-protocol": {
+    "methodology": {
+      "Revenue": "10% staking rewards are charged by mETH Protocol Treasury.",
+      "Fees": "Total validators fees and rewards from staked ETH.",
+      "HoldersRevenue": "No revenue share to COOK token holders.",
+      "ProtocolRevenue": "10% staking rewards are charged by mETH Protocol Treasury.",
+      "SupplySideRevenue": "90% staking rewards are distributed to mETH holders.",
+      "UserFees": "Percentage of rewards paid to protocol"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "asset_yield",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/meth-protocol"
+  },
+  "bedrock-unibtc": {
+    "methodology": {
+      "Revenue": "all uniBTC redemption fees are retained by Bedrock.",
+      "Fees": "uniBTC redemption fees paid by users when delayed redemption requests are created.",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "all uniBTC redemption fees are retained by Bedrock.",
+      "SupplySideRevenue": null,
+      "UserFees": "uniBTC redemption fees paid by users when delayed redemption requests are created."
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/bedrock-unibtc"
+  },
+  "bedrock-unieth": {
+    "methodology": {
+      "Revenue": "Bedrock manager commission on uniETH staking rewards.",
+      "Fees": "Gross uniETH staking rewards, calculated from uniETH exchangeRatio growth for holders plus the implied Bedrock manager commission.",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Bedrock manager commission on uniETH staking rewards.",
+      "SupplySideRevenue": "uniETH holder staking rewards measured from exchangeRatio growth.",
+      "UserFees": null
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "asset_yield",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/bedrock-unieth"
+  },
+  "bedrock-uniiotx": {
+    "methodology": {
+      "Revenue": "Bedrock manager commission on uniIOTX staking rewards.",
+      "Fees": "Gross uniIOTX staking rewards, calculated from uniIOTX exchangeRatio growth for holders plus the implied Bedrock manager commission.",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Bedrock manager commission on uniIOTX staking rewards.",
+      "SupplySideRevenue": "uniIOTX holder staking rewards measured from exchangeRatio growth.",
+      "UserFees": "Percentage of rewards paid to protocol"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "asset_yield",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/bedrock-uniiotx"
+  },
+  "euler-v2": {
+    "methodology": {
+      "Revenue": "Fees collected by Euler protocol.",
+      "Fees": "Includes interest that is paid by the borrowers, protocol and curators fees.",
+      "HoldersRevenue": "Revenue used for buy back EUL tokens.",
+      "ProtocolRevenue": "Fees collected by Euler protocol.",
+      "SupplySideRevenue": "Fees distributed to vaults lenders and curators.",
+      "UserFees": "Interest paid by borrowers"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/euler-v2"
+  },
+  "drift-staked-sol": {
+    "methodology": {
+      "Revenue": "Includes withdrawal fees and management fees collected by fee collector",
+      "Fees": "Staking rewards from staked SOL on drift staked solana",
+      "HoldersRevenue": "No revenue share to DRIFT token holders",
+      "ProtocolRevenue": "Revenue going to treasury/team",
+      "SupplySideRevenue": "97.5% of the staking rewards go to stakers",
+      "UserFees": "Percentage of rewards paid to protocol"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "asset_yield",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/drift-staked-sol"
+  },
+  "drift-trade": {
+    "methodology": {
+      "Revenue": "Treasury and token holders revenue",
+      "Fees": "Fees paid by users",
+      "HoldersRevenue": "Fees going to governance token holders",
+      "ProtocolRevenue": "Fees going to treasury",
+      "SupplySideRevenue": "LPs revenue",
+      "UserFees": "Fees paid by users"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/drift-trade"
+  },
+  "sunpump": {
+    "methodology": {
+      "Revenue": "Total trading fees paid by users collected by SunPump",
+      "Fees": "Total trading fees paid by users",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": null
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/sunpump"
+  },
+  "sunswap-v1": {
+    "methodology": {
+      "Revenue": "The protocol keeps no revenue.",
+      "Fees": "Swap fees paid by users.",
+      "HoldersRevenue": "Money going to governance token holders",
+      "ProtocolRevenue": "Percentage of swap fees going to treasury",
+      "SupplySideRevenue": "All the swap fees are distributed to liquidity providers.",
+      "UserFees": "Swap fees paid by users"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/sunswap-v1"
+  },
+  "sunswap-v2": {
+    "methodology": {
+      "Revenue": "1/6 of all swap fees are used to buyback and burn SUN.",
+      "Fees": "A 0.3% fee is charged on each swap.",
+      "HoldersRevenue": "1/6 of all swap fees are used to buyback and burn SUN.",
+      "ProtocolRevenue": "The protocol keeps no revenue.",
+      "SupplySideRevenue": "5/6 of all swap fees are distributed to liquidity providers.",
+      "UserFees": "Swap fees paid by users"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/sunswap-v2"
+  },
+  "sunswap-v3": {
+    "methodology": {
+      "Revenue": "The protocol keeps no revenue.",
+      "Fees": "Swap fees paid by users.",
+      "HoldersRevenue": "Money going to governance token holders",
+      "ProtocolRevenue": "Percentage of swap fees going to treasury",
+      "SupplySideRevenue": "All the swap fees are distributed to liquidity providers.",
+      "UserFees": "Swap fees paid by users"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/sunswap-v3"
+  },
+  "beefy": {
+    "methodology": {
+      "Revenue": "All fees except for 0.5% to strategist and variable harvest() call fee are revenue",
+      "Fees": "9.5% of each harvest is charged as a performance fee",
+      "HoldersRevenue": "36% of revenue is distributed to holders who stake",
+      "ProtocolRevenue": "64% of revenue is distributed to the treasury",
+      "SupplySideRevenue": null,
+      "UserFees": null
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/beefy"
+  },
+  "vesper": {
+    "methodology": {
+      "Revenue": "vaTokens minted are protocol revenue.",
+      "Fees": "Tracks vaTokens minted to Vesper's Fee Recipient address.",
+      "HoldersRevenue": "Tracks VSP distributed to esVSP lockers.",
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": null
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/vesper"
+  },
+  "dydx-v3": {
+    "methodology": {
+      "Revenue": "Treasury and token holders revenue",
+      "Fees": "Fees paid by users",
+      "HoldersRevenue": "Fees going to governance token holders",
+      "ProtocolRevenue": "Fees going to treasury",
+      "SupplySideRevenue": "LPs revenue",
+      "UserFees": "Fees paid by users"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/dydx-v3"
+  },
+  "sushiswap": {
+    "methodology": {
+      "Revenue": "A share of each trade fee goes to xSUSHI stakers.",
+      "Fees": "SushiSwap Classic charges a flat 0.3% fee.",
+      "HoldersRevenue": "A share of each trade fee goes to xSUSHI stakers.",
+      "ProtocolRevenue": "Treasury does not receive SushiSwap Classic swap fees.",
+      "SupplySideRevenue": "Liquidity providers receive 5/6 of swap fees from trades in their pools.",
+      "UserFees": "Users pay a 0.3% fee on each trade."
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/sushiswap"
+  },
+  "sushiswap-agg": {
+    "methodology": {
+      "Revenue": "Trading fees collected by Sushi.",
+      "Fees": "Trading fees paid by users while using Sushi Aggregator Routers.",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Trading fees collected by Sushi.",
+      "SupplySideRevenue": null,
+      "UserFees": null
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/sushiswap-agg"
+  },
+  "sushiswap-v3": {
+    "methodology": {
+      "Revenue": "The share of each swap fee Sushi keeps rather than paying to liquidity providers - nothing on most pools, 25% where the protocol fee is switched on, and 50% on Katana",
+      "Fees": "Traders pay a swap fee set per pool, from 0.01% to 1% on most chains and up to 4% on Katana",
+      "HoldersRevenue": "Negligible (was 38% before Mid of October 2025). SUSHI stakers stopped receiving major part of swap fees in Mid of October 2025; so no part of the fee is counted as going to holders",
+      "ProtocolRevenue": "Sushi keeps all of its fee share, collected into a Sushi-controlled treasury wallet on each chain",
+      "SupplySideRevenue": "Liquidity providers keep the rest of the swap fee in the pools they fund",
+      "UserFees": "Users pay the pool's swap fee on every trade, from 0.01% to 1% on most chains and up to 4% on Katana"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/sushiswap-v3"
+  },
+  "folks-finance-lending": {
+    "methodology": {
+      "Revenue": "Protocol share of borrow interest.",
+      "Fees": "Borrow interest paid across all v2 money-market pools.",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Retention rate portion sent to the community treasury.",
+      "SupplySideRevenue": "Remaining borrow interest paid to depositors.",
+      "UserFees": "Interest paid by borrowers"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/folks-finance-lending"
+  },
+  "folks-finance-xchain": {
+    "methodology": {
+      "Revenue": "Protocol share of borrow interest (retention rate per pool).",
+      "Fees": "Borrow interest paid across all xChain hub pools.",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Retention rate portion sent to the protocol treasury.",
+      "SupplySideRevenue": "Remaining borrow interest paid to depositors.",
+      "UserFees": "Interest paid by borrowers"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/folks-finance-xchain"
+  },
+  "xalgo-liquid-staking": {
+    "methodology": {
+      "Revenue": "Protocol share of consensus rewards, claimed via claim_fee.",
+      "Fees": "Gross ALGO consensus staking rewards.",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Protocol share of consensus rewards, claimed via claim_fee.",
+      "SupplySideRevenue": "Remaining consensus rewards accrued to xALGO holders.",
+      "UserFees": "Percentage of rewards paid to protocol"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "asset_yield",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/xalgo-liquid-staking"
+  },
+  "dodo-amm": {
+    "methodology": {
+      "Revenue": "20% of swap fees retained by the protocol treasury",
+      "Fees": "All swap fees collected from DODO trading pairs across all pools",
+      "HoldersRevenue": "Money going to governance token holders",
+      "ProtocolRevenue": "Percentage of swap fees going to treasury",
+      "SupplySideRevenue": "80% of swap fees distributed to liquidity providers",
+      "UserFees": "Swap fees paid by users"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/dodo-amm"
+  },
+  "synapse-cross-chain-bridge": {
+    "methodology": {
+      "Revenue": "Bridge fees, AMM admin fees, flash loan protocol fees, CCTP protocol fees, FastBridge protocol fees, and MessageBus fees accrued to Synapse contracts.",
+      "Fees": "Bridge, AMM, flash loan, CCTP, RFQ, and messaging fees paid by users and emitted by Synapse contracts.",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Bridge fees, AMM admin fees, flash loan protocol fees, CCTP protocol fees, FastBridge protocol fees, and MessageBus fees accrued to Synapse contracts.",
+      "SupplySideRevenue": "AMM LP share and flash loan LP share.",
+      "UserFees": "Bridge, AMM, flash loan, CCTP, RFQ, and messaging fees paid by users and emitted by Synapse contracts."
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/synapse-cross-chain-bridge"
+  },
+  "wrapped-hlp": {
+    "methodology": {
+      "Revenue": "The share of fees for Looping Collective.",
+      "Fees": "Total fees generated from HLP by the WHLP vault and its deployed strategies.",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "The share of fees for Looping Collective.",
+      "SupplySideRevenue": "Yield distributed to WHLP holders.",
+      "UserFees": "Pays management + performance fees"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "asset_yield",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/wrapped-hlp"
+  },
+  "up-v2": {
+    "methodology": {
+      "Revenue": "V2 swap fees routed to veUP voters through gauges, equal to HoldersRevenue.",
+      "Fees": "Total v2 swap fees paid by traders, valued on the same pricing side used for volume. Fees use PoolFactory.getFee(pool, stable), where 30 means 0.30%.",
+      "HoldersRevenue": "V2 pool fees attributable to staked gauge LP share, estimated from pool.balanceOf(gauge) / pool.totalSupply.",
+      "ProtocolRevenue": "Percentage of swap fees going to treasury",
+      "SupplySideRevenue": "V2 liquidity provider fees not routed to veUP voters.",
+      "UserFees": "Swap fees directly paid by traders."
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/up-v2",
+    "holderType": "ve_voter_locker_distribution",
+    "holderReason": "게이지 LP 지분에서 발생한 수수료의 veUP 투표자 귀속",
+    "holderCondition": "veUP 락업·투표"
+  },
+  "up-v3": {
+    "methodology": {
+      "Revenue": "Concentrated liquidity fees routed to veUP voters through gauges, equal to HoldersRevenue.",
+      "Fees": "Total concentrated liquidity swap fees paid by traders, valued on the same pricing side used for volume. Fees use CLPool.fee(), where 3000 means 0.30%.",
+      "HoldersRevenue": "Voter fee share is measured from CLPool.gaugeFees() deltas plus CollectFees events and applied per token.",
+      "ProtocolRevenue": "Percentage of swap fees going to treasury",
+      "SupplySideRevenue": "Concentrated liquidity provider fees not routed to veUP voters.",
+      "UserFees": "Swap fees directly paid by traders."
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/up-v3",
+    "holderType": "ve_voter_locker_distribution",
+    "holderReason": "게이지가 추적한 수수료의 veUP 투표자 귀속",
+    "holderCondition": "veUP 락업·투표"
+  },
+  "xexchange": {
+    "methodology": {
+      "Revenue": "0.1% of each swap is not distributed to LPs (0.05% used for MEX buyback & burn, 0.05% distributed to Energy holders).",
+      "Fees": "A 0.3% fee is charged on each swap.",
+      "HoldersRevenue": "0.05% of each swap is distributed to all accounts holding Energy (xMEX lockers) and 0.05% used for MEX buyback & burn.",
+      "ProtocolRevenue": "Percentage of swap fees going to treasury",
+      "SupplySideRevenue": "0.2% of each swap is distributed to liquidity providers.",
+      "UserFees": "Users pay a 0.3% fee on each swap."
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/xexchange",
+    "holderType": "mixed_holder_return",
+    "holderReason": "MEX 매입·소각과 xMEX 락업자 분배; 원천 합계를 한 번만 집계",
+    "holderCondition": "소각·xMEX 락업 조건"
+  },
+  "1inch-aqua": {
+    "methodology": {
+      "Revenue": "The 1inch DAO's encoded share of each fill's swap fee: 1/4 of the LP fee on low-fee tiers (below ~0.1225%) and 1/6 on higher tiers, transferred to the purpose-deployed per-chain DAO fee exchanger at fill time. Positions created before the DAO fee launch (2026-07-19; enabled 2026-07-21 on BNB Chain and Robinhood Chain) carry no DAO fee and contribute only to SupplySideRevenue. Cross-checked against measured ERC20 inflows to the fee exchangers.",
+      "Fees": "Total Aqua swap fees paid by takers: each fill's taker-paid amount (Pushed event on the AquaRouter registry, fee-inclusive; strategy-registration pushes excluded) multiplied by the position's fee rate decoded from its on-chain strategy bytecode (SwapVM flat-fee instruction, 1e9 units = 100%). Fills of positions on the legacy developer-release registry (pre-2026-07-19, a handful of test positions on an earlier instruction set) are excluded.",
+      "HoldersRevenue": "Money going to governance token holders",
+      "ProtocolRevenue": "All DAO revenue accrues to the 1inch DAO treasury.",
+      "SupplySideRevenue": "The share of each fill's swap fee retained by the LP inside the maker-owned wallet (Aqua is non-custodial): total fee minus the DAO share.",
+      "UserFees": "Swap fees paid by users"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/1inch-aqua"
+  },
+  "pangolin-v2": {
+    "methodology": {
+      "Revenue": "0.05% of trade volume is protocol revenue.",
+      "Fees": "0.3% fee charged on each swap.",
+      "HoldersRevenue": "0.0425% of trade volume goes to token holders.",
+      "ProtocolRevenue": "0.0075% of trade volume goes to the protocol.",
+      "SupplySideRevenue": "0.25% of trade volume is distributed to LPs.",
+      "UserFees": "Users pay a 0.3% fee on each swap."
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/pangolin-v2"
+  },
+  "pangolin-v3": {
+    "methodology": {
+      "Revenue": "10% Fees to Pangolin Protocol treasury, 10% to PNG stakers",
+      "Fees": "Fees paid by users for swaps",
+      "HoldersRevenue": "10% Fees to PNG stakers",
+      "ProtocolRevenue": "10% Fees to Pangolin Protocol treasury",
+      "SupplySideRevenue": "80% Fees to liquidity providers",
+      "UserFees": "Fees paid by users for swaps"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/pangolin-v3"
+  },
+  "babydoge-algebra": {
+    "methodology": {
+      "Revenue": "Protocol keeps 3% of swap fees as revenue.",
+      "Fees": "All swap fees paid by users.",
+      "HoldersRevenue": "Money going to governance token holders",
+      "ProtocolRevenue": "3% of swap fees.",
+      "SupplySideRevenue": "Remaining 97% of fees.",
+      "UserFees": "Swap fees paid by users"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/babydoge-algebra"
+  },
+  "babydogeswap": {
+    "methodology": {
+      "Revenue": "Up to 0.1% of user fees are distributed to treasury",
+      "Fees": "Fees collected from user trading fees",
+      "HoldersRevenue": "Money going to governance token holders",
+      "ProtocolRevenue": "Up to 0.1% of user fees are distributed to treasury",
+      "SupplySideRevenue": "A 0.2% user fees is distributed among LPs",
+      "UserFees": "Users pays 0.3% of each swap. Different user fee discounts depending on Baby Doge wallet balance (up to 70% off). Calculation made with base 0.3%"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/babydogeswap"
+  },
+  "synthetix-v4": {
+    "methodology": {
+      "Revenue": "Trading fees retained by the protocol.",
+      "Fees": "Trading fees paid by users on Synthetix v4 perpetual futures trades.",
+      "HoldersRevenue": "Fees going to governance token holders",
+      "ProtocolRevenue": "Trading fees retained by the protocol.",
+      "SupplySideRevenue": "LPs revenue",
+      "UserFees": "Trading fees deducted from users' collateral balances."
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/synthetix-v4"
+  },
+  "cowswap": {
+    "methodology": {
+      "Revenue": "CoW DAO share: protocol fees, ~25% partner service fee, and 50% of MEV Blocker fees/sale proceeds",
+      "Fees": "Swap fees from the sell token: protocol fees (50% surplus + 2bps volume), partner fees, and MEV Blocker fees",
+      "HoldersRevenue": "No revenue to COW token holders",
+      "ProtocolRevenue": "CoW DAO share: protocol fees, ~25% partner service fee, and 50% of MEV Blocker fees/sale proceeds",
+      "SupplySideRevenue": "Partner integrator share and 50% of MEV Blocker fees/sale proceeds to Beaver Build",
+      "UserFees": "Swap fees from the sell token: protocol fees (50% surplus + 2bps volume), partner fees, and MEV Blocker fees"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/cowswap"
+  },
+  "rainbow-predictions": {
+    "methodology": {
+      "Revenue": "All fees go to Rainbow (on-chain periods: USDC.e to the Rainbow fee wallet; Polymarket-v2 period: builder fees from trades on Polymarket v2)",
+      "Fees": "Rainbow charges up to 3% of each prediction market trade, with the fee shrinking as the bet gets safer. Before 2026-04-29 and again from 2026-06-29 these fees are collected on-chain as USDC.e in the Rainbow fee wallet. Between 2026-04-29 and 2026-06-29 they are the builder fees received by Rainbow from trades on Polymarket v2",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "All fees go to Rainbow (on-chain periods: USDC.e to the Rainbow fee wallet; Polymarket-v2 period: builder fees from trades on Polymarket v2)",
+      "SupplySideRevenue": null,
+      "UserFees": null
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/rainbow-predictions"
+  },
+  "rainbow-wallet": {
+    "methodology": {
+      "Revenue": "0.85% revenue from trading volume, plus the bridge relaying fee charged on each bridge transfer",
+      "Fees": "0.85% fees from trading volume, plus the bridge relaying fee charged on each bridge transfer",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "0.85% protocol revenue from trading volume, plus the bridge relaying fee charged on each bridge transfer",
+      "SupplySideRevenue": null,
+      "UserFees": null
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/rainbow-wallet"
+  },
+  "space-and-time": {
+    "methodology": {
+      "Revenue": "PayPortal transfer fees on Base. Gas fees on Space and Time are distributed to validators, not retained as protocol revenue.",
+      "Fees": "Gas fees paid on the Space and Time chain for verifiable compute queries, plus transfer fees from PayPortal on Base.",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "100% of PayPortal fees on Base go to the protocol treasury.",
+      "SupplySideRevenue": "Gas fees on Space and Time are distributed to validators",
+      "UserFees": null
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Reviewed provider methodology: explicit protocol-retained fees and governance-holder allocation.",
+    "reviewSource": "https://defillama.com/protocol/space-and-time"
+  },
+  "gravity-by-galxe": {
+    "methodology": {
+      "Revenue": "All the transaction fees paid are burnt",
+      "Fees": "Transaction fees paid by users for executing transactions on the Gravity network",
+      "HoldersRevenue": "All the transaction fees paid are burnt",
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/gravity-by-galxe"
+  },
+  "aptos": {
+    "methodology": {
+      "Revenue": "All the transaction fees paid are burnt",
+      "Fees": "Transaction fees paid by users for executing transactions on the Aptos network",
+      "HoldersRevenue": "All the transaction fees paid are burned",
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/aptos"
+  },
+  "cardano": {
+    "methodology": {
+      "Revenue": "Burned coins",
+      "Fees": "Gas fees paid by users",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/cardano"
+  },
+  "injective": {
+    "methodology": {
+      "Revenue": "Transaction Fees + Auction Fees (INJ burned in auctions)",
+      "Fees": "Transaction Fees",
+      "HoldersRevenue": "Transaction Fees + Auction Fees (INJ burned in auctions)",
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/injective"
+  },
+  "solana": {
+    "methodology": {
+      "Revenue": "Transaction base fees paid by users",
+      "Fees": "Transaction fees paid by users",
+      "HoldersRevenue": "Transaction base fees paid by users were burned",
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/solana"
+  },
+  "sei": {
+    "methodology": {
+      "Revenue": "Burned coins",
+      "Fees": "Gas fees paid by users",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/sei"
+  },
+  "zksync-era": {
+    "methodology": {
+      "Revenue": "Burned coins",
+      "Fees": "Gas fees paid by users",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/zksync-era"
+  },
+  "berachain": {
+    "methodology": {
+      "Revenue": "Burned coins",
+      "Fees": "Gas fees paid by users",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/berachain"
+  },
+  "filecoin": {
+    "methodology": {
+      "Revenue": "Transaction fees paid by users",
+      "Fees": "Transaction fees paid by users",
+      "HoldersRevenue": "Transaction fees paid by users were burned",
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/filecoin"
+  },
+  "ton": {
+    "methodology": {
+      "Revenue": "Amount of 50% TON transaction fees that were burned",
+      "Fees": "Transaction fees paid by users",
+      "HoldersRevenue": "Amount of 50% TON transaction fees that were burned",
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/ton"
+  },
+  "tezos": {
+    "methodology": {
+      "Revenue": "Amount of tez burned, including storage fees, allocation fees, double baking/attestation punishments, etc.",
+      "Fees": "Total transaction fees paid by users for gas + storage fees",
+      "HoldersRevenue": "Amount of tez burned, including storage fees, allocation fees, double baking/attestation punishments, etc.",
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/tezos"
+  },
+  "tron": {
+    "methodology": {
+      "Revenue": "Amount of TRX fees were burned.",
+      "Fees": "Gas fees paid by users.",
+      "HoldersRevenue": "Amount of TRX fees were burned.",
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/tron"
+  },
+  "sonic": {
+    "methodology": {
+      "Revenue": "Burned coins",
+      "Fees": "Gas fees paid by users",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/sonic"
+  },
+  "monad": {
+    "methodology": {
+      "Revenue": "Amount of MON base fees that were burned",
+      "Fees": "Total MON gas fees (including base fees and priority fees) paid by users",
+      "HoldersRevenue": "Amount of MON base fees that were burned",
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/monad"
+  },
+  "plasma": {
+    "methodology": {
+      "Revenue": "Burned coins",
+      "Fees": "Gas fees paid by users",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/plasma"
+  },
+  "canton": {
+    "methodology": {
+      "Revenue": "All the collected fees (traffic purchase, preapproval burn, preapproval renew burn, setup burn, dust expire, holding fee, sender change fees) are burnt",
+      "Fees": "Includes traffic purchase, preapproval burn, preapproval renew burn, setup burn, dust expire, holding fee, sender change fees",
+      "HoldersRevenue": "All the collected fees (traffic purchase, preapproval burn, preapproval renew burn, setup burn, dust expire, holding fee, sender change fees) are burned",
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "holder_return",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Native fee burn is a holder-return mechanism, not independent company sales.",
+    "reviewSource": "https://defillama.com/protocol/canton"
+  },
+  "dydx-v4": {
+    "methodology": {
+      "Revenue": "100% of trading fees distributed to DYDX token stakers",
+      "Fees": "All trading fees collected from perpetual futures trades on dYdX v4",
+      "HoldersRevenue": "All trading fees are distributed to DYDX token stakers as staking rewards",
+      "ProtocolRevenue": "Fees going to treasury",
+      "SupplySideRevenue": "LPs revenue",
+      "UserFees": "Fees paid by users"
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Token stakers provide chain validation; distinguish security-supplier payouts from governance-holder return.",
+    "reviewSource": "https://defillama.com/protocol/dydx-v4",
+    "holderType": "unclear_other",
+    "holderReason": "체인 검증자·위임자 보상 · 공급 측 수익",
+    "holderCondition": "검증·위임 조건"
+  },
+  "looped-hype": {
+    "methodology": {
+      "Revenue": "20% of staking rewards and fees for loyalty program (user rebates).",
+      "Fees": "Staking rewards and fees accumulated on the strategy pools and vaults.",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "20% of staking rewards and fees for loyalty program (user rebates).",
+      "SupplySideRevenue": "80% of yield distributed to LHYPE depositors after fee switch(100% before 17th october 2025).",
+      "UserFees": "Pays management + performance fees"
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/looped-hype"
+  },
+  "cakepie": {
+    "methodology": {
+      "Revenue": "Staking rewards collected from assets staked on PancakeSwap",
+      "Fees": "Staking rewards collected from assets staked on PancakeSwap",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Gets management + performance fees",
+      "SupplySideRevenue": "Generated yield excluding protocol fees",
+      "UserFees": "Pays management + performance fees"
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Underlying staking rewards without protocol/supplier split.",
+    "reviewSource": "https://defillama.com/protocol/cakepie"
+  },
+  "penpie": {
+    "methodology": {
+      "Revenue": "Protocol revenue from boosted PENDLE rewards + Bribes from voting incentives",
+      "Fees": "Total boosted PENDLE rewards from liquidity farming + Bribes from voting incentives on Pendle Finance",
+      "HoldersRevenue": "5% vlPNP holders + 12% mPENDLE Staking pool + 20% PRT mechanism + Bribes from voting incentives",
+      "ProtocolRevenue": "5% operational expenses + bribes share of protocol",
+      "SupplySideRevenue": "78% to liquidity providers",
+      "UserFees": "Pays management + performance fees"
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Mix includes external bribes, mPENDLE stakers and PRT; not all recipients are PNP governance holders.",
+    "reviewSource": "https://defillama.com/protocol/penpie",
+    "holderType": "unclear_other",
+    "holderReason": "PNP 홀더 외 mPENDLE·PRT 수령자가 섞여 분리 불가",
+    "holderCondition": "PNP 홀더 귀속액 분리 필요"
+  },
+  "radpie": {
+    "methodology": {
+      "Revenue": "Staking rewards collected from assets staked on Radiant",
+      "Fees": "Staking rewards collected from assets staked on Radiant",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Gets management + performance fees",
+      "SupplySideRevenue": "Generated yield excluding protocol fees",
+      "UserFees": "Pays management + performance fees"
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Underlying staking rewards without protocol/supplier split.",
+    "reviewSource": "https://defillama.com/protocol/radpie"
+  },
+  "wompie": {
+    "methodology": {
+      "Revenue": "Staking rewards collected from assets staked on Wombat Exchange",
+      "Fees": "Staking rewards collected from assets staked on Wombat Exchange",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Gets management + performance fees",
+      "SupplySideRevenue": "Generated yield excluding protocol fees",
+      "UserFees": "Pays management + performance fees"
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Underlying staking rewards without protocol/supplier split.",
+    "reviewSource": "https://defillama.com/protocol/wompie"
+  },
+  "synthetix-v1+v2": {
+    "methodology": {
+      "Revenue": "Fees paid by users and awarded to SNX stakers",
+      "Fees": "Fees generated on each synthetic asset exchange, between 0.1% and 1% (usually 0.3%)",
+      "HoldersRevenue": "Fees are granted proportionally to SNX stakers by automatically burning outstanding debt (note: rewards not included here can also be claimed by SNX stakers)",
+      "ProtocolRevenue": "Percentage of fees going to treasury",
+      "SupplySideRevenue": "LPs revenue",
+      "UserFees": "Users pay between 10-100 bps (0.1%-1%), usually 30 bps, whenever they exchange a synthetic asset (Synth)"
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "SNX stakers back trading debt; collateral-provider remuneration is not established as ordinary token-holder revenue.",
+    "reviewSource": "https://defillama.com/protocol/synthetix-v1+v2",
+    "holderType": "unclear_other",
+    "holderReason": "담보 제공자의 부채 상환 · 일반 홀더 환원과 구분 필요",
+    "holderCondition": "SNX 담보·부채 부담"
+  },
+  "synthetix-v3": {
+    "methodology": {
+      "Revenue": "Fees paid by users and awarded to LPs",
+      "Fees": "Fees generated from trades",
+      "HoldersRevenue": "Fees are granted proportionally to LPs by tracking the profit and loss of the positions backed by Synthetix V3",
+      "ProtocolRevenue": "Fees going to treasury",
+      "SupplySideRevenue": "LPs revenue",
+      "UserFees": "Users pay fees to trade on derivatives markets."
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "LP compensation and PnL, not comparable protocol-retained revenue or governance-holder return.",
+    "reviewSource": "https://defillama.com/protocol/synthetix-v3",
+    "holderType": "unclear_other",
+    "holderReason": "LP 손익은 거버넌스 토큰 홀더 환원으로 확인되지 않음",
+    "holderCondition": "유동성 제공"
+  },
+  "apollo-diversified-credit-securitize-fund": {
+    "methodology": {
+      "Revenue": "Includes 0.5% management fees collected by the protocol",
+      "Fees": "Increase yields calculated from ACRED price change and 0.5% management fees",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Includes 0.5% management fees collected by the protocol",
+      "SupplySideRevenue": "Includes yields calculated from ACRED price change",
+      "UserFees": null
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/apollo-diversified-credit-securitize-fund"
+  },
+  "blackrock-buidl": {
+    "methodology": {
+      "Revenue": "Management fees (18-50 bps depending on the blockchain and BUIDL share class)",
+      "Fees": "Total yields generated from the fund's underlying assets (U.S. Treasuries and repo agreements) plus the management fees charged by BlackRock",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Management fees (18-50 bps depending on the blockchain and BUIDL share class)",
+      "SupplySideRevenue": "Net yields accrued to BUIDL holders (fund yield after management fees)",
+      "UserFees": null
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/blackrock-buidl"
+  },
+  "blockchain-capital": {
+    "methodology": {
+      "Revenue": "Includes 2.5% management fees collected by the protocol",
+      "Fees": "Includes 2.5% management fees collected by the protocol",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Includes 2.5% management fees collected by the protocol",
+      "SupplySideRevenue": null,
+      "UserFees": null
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/blockchain-capital"
+  },
+  "hamilton-lane-senior-credit-opportunities-securitize-fund": {
+    "methodology": {
+      "Revenue": "Includes 2% management fees collected by the protocol",
+      "Fees": "Includes yields calculated from HLSCOPE price change and 2% management fees",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Includes 2% management fees collected by the protocol",
+      "SupplySideRevenue": "Includes yields calculated from HLSCOPE price change",
+      "UserFees": null
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/hamilton-lane-senior-credit-opportunities-securitize-fund"
+  },
+  "mantle-index-four-fund": {
+    "methodology": {
+      "Revenue": "Management fees are revenue.",
+      "Fees": "1% total deposited assets charged as management fees annually.",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "All revenue are collected by protocol.",
+      "SupplySideRevenue": null,
+      "UserFees": null
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/mantle-index-four-fund"
+  },
+  "securitize-tokenized-aaa-clo-fund": {
+    "methodology": {
+      "Revenue": "Includes 0.3% management fees collected by the protocol",
+      "Fees": "Increase yields calculated from STAC CLO price change and 0.3% management fees",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Includes 0.3% management fees collected by the protocol",
+      "SupplySideRevenue": "Includes yields calculated from STAC CLO price change",
+      "UserFees": null
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/securitize-tokenized-aaa-clo-fund"
+  },
+  "vaneck-treasury-fund": {
+    "methodology": {
+      "Revenue": "Includes 0.2% management fees collected by the protocol",
+      "Fees": "Increase yields calculated from VBill daily yield percentage and 0.2% management fees",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": "Includes 0.2% management fees collected by the protocol",
+      "SupplySideRevenue": "Includes yields calculated from VBill daily yield percentage",
+      "UserFees": null
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Provider aggregate requires further attribution review (recipient, gross/net scope or investment yield); no comparable revenue multiple asserted.",
+    "reviewSource": "https://defillama.com/protocol/vaneck-treasury-fund"
+  },
+  "movement": {
+    "methodology": {
+      "Revenue": "Total transaction fees paid by users",
+      "Fees": "Total transaction fees paid by users",
+      "HoldersRevenue": null,
+      "ProtocolRevenue": null,
+      "SupplySideRevenue": null,
+      "UserFees": "Gas fees paid by users"
+    },
+    "revenueKind": "unknown",
+    "feeKind": "unknown",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-21",
+    "reviewNote": "Gross transaction fees without validator/treasury/burn split.",
+    "reviewSource": "https://defillama.com/protocol/movement"
   }
 }

@@ -95,7 +95,7 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
   { key: "athChangePercentage", label: "ATH 대비", title: "현재가의 사상 최고가 대비 변화율", group: "performance" },
   { key: "atlChangePercentage", label: "ATL 대비", title: "현재가의 사상 최저가 대비 변화율", group: "performance" },
   { key: "category", label: "섹터", title: "카테고리", group: "market" },
-  { key: "captureScore", label: "포획", title: "최근 30일 적격 경제유형만 반영한 일반 홀더 가치포획 점수", group: "valuation" },
+  { key: "captureScore", label: "포획", title: "최근 30일 확인된 환원 방식에 대한 실험 점수. 소각·조건부 분배를 포함하며 현금 배당 점수가 아닙니다", group: "valuation" },
   { key: "revenueAnnual", label: "원천 30일 연환산", title: "원천 최근 30일 × 365/30. 실제 1년 합계나 미래 예측을 뜻하지 않습니다", group: "fundamentals" },
   { key: "revenue30d", label: "집계액 30일", title: "최근 30일 집계액 (원값)", group: "fundamentals" },
   { key: "fdv", label: "FDV", title: "완전희석가치 (CoinMarketCap 우선)", group: "market" },

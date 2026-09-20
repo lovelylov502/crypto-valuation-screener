@@ -111,13 +111,13 @@ function captureClass(score: number | null): string {
   return "text-[var(--color-muted)]";
 }
 
-export function holderTypeSummary(c: CoinScored): string {
+export function holderTypeSummary(c: CoinScored, eligibleOnly = false): string {
   const labels = [
     ...new Set(
       c.holderValue.components
         .filter(
           (component) =>
-            (component.current30d ?? 0) > 0 || (component.ttm ?? 0) > 0,
+            (!eligibleOnly || component.eligible) && ((component.current30d ?? 0) > 0 || (component.ttm ?? 0) > 0),
         )
         .map((component) => holderEconomicTypeLabel(component.economicType)),
     ),
@@ -147,19 +147,32 @@ function holderValueDetail(c: CoinScored): string {
     .join(" / ");
 }
 
-// 셀 렌더 (코인 제외)
+function shortReason(reason: string): string {
+  if (reason.includes("FDV")) return "FDV 미확인";
+  if (reason.includes("이력 부족")) return reason.split(" · ")[0];
+  if (reason.includes("토큰 연결")) return "연결 확인";
+  if (reason.includes("스테이블")) return "비적용";
+  if (reason.includes("환원으로 분류")) return "환원 자료";
+  if (reason.includes("0 이하")) return "0 이하";
+  if (reason.includes("자료 없음") || reason.includes("미연결") || reason.includes("이력 없음")) return "자료 미확보";
+  return "확인 필요";
+}
+function metricReading(value: number | null, reason: string, basis: CapitalBasis, mcapValue: number | null, note?: string) {
+  return <span className="metric-reading" title={reason}><strong>{fmtMult(value)}</strong>{value === null ? <small>{shortReason(reason)}</small> : note ? <small>{note}</small> : null}{basis === "fdv" && value === null && mcapValue !== null && <small className="capital-fallback">시총 기준 {fmtMult(mcapValue)}</small>}</span>;
+}
+export function holderConditionSummary(c: CoinScored): string {
+  return [...new Set(c.holderValue.components.filter(p=>p.eligible).map(p=>p.condition).filter(Boolean))].join(" · ") || "수령 조건 미확인";
+}
+// Selected-capital values are never replaced by a circulating-capital reference in sorting or filters.
 export function renderCell(c: CoinScored, key: SortKey, basis: CapitalBasis = "mcap") {
-  if (key === "psSales") {
-    const value = salesMultiple(c, basis), other = salesMultiple(c, basis === "mcap" ? "fdv" : "mcap");
-    return <span className="metric-reading"><strong>{fmtMult(value)}</strong><small className={value === null ? "muted" : "estimate-badge"}>{value === null ? salesReason(c) : c.sales?.basis === "annualized_estimate" ? "외부 매출 추정" : "보고 매출"}</small>{value !== null && <small>{basis === "mcap" ? "FDV" : "시총"} 기준 {fmtMult(other)}</small>}</span>;
-  }
+  if (key === "psSales") return metricReading(salesMultiple(c,basis),salesReason(c,basis),basis,salesMultiple(c),c.sales?.basis === "annualized_estimate" ? "외부 매출 추정" : "보고 매출");
   if (key.startsWith("phr")) {
-    const days = METRIC_DAYS[key] ?? 30, value = holderMultiple(c, days, basis);
-    return <span className="metric-reading" title={holderReason(c, days)}><strong>{fmtMult(value)}</strong><small>{value === null ? holderReason(c, days) : days === 365 ? "365일 실제 합계" : `${days}일 연환산`}</small></span>;
+    const days=METRIC_DAYS[key] ?? 30;
+    return metricReading(holderMultiple(c,days,basis),holderReason(c,days,basis)+" · "+holderConditionSummary(c),basis,holderMultiple(c,days),holderTypeSummary(c,true) + (holderConditionSummary(c).includes("락업") ? " · 락업" : holderConditionSummary(c).includes("스테이킹") ? " · 스테이킹" : "") + (c.holderValue.availability === "mixed" ? " · 확인분" : ""));
   }
-  if (key === "pr" || key === "pr7d" || key === "pr90d" || key === "pr1y") {
-    const days = METRIC_DAYS[key] ?? 30, value = protocolMultiple(c, days, basis);
-    return <span className="metric-reading"><strong>{fmtMult(value)}</strong><small>{value !== null ? "프로토콜 수익" : protocolReason(c,days)}</small></span>;
+  if (["pr","pr7d","pr90d","pr1y"].includes(key)) {
+    const days=METRIC_DAYS[key] ?? 30;
+    return metricReading(protocolMultiple(c,days,basis),protocolReason(c,days,basis),basis,protocolMultiple(c,days),c.fundamentals.revenue.kind === "service_sales" ? "서비스 매출 집계" : undefined);
   }
   switch (key) {
     case "price": return fmtPrice(c.price);
@@ -172,7 +185,7 @@ export function renderCell(c: CoinScored, key: SortKey, basis: CapitalBasis = "m
     case "revenue1y": return fmtUsd(revenueAmount(c, 365));
     case "holderRoute": return <span className="route-cell">{protocolResearch(c)?.holder?.route ?? holderTypeSummary(c)}<small>{protocolResearch(c)?.holder ? "공식 문서 확인" : "원천 설명 자동 분류"}</small></span>;
     case "payoutAsset": return <span className="route-cell">{protocolResearch(c)?.holder?.asset ?? "미확인"}</span>;
-    case "holderCondition": return <span className="route-cell">{protocolResearch(c)?.holder?.recipient ?? "수령 조건 미확인"}</span>;
+    case "holderCondition": return <span className="route-cell">{protocolResearch(c)?.holder?.recipient ?? holderConditionSummary(c)}</span>;
     case "signals":
       return (
         <span className="signal-cell">

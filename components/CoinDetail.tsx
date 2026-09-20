@@ -139,7 +139,7 @@ export function CoinDetail({
                   <strong>{fmtUsd(part.current30d)}</strong>
                   <small>최근 30일</small>
                 </div>
-                <p>{part.reason}</p>
+                <p>{part.reason}{part.condition && <><br/><strong>{part.condition}</strong></>}</p>
               </article>
             ))
           )}

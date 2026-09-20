@@ -1,9 +1,13 @@
+import registry from "./fundamentalDefinitions.json";
+import { definitionReviewed } from "./fundamentalSource";
+
 export type HolderEconomicType =
   | "direct_distribution"
   | "market_buyback"
   | "buyback_and_burn"
   | "native_fee_burn"
   | "ve_voter_locker_distribution"
+  | "mixed_holder_return"
   | "unclear_other";
 
 export type HolderValueAvailability =
@@ -25,6 +29,7 @@ export interface HolderValueComponent extends HolderMethodologyClassification {
   current30d: number | null;
   previous30d: number | null;
   ttm: number | null;
+  condition?: string;
 }
 
 export interface HolderValueSummary {
@@ -52,11 +57,22 @@ const HOLDER_ECONOMIC_TYPE_LABELS: Record<HolderEconomicType, string> = {
   buyback_and_burn: "매입+소각",
   native_fee_burn: "수수료 소각",
   ve_voter_locker_distribution: "ve/투표자",
+  mixed_holder_return: "복수 환원 방식",
   unclear_other: "불명확",
 };
 
 export function holderEconomicTypeLabel(type: HolderEconomicType): string {
   return HOLDER_ECONOMIC_TYPE_LABELS[type];
+}
+
+export function holderCondition(methodology: unknown, type: HolderEconomicType): string {
+  const definition = holderMethodology(methodology) ?? "";
+  if (type === "unclear_other") return "수령 조건 미확인";
+  if (type === "ve_voter_locker_distribution") return "락업·투표 조건";
+  if (/\bstak|\bxORCA\b/i.test(definition)) return "스테이킹 조건";
+  if (type === "native_fee_burn" || type === "buyback_and_burn") return "토큰 소각 · 현금 지급 없음";
+  if (type === "market_buyback") return "시장매입 · 직접 지급 여부 별도 확인";
+  return "원천에 명시된 홀더 · 상세 조건 확인";
 }
 
 type Json = Record<string, unknown>;
@@ -175,13 +191,6 @@ export function classifyHolderMethodology(
     /\bvote[-\s]?escrow(?:ed)?\b|\b(?:vote|voted|voters?|voting)\b|\bbribes?\b|\blockers?\b|\bgauges?\b/.test(
       normalized,
     );
-  if (restrictedBeneficiary) {
-    return {
-      economicType: "ve_voter_locker_distribution",
-      eligible: false,
-      reason: "ve·voter·locker 한정 귀속",
-    };
-  }
 
   const buyback =
     /\bbuy(?:\s|-)?backs?\b|\bbuys\s+back\b|\bbought\s+back\b|\bby\s+back\b|\bbuying\b[^.]{0,100}\btokens?\b|\b(?:buy|buying)\b[^.]{0,80}\b(?:on|from|in)\s+the\s+(?:open\s+)?market\b|\brepurchas(?:e|es|ed|ing)\b|\bbuy\s*(?:&|and)\s*burn\b/.test(
@@ -220,6 +229,14 @@ export function classifyHolderMethodology(
     };
   }
 
+  if (restrictedBeneficiary) {
+    return {
+      economicType: "ve_voter_locker_distribution",
+      eligible: true,
+      reason: "ve·voter·locker 한정 귀속",
+    };
+  }
+
   const incidentalBurn =
     /\bsourc(?:e|ed|ing)\s+from\b[^.;]{0,80}\bburn(?:s|ed|ing|t)?\b/.test(
       normalized,
@@ -249,7 +266,7 @@ export function classifyHolderMethodology(
   if (burn && !negatedBurn) {
     return {
       economicType: "native_fee_burn",
-      eligible: false,
+      eligible: true,
       reason: "시장매입 없는 수수료·네이티브 토큰 소각",
     };
   }
@@ -354,7 +371,7 @@ function finalize(accumulator: HolderAccumulator): HolderValueSummary {
     availability = hasExcluded ? "mixed" : "eligible";
     phrUnavailableReason = null;
     if (hasExcluded) {
-      warning = "일부 DefiLlama holder revenue는 일반 홀더 P/HR에서 제외";
+      warning = "확인된 환원 구성만 포함 · 일부 원천 금액은 수령 대상·재원 확인 필요";
     }
   } else if (accumulator.eligibleTtm > 0) {
     availability = "stale";
@@ -362,8 +379,8 @@ function finalize(accumulator: HolderAccumulator): HolderValueSummary {
     phrUnavailableReason = "최근 30일 적격 holder value가 0/누락";
   } else if ((rawCurrent30d ?? 0) > 0 || (rawTtm ?? 0) > 0) {
     availability = "excluded";
-    warning = "DefiLlama holder revenue가 일반 홀더 P/HR 제외 유형";
-    phrUnavailableReason = "일반 홀더 P/HR 제외 경제유형";
+    warning = "원천 환원 집계는 있으나 수령 대상·재원 확인 필요";
+    phrUnavailableReason = "환원 방식 확인 필요";
   }
 
   if (eligible.length > 0 && (!currentComplete || !previousComplete)) {
@@ -419,7 +436,15 @@ export function aggregateHolderValueByGroup(
     const current30d = amount(row.total30d);
     const previous30d = amount(row.total60dto30d);
     const ttm = amount(row.total1y);
-    const classification: HolderMethodologyClassification = reviewed(row) ? classifyHolderMethodology(row.methodology) : { economicType: "unclear_other", eligible: false, reason: "원천 집계 정의 신규·변경 · 재검토 필요" };
+    const matched = reviewed(row);
+    const exactReview = matched && definitionReviewed(row);
+    const review = (registry as Record<string, { holderType?: HolderEconomicType; holderReason?: string; holderCondition?: string }>)[slug];
+    // Overrides are bound to the exact reviewed provider methodology, never to a ticker alone.
+    const classification: HolderMethodologyClassification = !matched
+      ? { economicType: "unclear_other", eligible: false, reason: "원천 집계 정의 신규·변경 · 재검토 필요" }
+      : exactReview && review?.holderType
+        ? { economicType: review.holderType, eligible: review.holderType !== "unclear_other", reason: review.holderReason ?? "원천 환원 방식 검토" }
+        : classifyHolderMethodology(row.methodology);
     const component: HolderValueComponent = {
       slug,
       name: text(row.name) ?? slug,
@@ -427,6 +452,7 @@ export function aggregateHolderValueByGroup(
       current30d,
       previous30d,
       ttm,
+      condition: exactReview && review?.holderCondition ? review.holderCondition : holderCondition(row.methodology, classification.economicType),
     };
     accumulator.components.push(component);
 

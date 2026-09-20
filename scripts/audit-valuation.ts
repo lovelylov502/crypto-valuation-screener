@@ -7,7 +7,8 @@ import { fetchCoins } from "../lib/sources";
 import { scoreCoins } from "../lib/valuation";
 import { assembleScreener } from "../lib/screener";
 import { fundamentalErrors } from "../lib/fundamentalContract";
-import { holderMultiple, holderAmount, salesMultiple } from "../lib/valuationMetrics";
+import { holderMultiple, holderAmount, salesMultiple, protocolMultiple } from "../lib/valuationMetrics";
+import { metricCoverage, definitionReviewQueue, METRIC_WINDOWS } from "../lib/metricCoverage";
 import type { CoinScored, SourceObservation } from "../lib/types";
 
 async function main() {
@@ -16,7 +17,10 @@ async function main() {
   if (!baselineRoot) throw new Error("Supply the read-only baseline checkout path");
   await mkdir(out, { recursive:true });
   const replayRoot = process.argv[4] ? resolve(process.argv[4]) : null;
-  const replayReceipts: {url:string;status:number;file:string}[] = replayRoot ? JSON.parse(await readFile(resolve(replayRoot,"source-manifest.json"),"utf8")) : [];
+  const replayReceipts: {url:string;status:number;file:string;sha256:string}[] = replayRoot ? JSON.parse(await readFile(resolve(replayRoot,"source-manifest.json"),"utf8")) : [];
+  const comparisonAt = replayRoot ? JSON.parse(await readFile(resolve(replayRoot,"audit.json"),"utf8")).stats.sourceCollectionAt : new Date().toISOString();
+  const frozenNow = Date.parse(comparisonAt);
+  Date.now = () => frozenNow;
   const originalFetch=globalThis.fetch;
   const pending=new Map<string,Promise<{body:string,status:number}>>();
   const receipts: {url:string;status:number;sha256:string;bytes:number;file:string}[]=[];
@@ -25,7 +29,10 @@ async function main() {
     if (!/^https:\/\/(api\.llama\.fi|stablecoins\.llama\.fi|api\.coingecko\.com|pro-api\.coinmarketcap\.com)\//.test(url)) throw new Error("Unexpected source URL");
     if(!pending.has(url)) pending.set(url,(async()=>{
       const receipt = replayReceipts.find(r=>r.url===url && r.status===200);
-      const response=receipt ? new Response(gunzipSync(await readFile(resolve(replayRoot!,receipt.file))).toString("utf8"), {status:200}) : await originalFetch(url,{signal:AbortSignal.timeout(60000),headers:{accept:"application/json"}});
+      if (replayRoot && !receipt) throw new Error("Missing successful replay receipt: " + url);
+      const replayBody = receipt ? gunzipSync(await readFile(resolve(replayRoot!,receipt.file))).toString("utf8") : null;
+      if (receipt && createHash("sha256").update(replayBody!).digest("hex") !== receipt.sha256) throw new Error("Replay source hash mismatch: " + url);
+      const response=receipt ? new Response(replayBody, {status:200}) : await originalFetch(url,{signal:AbortSignal.timeout(60000),headers:{accept:"application/json"}});
       const body=await response.text(), key=createHash("sha256").update(url).digest("hex").slice(0,16), file=key+".json.gz";
       await writeFile(resolve(out,file),gzipSync(body));
       receipts.push({url,status:response.status,sha256:createHash("sha256").update(body).digest("hex"),bytes:Buffer.byteLength(body),file});
@@ -36,10 +43,11 @@ async function main() {
   }) as typeof fetch;
   const oldSources=await import(pathToFileURL(resolve(baselineRoot,"lib/sources.ts")).href);
   const oldScreener=await import(pathToFileURL(resolve(baselineRoot,"lib/screener.ts")).href);
+  const oldMetrics=await import(pathToFileURL(resolve(baselineRoot,"lib/valuationMetrics.ts")).href);
   const oldObservations:SourceObservation[]=[], newObservations:SourceObservation[]=[];
   const beforeRaw=await oldSources.fetchCoins(oldObservations);
   const afterRaw=await fetchCoins(newObservations);
-  const at=new Date().toISOString();
+  const at=comparisonAt;
   const before=oldScreener.assembleScreener(beforeRaw,at,oldObservations);
   const after=assembleScreener(afterRaw,at,newObservations);
   const beforeMap=new Map<string,CoinScored>(before.coins.map((c:CoinScored)=>[c.slug,c]));
@@ -67,6 +75,10 @@ async function main() {
       if(b.multiples.psSales!==null && (!b.sales || b.sales.status!=="current" || Math.abs(b.multiples.psSales-b.mcap!/b.sales.amountUsd)>1e-8)) failures.push(slug+":sales");
       if(b.price!==null&&b.circulatingSupply!==null&&b.mcap!==null&&b.cmcId!==null&&Math.abs(b.price*b.circulatingSupply/b.mcap-1)>.05) failures.push(slug+":market cap does not reconcile");
     }
+    if (a && b) for (const basis of ["mcap","fdv"] as const) for (const days of METRIC_WINDOWS) {
+      if (oldMetrics.protocolMultiple(a,days,basis) !== protocolMultiple(b,days,basis)) changedFields.push(`pr_${basis}_${days}`);
+      if (oldMetrics.holderMultiple(a,days,basis) !== holderMultiple(b,days,basis)) changedFields.push(`phr_${basis}_${days}`);
+    }
     const nextRaw=afterRaw.find(c=>c.slug===slug);
     const parent = parentBySlug.get(slug);
     const removalReason = !b ? parent && afterRaw.some(c=>c.slug===parent) ? "grouped_into_parent" : nextRaw ? "below_market_cap_screen_threshold" : "no_supported_market_or_tvl_identity" : null;
@@ -79,7 +91,12 @@ async function main() {
       holderDays:b?.holderHistory?Object.fromEntries([7,30,90,365].map(n=>[n,b.holderHistory!.periods[n as 7|30|90|365].reportedDays])):null,
       issues:b?.opportunities.dataIssues??[]};
   });
-  const stats={at,replayedFrom:replayRoot,sourceCollectionAt:replayRoot ? (JSON.parse(await readFile(resolve(replayRoot,"audit.json"),"utf8")).stats.sourceCollectionAt ?? JSON.parse(await readFile(resolve(replayRoot,"audit.json"),"utf8")).stats.at) : at,beforeUniverseRows:beforeRaw.length,afterUniverseRows:afterRaw.length,allRawRowsContractChecked:afterRaw.length,beforeRows:before.coins.length,afterRows:after.coins.length,examinedUnion:rows.length,
+  const coverageBefore = Object.fromEntries((["mcap","fdv"] as const).map(basis=>[basis,Object.fromEntries(([7,30,90,365,"any"] as const).map(window=>{
+    const available=(c:CoinScored,metric:"sales"|"revenue"|"holder")=>metric === "sales" ? oldMetrics.salesMultiple(c,basis)!==null : (window === "any" ? METRIC_WINDOWS : [window]).some(days=>(metric === "revenue" ? oldMetrics.protocolMultiple(c,days,basis) : oldMetrics.holderMultiple(c,days,basis))!==null);
+    return [window,{sales:before.coins.filter((c:CoinScored)=>available(c,"sales")).length,revenue:before.coins.filter((c:CoinScored)=>available(c,"revenue")).length,holder:before.coins.filter((c:CoinScored)=>available(c,"holder")).length,unique:before.coins.filter((c:CoinScored)=>(["sales","revenue","holder"] as const).some(m=>available(c,m))).length}];
+  }))]));
+  const coverageAfter = Object.fromEntries((["mcap","fdv"] as const).map(basis=>[basis,Object.fromEntries(([7,30,90,365,"any"] as const).map(window=>[window,metricCoverage(after.coins,basis,window)]))]));
+  const stats={at,coverageBefore,coverageAfter,metricRowsChanged:rows.filter(r=>r.changedFields.some(f=>/^pr_|^phr_/.test(f))).length,sourceValidationErrors:newObservations.filter(s=>s.status === "error"),replayedFrom:replayRoot,sourceCollectionAt:replayRoot ? (JSON.parse(await readFile(resolve(replayRoot,"audit.json"),"utf8")).stats.sourceCollectionAt ?? JSON.parse(await readFile(resolve(replayRoot,"audit.json"),"utf8")).stats.at) : at,beforeUniverseRows:beforeRaw.length,afterUniverseRows:afterRaw.length,allRawRowsContractChecked:afterRaw.length,beforeRows:before.coins.length,afterRows:after.coins.length,examinedUnion:rows.length,
     changed:rows.filter(r=>r.disposition==="changed").length,removedOrGrouped:rows.filter(r=>r.disposition==="removed_or_grouped").length,added:rows.filter(r=>r.disposition==="added").length,
     removalsByReason:Object.fromEntries(["grouped_into_parent","below_market_cap_screen_threshold","no_supported_market_or_tvl_identity"].map(k=>[k,rows.filter(r=>r.removalReason===k).length])),
     capitalExclusions:after.coins.filter(c=>c.capitalExclusionReason).map(c=>c.slug),
@@ -88,14 +105,15 @@ async function main() {
     sales:after.coins.filter(c=>c.multiples.psSales!==null).length,pr:after.coins.filter(c=>c.multiples.pr!==null).length,
     phr:Object.fromEntries(([7,30,90,365] as const).map(n=>[n,after.coins.filter(c=>holderMultiple(c,n)!==null).length])),
     failures, sourceFailures:receipts.filter(r=>r.status!==200).map(r=>r.url),payloadBytes:Buffer.byteLength(JSON.stringify(after)),
-    scope:"Same public source responses replayed into v6 and v7. Every screenable row checked. Provider definitions and formulas are checked; this is not an independent financial/onchain audit of every protocol."};
+    scope:"Same market/overview responses and completed UTC date replayed into baseline and current rules. Additional per-component histories are archived with hashes. All screenable rows checked; no independent financial/onchain audit asserted."};
+  await writeFile(resolve(out,"review-queue.json"),JSON.stringify(definitionReviewQueue(after.coins),null,2));
   await writeFile(resolve(out,"audit.json"),JSON.stringify({stats,rows},null,2));
   await writeFile(resolve(out,"source-manifest.json"),JSON.stringify(receipts,null,2));
   await writeFile(resolve(out,"before.json.gz"),gzipSync(JSON.stringify(before)));
   await writeFile(resolve(out,"after.json.gz"),gzipSync(JSON.stringify(after)));
   await writeFile(resolve(out,"inputs-after.json.gz"),gzipSync(JSON.stringify(afterRaw)));
   console.log(JSON.stringify(stats,null,2));
-  if(failures.length||stats.sourceFailures.length||stats.payloadBytes>=4500000) process.exitCode=1;
+  if(failures.length||stats.sourceFailures.length||stats.sourceValidationErrors.length||stats.payloadBytes>=4500000) process.exitCode=1;
 }
 main().catch(e=>{console.error(e instanceof Error?e.message:e);process.exitCode=1;});
 

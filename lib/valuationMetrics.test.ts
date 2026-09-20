@@ -69,7 +69,7 @@ describe("sales and dated holder metrics",()=>{
     c.holderHistory!.periods[30].reportedDays=29;
     expect(fundamentalErrors(c)).toContain("period coverage");
   });
-  it("keeps native burns and conditional flows out of holder history",()=>{
+  it("keeps unreviewed native burns out of holder history",()=>{
     const excluded=[{slug:"other",name:"Other",methodology:{HoldersRevenue:"All native transaction fees are burned"}}];
     expect(Object.keys(summarizeHolderHistory(excluded,chart,Date.parse(at)))).toHaveLength(0);
   });

@@ -105,12 +105,13 @@ describe("independent opportunity signals and same-period accounting", () => {
     expect(started.opportunities.transition).toBe(true);
     expect(unknown.opportunities.transition).toBe(false);
   });
-  it("observes conditional locker revenue without making it eligible for general P/HR", () => {
+  it("includes reviewed conditional locker revenue with an explicit condition", () => {
     const holderValue = aggregateHolderValueByGroup([{slug:"ve-test",total30d:100,total60dto30d:80,methodology:{HoldersRevenue:"All fees distributed to ve token voters."}}],s=>s).get("ve-test")!;
     const [c] = scoreCoins([sample({holderValue})], REFERENCE);
     expect(c.opportunities.holder).toBe(true);
     expect(c.opportunities.conditionalCurrent30d).toBe(100);
-    expect(c.multiples.phr).toBeNull();
+    expect(c.multiples.phr).toBeCloseTo(c.mcap! / (100 * 365 / 30));
+    expect(c.holderValue.components[0].condition).toBe("락업·투표 조건");
   });
 });
 
@@ -245,7 +246,7 @@ describe("scoreCoins discovery model", () => {
     const [scored] = scoreCoins([current], REFERENCE);
 
     expect(scored.multiples.phr).toBeCloseTo(120_000_000 / 12_166_666.666666666);
-    expect(SCORE_VERSION).toBe("research-v7-sales-and-holder-windows");
+    expect(SCORE_VERSION).toBe("research-v8-coverage-and-holder-types");
   });
 
   it("leaves current P/HR unavailable when TTM is positive but current 30d is zero", () => {

@@ -3,6 +3,7 @@ import { getScreener } from "@/lib/serverScreener";
 
 // Only the joined snapshot is cached. A second ISR cache could extend stale data by 30 minutes.
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET() {
   try {
