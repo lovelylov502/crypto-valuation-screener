@@ -97,7 +97,7 @@ export function UsdRangeFilter({
       <div className="mb-2 text-xs text-[var(--color-muted)]">{label}</div>
       <div className="grid grid-cols-2 gap-2 text-xs text-[var(--color-muted)]">
         <label className="flex items-center gap-1">
-          <span>최소 $M</span>
+          <span className="whitespace-nowrap">최소 $M</span>
           <input
             type="number"
             min={0}
@@ -113,7 +113,7 @@ export function UsdRangeFilter({
           />
         </label>
         <label className="flex items-center gap-1">
-          <span>최대 $M</span>
+          <span className="whitespace-nowrap">최대 $M</span>
           <input
             type="number"
             min={0}

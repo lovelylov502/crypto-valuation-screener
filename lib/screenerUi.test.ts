@@ -13,7 +13,9 @@ describe("holder-value screener columns", () => {
     expect(current).toMatchObject({ label: "현재 홀더가치/년" });
     expect(current?.title).toContain("적격 최근 30일");
     expect(current?.title).toContain("365/30");
-    expect(DEFAULT_VISIBLE_COLUMNS).toContain("psSales");
+    expect(DEFAULT_VISIBLE_COLUMNS).not.toContain("psSales");
+    expect(SCREENER_COLUMNS.some(c=>c.key==="psSales")).toBe(false);
+    expect(DEFAULT_VISIBLE_COLUMNS).toContain("pr");
     expect(DEFAULT_VISIBLE_COLUMNS).toContain("phr");
     expect(DEFAULT_VISIBLE_COLUMNS).not.toContain("captureScore");
   });

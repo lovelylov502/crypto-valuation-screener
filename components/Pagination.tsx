@@ -21,7 +21,7 @@ export function Pagination({ total, page, size, position, onPage, onSize }: {
     </div>
     <nav aria-label={`결과 페이지 ${position === "top" ? "위" : "아래"}`}>
       <button className="page-button" aria-label="이전 페이지" disabled={page === 1} onClick={() => onPage(page - 1)}><ChevronLeft size={16} /></button>
-      {pageNumbers(page, pages).map((n, i) => n === "gap"
+      {position === "top" ? <span className="page-position">{page} / {pages}</span> : pageNumbers(page, pages).map((n, i) => n === "gap"
         ? <span className="page-gap" key={`gap-${i}`}>…</span>
         : <button className="page-button" key={n} aria-label={`${n}페이지`} aria-current={n === page ? "page" : undefined} onClick={() => onPage(n)}>{n}</button>)}
       <button className="page-button" aria-label="다음 페이지" disabled={page === pages} onClick={() => onPage(page + 1)}><ChevronRight size={16} /></button>

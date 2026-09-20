@@ -33,9 +33,10 @@ export function useColumnReorder(columns: SortKey[], onMove: (from: SortKey, to:
       current.moved = true;
       const container = e.currentTarget.closest<HTMLElement>("[data-reorder-zone]");
       if (container) {
-        const bounds = container.getBoundingClientRect();
-        if (zone === "columns") container.scrollTop += e.clientY < bounds.top + 24 ? -16 : e.clientY > bounds.bottom - 24 ? 16 : 0;
-        else container.scrollLeft += e.clientX < bounds.left + 32 ? -20 : e.clientX > bounds.right - 32 ? 20 : 0;
+        const scroller = zone === "columns" ? container.closest<HTMLElement>(".settings-body") ?? container : container;
+        const bounds = scroller.getBoundingClientRect();
+        if (zone === "columns") scroller.scrollTop += e.clientY < bounds.top + 24 ? -16 : e.clientY > bounds.bottom - 24 ? 16 : 0;
+        else scroller.scrollLeft += e.clientX < bounds.left + 32 ? -20 : e.clientX > bounds.right - 32 ? 20 : 0;
       }
       const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-column-key]");
       const over = target?.closest<HTMLElement>("[data-reorder-zone]")?.dataset.reorderZone === zone ? target.dataset.columnKey as SortKey : null;

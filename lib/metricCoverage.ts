@@ -1,6 +1,7 @@
 import type { CoinRaw } from "./types";
 import { salesMultiple, protocolMultiple, holderMultiple, type CapitalBasis } from "./valuationMetrics";
 import type { RevenueWindowDays } from "./revenueHistory";
+import { SCREENER_COLUMNS, type SortKey } from "./screenerColumns";
 
 export const METRIC_WINDOWS = [7, 30, 90, 365] as const;
 export type CoverageWindow = RevenueWindowDays | "any";
@@ -22,17 +23,31 @@ export function hasSourceData(c: CoinRaw, window: CoverageWindow): boolean {
     return raw != null || holders != null || (c.revenueHistory?.periods[days].reportedDays ?? 0) > 0 || (c.holderHistory?.periods[days].reportedDays ?? 0) > 0;
   });
 }
-export function matchesAvailability(c: CoinRaw, metric: AvailableMetric, basis: CapitalBasis, window: CoverageWindow): boolean {
+export function matchesAvailability(c: CoinRaw, metric: AvailableMetric, basis: CapitalBasis, window: CoverageWindow, includeSales = true): boolean {
   if (metric === "all") return true;
-  const any = () => (["sales","revenue","holder"] as const).some(m => metricAvailable(c,m,basis,window));
+  const any = () => (includeSales ? ["sales","revenue","holder"] as const : ["revenue","holder"] as const).some(m => metricAvailable(c,m,basis,window));
   if (metric === "any") return any();
   if (metric === "review") return hasSourceData(c,window) && !any();
   if (metric === "missing") return !hasSourceData(c,window) && !any();
   return metricAvailable(c,metric,basis,window);
 }
-export function metricCoverage(coins: CoinRaw[], basis: CapitalBasis, window: CoverageWindow) {
-  const count = (metric: AvailableMetric) => coins.filter(c => matchesAvailability(c,metric,basis,window)).length;
+export function metricCoverage(coins: CoinRaw[], basis: CapitalBasis, window: CoverageWindow, includeSales = true) {
+  const count = (metric: AvailableMetric) => coins.filter(c => matchesAvailability(c,metric,basis,window,includeSales)).length;
   return { total: coins.length, sales:count("sales"), revenue:count("revenue"), holder:count("holder"), unique:count("any"), review:count("review"), missing:count("missing"), source:coins.filter(c => hasSourceData(c,window)).length };
+}
+
+export const METRIC_COLUMN_DAYS: Partial<Record<SortKey, RevenueWindowDays>> = { pr:30, pr7d:7, pr90d:90, pr1y:365, phr:30, phr7d:7, phr90d:90, phr1y:365 };
+/** Count only the periods visible in the table, across the current filtered result. */
+export function visibleMetricCoverage(coins: CoinRaw[], basis: CapitalBasis, columns: SortKey[]) {
+  const metrics = columns.flatMap(key => {
+    const days = METRIC_COLUMN_DAYS[key];
+    return days ? [{ key, days, metric: key.startsWith("phr") ? "holder" as const : "revenue" as const, label: SCREENER_COLUMNS.find(c=>c.key===key)!.label }] : [];
+  });
+  return {
+    total: coins.length,
+    unique: coins.filter(c => metrics.some(m => metricAvailable(c,m.metric,basis,m.days))).length,
+    metrics: metrics.map(m => ({ key:m.key, label:m.label, count:coins.filter(c => metricAvailable(c,m.metric,basis,m.days)).length })),
+  };
 }
 /** Every unmatched source remains reviewable, including zero-valued children of a parent. */
 export function definitionReviewQueue(coins: CoinRaw[]) {

@@ -1,5 +1,14 @@
 export type RangeHandle = "min" | "max";
 
+/** Compare displayed values; missing values stay last in both directions. */
+export function compareTableValues(a: number | string | null, b: number | string | null, direction: "asc" | "desc"): number {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  const difference = typeof a === "string" && typeof b === "string" ? a.localeCompare(b) : Number(a) - Number(b);
+  return difference * (direction === "asc" ? 1 : -1);
+}
+
 export function hasEligibleCurrentHolderValue(holderValue: {
   eligibleRunRate: number | null;
   rawTtm: number | null;

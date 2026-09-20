@@ -11,8 +11,9 @@ import { TriangleAlert } from "lucide-react";
 import { multipleLabel, feeLabel, knownRevenue } from "@/lib/fundamentals";
 import { salesMultiple, salesReason, protocolMultiple, protocolReason, holderMultiple, holderReason, datedHolderValue, type CapitalBasis } from "@/lib/valuationMetrics";
 import type { RevenueWindowDays } from "@/lib/revenueHistory";
+import { METRIC_COLUMN_DAYS } from "@/lib/metricCoverage";
 
-export const METRIC_DAYS: Partial<Record<SortKey, RevenueWindowDays>> = { phr: 30, phr7d: 7, phr90d: 90, phr1y: 365, pr: 30, pr7d: 7, pr90d: 90, pr1y: 365 };
+export const METRIC_DAYS: Partial<Record<SortKey, RevenueWindowDays>> = METRIC_COLUMN_DAYS;
 
 // 코인 외부 링크: canonical CMC 우선, 없으면 CoinGecko/DefiLlama 폴백
 export function coinUrl(c: CoinScored): string {

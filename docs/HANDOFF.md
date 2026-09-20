@@ -1,5 +1,15 @@
 # Handoff
 
+## 2026-09-21 — CoinMarketCap-informed UI implementation
+
+The user authorized a plan and implementation using CoinMarketCap's dark interface while preserving the previously specified interaction rules. The compact navy/blue table removes the sort dropdown, separate direction button and persistent sidebar. Column headers sort directly; nulls stay last in either direction and a hidden sort falls back to a visible column. Display settings now use one ordered list, addable metrics below, and a fixed top reset action. P/S is absent from table/defaults/filter options and remains separate business-sales evidence in coin details.
+
+The same browser preference keys preserve valid personal order, filters, numerator and watchlist. Only sales-specific controls are retired, with a one-time migration notice; legacy P/S thresholds are not converted to P/R. P/R/P-HR maximum filters use an explicit shared 7/30/90/365-day period. Availability filtering and whole-universe coverage inspection have independent periods. The main coverage count now reflects the visible metric periods and current filtered rows, deduplicating overlaps and excluding market-cap reference values from FDV coverage.
+
+No collection, financial eligibility or arithmetic rules changed; rule version remains `research-v8-coverage-and-holder-types`. The production page verifier now requires the new display/guide/coverage/shared-numerator markers and rejects the removed P/S table and sorting controls, while retaining all API and deployment identity guards.
+
+202 application tests, TypeScript and production build passed. Browser checks covered pointer and keyboard reorder, reload persistence, column-only reset, direct ascending/descending sorting, hidden-sort fallback, four-period grouping, range filters, coverage counts, VVV denominator evidence, focus containment/Escape return, and layouts at 1280×720, 390×844 and 1920×1080. Warning/error logs were empty. [design-qa.md](../design-qa.md) records the source/implementation comparison and fixes; screenshots are outside Git under the task's `outputs/cmc-ui-v9`. Canonical deployment and readback are recorded separately after release.
+
 ## 2026-09-21 — v8 production receipt
 
 Application commit `badbd05e2afe0e1dd3960995a5bd0fe5c36fc10b` is live through `npm run deploy:production`. Deployment `dpl_3xWmjrQgxN97W1yK4Kh4LVtqNv4o`, unique URL https://crypto-valuation-screener-dtvawwzhq-bodycation.vercel.app, is READY in production. Authenticated Vercel readback confirms the exact main commit, expected project and https://crypto-valuation-screener.vercel.app alias. This entry is a subsequent documentation-only receipt.
