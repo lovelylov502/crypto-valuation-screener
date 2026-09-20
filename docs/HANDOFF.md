@@ -1,5 +1,17 @@
 # Handoff
 
+## 2026-09-21 — v8 production receipt
+
+Application commit `badbd05e2afe0e1dd3960995a5bd0fe5c36fc10b` is live through `npm run deploy:production`. Deployment `dpl_3xWmjrQgxN97W1yK4Kh4LVtqNv4o`, unique URL https://crypto-valuation-screener-dtvawwzhq-bodycation.vercel.app, is READY in production. Authenticated Vercel readback confirms the exact main commit, expected project and https://crypto-valuation-screener.vercel.app alias. This entry is a subsequent documentation-only receipt.
+
+The guarded route passed clean synchronized canonical main, authenticated project/team identity, 194 application tests, six deployment-contract tests, TypeScript, production build, whitespace checks and pinned-CLI dry run. Canonical HTML/API return HTTP 200 with all twelve UI markers and no legacy markers. The saved API is 3,453,844 bytes, 581 rows, `research-v8-coverage-and-holder-types`, `Cache-Control: no-store`, observed at `2026-09-20T17:47:33.804Z` (2026-09-21 02:47 KST). All source observations and the separate full-row production validation pass. Payload SHA-256: `4d20382db3f4c8608821ca48891c21d3b6893e90efdafdfe974e0eb3abda99bd`.
+
+Production FDV/30-day counts are P/S 1, P/R 108, P/HR 54, distinct 135; FDV/any-period counts are 1/114/64, distinct 142. Any-period coverage partitions as 142 computable + 135 source-present withheld + 304 missing = 581. Circulating-cap any-period coverage is 162; the earlier frozen comparison's 163 has a different collected row set (mETH Protocol is absent from this production snapshot). VVV is FDV P/S 20.7981 versus 30-day P/HR 235.2844, with the separate annualized sales estimate and buy/burn denominator disclosed. Ethereum has 30/30 burn-history days with a linked supplemental source.
+
+Production browser verification confirms VVV's sales source/estimate and return distinction, popup display/filter controls, mobile 390×844 layout, keyboard focus containment, Escape focus return, saved column order after hydration/reload, no document horizontal overflow and no warning/error logs. The public tab is restored to all rows, circulating cap, its original six-column order and closed popups. Temporary viewport overrides are reset and the local preview server is stopped. Local pointer/keyboard reorder, FDV reference and Aave historical-period checks are recorded in the implementation entry below.
+
+Evidence is outside Git under `C:/Users/TAE/Documents/Codex/2026-09-19/dot-plugin-browser-openai-bundled-mention/outputs/coverage-v8`: `deployment.log`, `deployment-identity.json`, `production/readback.json`, `production/snapshot.json`, `ui`, `final-audit`, and the daily-capture smoke artifacts. The daily capture was tested locally; this receipt does not claim a new hosted scheduled-run result.
+
 ## 2026-09-21 — v8 coverage and popup implementation
 
 The user authorized the project-wide coverage correction and replacing the permanent sidebar with CoinGecko-style filter/display popups. Current contract is `research-v8-coverage-and-holder-types`; [SCREENER_V8.md](./SCREENER_V8.md) records definitions, source recovery, retained exclusions and exact comparison counts. Existing browser preferences migrate without resetting columns, numerator or filters. All confirmed holder mechanisms include explicit conditions; absent FDV stays unavailable with a separately labeled circulating-cap reference.
