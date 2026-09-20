@@ -47,3 +47,5 @@ The v5.1 usability readback also requires both page-size selectors in the page a
 After every production deployment, also retain the Vercel deployment ID and unique URL from CLI output or `vercel inspect`. A successful payload upload alone is not a completed deployment until the canonical alias passes the readback gate.
 
 V7 also checks the separate sales evidence identity and amount, P/HR arithmetic and complete 30-day coverage, protocol-only P/R, and stablecoin capital exclusions. UI page-size IDs remain required.
+
+The 2026-09-21 usability update additionally requires table column-move controls and the last-settings persistence hint in the production HTML. Its calculation rules and API version remain V7.

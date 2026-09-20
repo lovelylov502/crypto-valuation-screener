@@ -1,5 +1,15 @@
 # Handoff
 
+## 2026-09-21 — column ordering and remembered workspace
+
+The user reported repeated dropdown interaction, unnecessary preset emphasis, undiscoverable column settings and scattered added columns. Whole-universe/watchlist, numerator and available-metric choices are now visible buttons. Secondary signal views remain under filters. A prominent table-side column button opens the saved columns panel.
+
+Pointer drag handles in both the sidebar list and table header update one persisted column order. Keyboard arrows and the original move buttons remain available; Escape cancels a pending drag. New period columns insert beside their metric, while the explicit four-period action groups 1 year / 90 / 30 / 7 days at that metric's existing position. Other columns retain their order. The existing V7 storage key is retained, including migration of old layouts; last settings panel and desktop sidebar visibility now also persist. Mobile sidebar opening does not overwrite the desktop preference.
+
+P/R versus P/HR help now explains protocol-side revenue versus eligible holder returns, overlapping accounting scope and a clearly hypothetical 10x / 50x example, linked to DefiLlama's definitions. Financial collection, eligibility, formulas and score version are unchanged.
+
+Local browser checks passed sidebar pointer dragging, table-header pointer dragging, keyboard movement, four-period grouping, adjacent checkbox insertion, reload restoration of filters/numerator/column order/settings panel/collapsed sidebar, and mobile 390px layout with Escape focus return. Five targeted regression tests cover order integrity and legacy/current preference round-trips. Final guarded production verification is recorded separately after deployment.
+
 ## 2026-09-20 — v7 production receipt
 
 V7 is live at https://crypto-valuation-screener.vercel.app. Application commit `b764a3a6c50774e6046432c276fc6f42b6cf07da` was deployed from clean synchronized canonical main through `npm run deploy:production`. Deployment `dpl_FRKeT8eGhjU5TPgNp5P3kXJqkQCw` is READY in production; unique URL https://crypto-valuation-screener-gcjn2ct1s-bodycation.vercel.app. Authenticated readback confirms the application commit, main branch, expected project and canonical alias. This receipt is a later documentation-only commit.

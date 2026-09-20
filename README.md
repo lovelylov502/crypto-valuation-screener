@@ -9,7 +9,8 @@
 ## Current v7
 
 - P/S uses separately sourced business sales, with scope, estimate status, date and expiry. P/R uses protocol-retained revenue. P/HR uses dated, eligible holder returns. Missing evidence stays unavailable.
-- The left control panel changes filters and columns independently. Column order, numerator choice, watchlist and filters persist. Details open on the right without replacing the table.
+- The left control panel changes filters and columns independently. Drag handles on the selected-column list and table headers reorder columns; arrow keys and move buttons are also supported. Column order, numerator choice, watchlist, filters, last settings panel and desktop sidebar visibility persist in the same browser. Details open on the right without replacing the table.
+- Whole-universe/watchlist, MCap/FDV and metric availability use visible buttons. Additional signal views are secondary filters. New period columns stay beside their metric; the four-period action groups 1 year / 90 / 30 / 7 days without resetting other columns.
 - MCap/FDV selection applies consistently to all three multiples. Holder and protocol multiples offer 7/30/90/365-day windows; incomplete 365-day coverage is never TTM.
 - Exact asset IDs and symbol agreement replace substring ticker matching. Protocol-directory parent links eliminate duplicate child rows. Stablecoin issued supply cannot produce investment-token multiples or scores.
 - Every response checks the valuation contract. Definition drift, missing daily observations and expired sales evidence hold the affected metrics. Daily archives add a quality report and calculation-source hashes.

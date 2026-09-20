@@ -69,12 +69,13 @@ export const COLUMN_GROUP_LABELS: Record<ColumnGroup, string> = {
 
 export const SCREENER_COLUMNS: ScreenerColumn[] = [
   { key: "psSales", label: "P/S · 사업 매출", title: "토큰 시총 또는 FDV ÷ 별도로 확인한 연간 사업 매출. 추정치는 기준일과 출처를 표시하며 소각액·수수료를 매출로 대체하지 않습니다", group: "valuation" },
-  { key: "pr", label: "P/R · 30일", title: "현재 토큰 가치 ÷ (프로토콜 귀속 수익 30일 × 365/30). 회사 전체 매출·순이익과 다릅니다", group: "valuation" },
   { key: "pr1y", label: "P/R · 1년", title: "현재 토큰 가치 ÷ 프로토콜 귀속 수익 365일 합계. 이력이 부족하면 보류", group: "valuation" },
   { key: "pr90d", label: "P/R · 90일", title: "현재 토큰 가치 ÷ (프로토콜 귀속 수익 90일 × 365/90)", group: "valuation" },
+  { key: "pr", label: "P/R · 30일", title: "현재 토큰 가치 ÷ (프로토콜 귀속 수익 30일 × 365/30). 회사 전체 매출·순이익과 다릅니다", group: "valuation" },
   { key: "pr7d", label: "P/R · 7일", title: "현재 토큰 가치 ÷ (프로토콜 귀속 수익 7일 × 365/7)", group: "valuation" },
   { key: "phr1y", label: "P/HR · 1년", title: "현재 토큰 가치 ÷ 적격 환원액 365일 합계. 정확히 365일의 이력이 필요합니다", group: "valuation" },
   { key: "phr90d", label: "P/HR · 90일", title: "현재 토큰 가치 ÷ (적격 환원액 90일 × 365/90)", group: "valuation" },
+  { key: "phr", label: "P/HR · 30일", title: "현재 토큰 가치 ÷ (적격 최근 30일 환원액 × 365/30). 현금 분배·시장매입과 소각을 구분하며 낮은 배수만으로 저평가를 판단하지 않습니다", group: "valuation" },
   { key: "phr7d", label: "P/HR · 7일", title: "현재 토큰 가치 ÷ (적격 환원액 7일 × 365/7). 일회성 매입에 민감합니다", group: "valuation" },
   { key: "signals", label: "포착 신호", title: "실적 개선 · 현재 홀더 배분 · 관측 흐름 전환. 여러 신호가 함께 나타날 수 있습니다", group: "valuation" },
   { key: "revenueGrowth", label: "집계액 변화", title: "동일 구성요소 최근 30일 / 직전 30일 변화", group: "fundamentals" },
@@ -83,7 +84,6 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
   { key: "scoreAxes", label: "4축", title: "가치 30 · 개선 25 · 미발견 25 · 품질 20", group: "valuation" },
   { key: "confidence", label: "자료 완성도", title: "필드 확보율 A/B/C. 성공 확률이나 근거 신뢰도가 아닙니다", group: "valuation" },
   { key: "gateStatus", label: "게이트", title: "정체성·시세·이력·유동성·희석·상장기간·활동성 필수 조건", group: "valuation" },
-  { key: "phr", label: "P/HR · 30일", title: "현재 토큰 가치 ÷ (적격 최근 30일 환원액 × 365/30). 현금 분배·시장매입과 소각을 구분하며 낮은 배수만으로 저평가를 판단하지 않습니다", group: "valuation" },
   { key: "holderValueRunRate", label: "현재 홀더가치/년", title: "P/HR 적격 최근 30일 holder value × 365/30. DefiLlama-derived 분류", group: "fundamentals" },
   { key: "holderValueTtm", label: "홀더 원천 1년", title: "DefiLlama total1y. 365일 확보 여부 미확인 · P/HR 제외 유형 포함", group: "fundamentals" },
   { key: "mcap", label: "시총", title: "유통 시가총액", group: "market" },
@@ -117,6 +117,6 @@ export const DEFAULT_VISIBLE_COLUMNS: SortKey[] = [
   "mcap",
   "psSales",
   "pr",
-  "phr",
   "phr90d",
+  "phr",
 ];

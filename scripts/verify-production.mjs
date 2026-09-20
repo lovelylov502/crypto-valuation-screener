@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { DEPLOY_CONTRACT } from "./deploy-contract.mjs";
 
-const ADVANCED_UI_MARKERS = ["비교 설정", "배수 분자", "P/S · 사업 매출", "P/R · 30일", "P/HR · 30일", "차이와 계산법", "최신 자료 확인", "page-size-top", "page-size-bottom"];
+const ADVANCED_UI_MARKERS = ["비교 설정", "배수 분자", "P/S · 사업 매출", "P/R · 30일", "P/HR · 30일", "차이와 계산법", "최신 자료 확인", "page-size-top", "page-size-bottom", "표 열 순서 이동", "마지막 설정·열 순서"];
 const LEGACY_UI_MARKERS = ["저평가 80+", "고평가 20 이하", "P/S 참고선", "P/S · 30일"];
 const MAX_API_BYTES = 4_500_000;
 const MAX_ATTEMPTS = 8;

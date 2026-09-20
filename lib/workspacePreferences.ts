@@ -3,12 +3,13 @@ import type { CapitalBasis } from "./valuationMetrics";
 export type UniverseView = "all" | "favorites" | "growth" | "holder" | "changes" | "issues";
 export interface WorkspacePreferences {
   columns: SortKey[]; capital: CapitalBasis; view: UniverseView; search: string; category: string;
+  panel: "filters" | "columns"; sidebarOpen: boolean;
   available: "all" | "sales" | "revenue" | "holder";
   minMcap: number; maxMcap: number; maxPs: number; maxPhr: number;
   hideDilution: boolean; verifiedOnly: boolean; sortKey: SortKey; sortDir: "asc" | "desc";
 }
 export const WORKSPACE_KEY = "crypto-valuation-workspace-v7";
-export const defaultPreferences = (): WorkspacePreferences => ({ columns: [...DEFAULT_VISIBLE_COLUMNS], capital: "mcap", view: "all", search: "", category: "", available: "all", minMcap: 0, maxMcap: 0, maxPs: 0, maxPhr: 0, hideDilution: false, verifiedOnly: false, sortKey: "mcap", sortDir: "desc" });
+export const defaultPreferences = (): WorkspacePreferences => ({ columns: [...DEFAULT_VISIBLE_COLUMNS], capital: "mcap", view: "all", search: "", category: "", panel: "columns", sidebarOpen: true, available: "all", minMcap: 0, maxMcap: 0, maxPs: 0, maxPhr: 0, hideDilution: false, verifiedOnly: false, sortKey: "mcap", sortDir: "desc" });
 export function parseWorkspace(raw: string | null): WorkspacePreferences {
   const defaults = defaultPreferences();
   try {
@@ -18,6 +19,7 @@ export function parseWorkspace(raw: string | null): WorkspacePreferences {
     const columns = Array.isArray(p.columns) ? [...new Set<SortKey>(p.columns.filter((k: unknown) => typeof k === "string" && keys.has(k)))] : [];
     const finite = (k: string) => typeof p[k] === "number" && Number.isFinite(p[k]) && p[k] >= 0 ? p[k] : 0;
     return { ...defaults, columns: columns.length ? columns : defaults.columns,
+      panel: p.panel === "filters" ? "filters" : "columns", sidebarOpen: p.sidebarOpen !== false,
       capital: p.capital === "fdv" ? "fdv" : "mcap",
       view: ["all", "favorites", "growth", "holder", "changes", "issues"].includes(p.view) ? p.view : "all",
       search: typeof p.search === "string" ? p.search.slice(0, 200) : "",
@@ -30,5 +32,5 @@ export function parseWorkspace(raw: string | null): WorkspacePreferences {
 }
 /** Reset filters without changing the user's comparison columns or capital basis. */
 export function resetWorkspaceFilters(p: WorkspacePreferences): WorkspacePreferences {
-  return { ...defaultPreferences(), columns: p.columns, capital: p.capital, sortKey: p.sortKey, sortDir: p.sortDir };
+  return { ...defaultPreferences(), columns: p.columns, capital: p.capital, sortKey: p.sortKey, sortDir: p.sortDir, panel: p.panel, sidebarOpen: p.sidebarOpen };
 }
