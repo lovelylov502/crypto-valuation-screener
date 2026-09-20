@@ -7,11 +7,32 @@ describe("quote changes", () => {
     const url = String(input);
     const body = url.includes("/coins/markets")
       ? quote ? [{ id: "token", current_price: 1, market_cap: 10000000, price_change_percentage_24h: 3, price_change_percentage_7d_in_currency: 5 }] : []
+      : url.includes("stablecoins.llama.fi") ? { peggedAssets: [{gecko_id:"usdd",symbol:"USDD"}] }
       : url.includes("coinmarketcap.com") ? { data: [] }
       : url.endsWith("/protocols") ? [{ slug: "token", name: "Token", symbol: "T", gecko_id: "token", mcap: 10000000, change_1d: 99, change_7d: 88 }]
       : { protocols: [{ slug: "token", total30d: 100, total60dto30d: 90 }] };
     return new Response(JSON.stringify(body));
   }));
+  it("groups children using the protocol directory even when the overview omits parent links", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+      const url = String(input);
+      const body = url.includes("stablecoins.llama.fi") ? {peggedAssets:[{gecko_id:"usdd",symbol:"USDD"}]} : url.includes("coinmarketcap.com") ? {data:[]} : url.includes("/coins/markets") ? []
+        : url.endsWith("/protocols") ? [{slug:"child-a",name:"A",symbol:"T",gecko_id:"token",mcap:10000000,parentProtocol:"parent#token"},{slug:"child-b",name:"B",symbol:"T",gecko_id:"token",mcap:10000000,parentProtocol:"parent#token"}]
+        : {protocols:[{slug:"child-a",total30d:100},{slug:"child-b",total30d:200}]};
+      return new Response(JSON.stringify(body));
+    }));
+    const coins = await fetchCoins([]);
+    expect(coins).toHaveLength(1);
+    expect(coins[0].slug).toBe("parent#token");
+    expect(coins[0].mcap).toBe(10000000);
+    expect(coins[0].revenue30d).toBe(300);
+  });
+  it("refuses to disable stablecoin valuation exclusions when their identity registry is empty", async () => {
+    mockSources(true);
+    const fetchSource = globalThis.fetch;
+    vi.stubGlobal("fetch", vi.fn(async (input: string) => String(input).includes("stablecoins.llama.fi") ? new Response(JSON.stringify({peggedAssets:[]})) : fetchSource(input)));
+    await expect(fetchCoins([])).rejects.toThrow("Stablecoin identity registry unavailable");
+  });
   it("never fills missing price changes with DefiLlama TVL changes", async () => {
     mockSources(false);
     const [coin] = await fetchCoins([]);

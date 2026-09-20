@@ -2,6 +2,7 @@ import type { CoinScored, ScreenerResponse } from "./types";
 import type { OpportunityTrack } from "./signals";
 import { researchMultiple } from "./research";
 import { revenueAmount, revenueBasis, historyMatches } from "./revenueHistory";
+import { holderAmount, holderHistoryMatches } from "./valuationMetrics";
 
 export const HISTORY_STORAGE_KEY = "crypto-screener-history-v1";
 export const REVIEW_BASELINE_KEY = "crypto-screener-review-baseline-v1";
@@ -28,7 +29,7 @@ export interface Snapshot {
 function identity(coin: CoinScored) {
   return `${coin.identityStatus}:${coin.cmcId ?? ""}:${coin.geckoId ?? ""}:${coin.symbol ?? ""}`;
 }
-const observationBasis = (coin: CoinScored) => `${revenueBasis(coin)}:${coin.revenueHistory?.definitionFingerprint ?? "none"}`;
+const observationBasis = (coin: CoinScored) => `${revenueBasis(coin)}:${coin.revenueHistory?.definitionFingerprint ?? "none"}:holder:${coin.holderHistory?.definitionFingerprint ?? "none"}:sales:${coin.sales?.id ?? "none"}:${coin.sales?.amountUsd ?? "none"}:${coin.sales?.status ?? "none"}`;
 export function makeSnapshot(data: ScreenerResponse): Snapshot {
   return {
     schema: 2,
@@ -47,7 +48,7 @@ export function makeSnapshot(data: ScreenerResponse): Snapshot {
           score: c.valueScore,
           phr: c.multiples.phr,
           revenue30d: revenueAmount(c, 30),
-          holder30d: c.holderValue.eligibleCurrent30d,
+          holder30d: holderAmount(c, 30),
           tracks: (["business", "holder", "transition"] as const).filter(
             (track) => c.opportunities[track],
           ),
@@ -148,7 +149,7 @@ export function compareSnapshot(
   if (!previous) return { ...empty, state: "new", meaningful: true };
   if (previous.identity !== identity(coin))
     return { ...empty, state: "identity_changed" };
-  if (!historyMatches(coin) || previous.definition !== coin.fundamentals.fingerprint || previous.basis !== observationBasis(coin))
+  if (!historyMatches(coin) || (coin.holderHistory && !holderHistoryMatches(coin)) || previous.definition !== coin.fundamentals.fingerprint || previous.basis !== observationBasis(coin))
     return { ...empty, state: "definition_changed" };
   const delta = (a: number | null, b: number | null) =>
     a !== null && b !== null ? a - b : null;
@@ -159,7 +160,7 @@ export function compareSnapshot(
   const phrDelta = delta(coin.multiples.phr, previous.phr);
   const revenueDelta = delta(revenueAmount(coin, 30), previous.revenue30d);
   const holderDelta = delta(
-    coin.holderValue.eligibleCurrent30d,
+    holderAmount(coin, 30),
     previous.holder30d,
   );
   // Change filter suppresses quote noise; all exact deltas remain available in the detail.

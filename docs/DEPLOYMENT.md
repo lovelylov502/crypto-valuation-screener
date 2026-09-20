@@ -40,8 +40,10 @@ npm run verify:local
 
 ## Post-deploy readback gate
 
-`npm run verify:production` requires both canonical endpoints to return HTTP 200. The page must contain `배수 참고선`, `사업 수익 성장`, `시총/집계액 · 집계액 추이`, `집계 종류`, `확인 후 변화`, and `최신 자료 확인`, and must not contain `저평가 80+` or `고평가 20 이하`. The API must return `scoreVersion=research-v6-fundamental-scope`, row fields including `opportunities` and `peerCounts`, a non-empty result, and a payload below 4.5 MB. At least one row must have usable completed-day revenue history with positive 30-day revenue and 13 weekly observations. The source-root, repository, branch, remote, credential, and Vercel identity guards are unchanged.
+`npm run verify:production` requires both canonical endpoints to return HTTP 200. The page must contain `비교 설정`, `배수 분자`, `P/S · 사업 매출`, `P/R · 30일`, `P/HR · 30일`, `차이와 계산법`, and `최신 자료 확인`, and must not contain `저평가 80+` or `고평가 20 이하`. The API must return `scoreVersion=research-v7-sales-and-holder-windows`, row fields including `opportunities` and `peerCounts`, a non-empty result, and a payload below 4.5 MB. At least one row must have usable completed-day revenue history with positive 30-day revenue and 13 weekly observations. The source-root, repository, branch, remote, credential, and Vercel identity guards are unchanged.
 
 The v5.1 usability readback also requires both page-size selectors in the page and the `descriptionKo` API field with at least one usable Korean introduction. V6 also rejects legacy `multiples.ps`, unknown/mixed multiples, unreviewed holder shares and non-business growth. The live VVV row must remain holder-return scoped for both Revenue and Fees, with no business growth or inferred 100% share.
 
 After every production deployment, also retain the Vercel deployment ID and unique URL from CLI output or `vercel inspect`. A successful payload upload alone is not a completed deployment until the canonical alias passes the readback gate.
+
+V7 also checks the separate sales evidence identity and amount, P/HR arithmetic and complete 30-day coverage, protocol-only P/R, and stablecoin capital exclusions. UI page-size IDs remain required.

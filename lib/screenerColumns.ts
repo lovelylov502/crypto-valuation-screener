@@ -1,4 +1,12 @@
 export type SortKey =
+  | "psSales"
+  | "pr"
+  | "pr7d"
+  | "pr90d"
+  | "pr1y"
+  | "phr7d"
+  | "phr90d"
+  | "phr1y"
   | "price"
   | "change1d"
   | "multiple7d"
@@ -53,13 +61,21 @@ export interface ScreenerColumn {
 }
 
 export const COLUMN_GROUP_LABELS: Record<ColumnGroup, string> = {
-  valuation: "가치 비교 · 기존 점수",
+  valuation: "배수 · 비교 지표",
   fundamentals: "집계액 · 홀더 환원",
   market: "가격 · 시총 · 공급",
   performance: "가격 변화",
 };
 
 export const SCREENER_COLUMNS: ScreenerColumn[] = [
+  { key: "psSales", label: "P/S · 사업 매출", title: "토큰 시총 또는 FDV ÷ 별도로 확인한 연간 사업 매출. 추정치는 기준일과 출처를 표시하며 소각액·수수료를 매출로 대체하지 않습니다", group: "valuation" },
+  { key: "pr", label: "P/R · 30일", title: "현재 토큰 가치 ÷ (프로토콜 귀속 수익 30일 × 365/30). 회사 전체 매출·순이익과 다릅니다", group: "valuation" },
+  { key: "pr1y", label: "P/R · 1년", title: "현재 토큰 가치 ÷ 프로토콜 귀속 수익 365일 합계. 이력이 부족하면 보류", group: "valuation" },
+  { key: "pr90d", label: "P/R · 90일", title: "현재 토큰 가치 ÷ (프로토콜 귀속 수익 90일 × 365/90)", group: "valuation" },
+  { key: "pr7d", label: "P/R · 7일", title: "현재 토큰 가치 ÷ (프로토콜 귀속 수익 7일 × 365/7)", group: "valuation" },
+  { key: "phr1y", label: "P/HR · 1년", title: "현재 토큰 가치 ÷ 적격 환원액 365일 합계. 정확히 365일의 이력이 필요합니다", group: "valuation" },
+  { key: "phr90d", label: "P/HR · 90일", title: "현재 토큰 가치 ÷ (적격 환원액 90일 × 365/90)", group: "valuation" },
+  { key: "phr7d", label: "P/HR · 7일", title: "현재 토큰 가치 ÷ (적격 환원액 7일 × 365/7). 일회성 매입에 민감합니다", group: "valuation" },
   { key: "signals", label: "포착 신호", title: "실적 개선 · 현재 홀더 배분 · 관측 흐름 전환. 여러 신호가 함께 나타날 수 있습니다", group: "valuation" },
   { key: "revenueGrowth", label: "집계액 변화", title: "동일 구성요소 최근 30일 / 직전 30일 변화", group: "fundamentals" },
   { key: "holderGrowth", label: "홀더 변화", title: "적격 홀더 금액 최근 30일 / 직전 30일 변화. 0과 누락을 구분", group: "fundamentals" },
@@ -67,7 +83,7 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
   { key: "scoreAxes", label: "4축", title: "가치 30 · 개선 25 · 미발견 25 · 품질 20", group: "valuation" },
   { key: "confidence", label: "자료 완성도", title: "필드 확보율 A/B/C. 성공 확률이나 근거 신뢰도가 아닙니다", group: "valuation" },
   { key: "gateStatus", label: "게이트", title: "정체성·시세·이력·유동성·희석·상장기간·활동성 필수 조건", group: "valuation" },
-  { key: "phr", label: "P/HR", title: "시총 / 적격 최근 30일 holder value 연환산 (낮을수록 쌈)", group: "valuation" },
+  { key: "phr", label: "P/HR · 30일", title: "현재 토큰 가치 ÷ (적격 최근 30일 환원액 × 365/30). 현금 분배·시장매입과 소각을 구분하며 낮은 배수만으로 저평가를 판단하지 않습니다", group: "valuation" },
   { key: "holderValueRunRate", label: "현재 홀더가치/년", title: "P/HR 적격 최근 30일 holder value × 365/30. DefiLlama-derived 분류", group: "fundamentals" },
   { key: "holderValueTtm", label: "홀더 원천 1년", title: "DefiLlama total1y. 365일 확보 여부 미확인 · P/HR 제외 유형 포함", group: "fundamentals" },
   { key: "mcap", label: "시총", title: "유통 시가총액", group: "market" },
@@ -80,7 +96,6 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
   { key: "atlChangePercentage", label: "ATL 대비", title: "현재가의 사상 최저가 대비 변화율", group: "performance" },
   { key: "category", label: "섹터", title: "카테고리", group: "market" },
   { key: "captureScore", label: "포획", title: "최근 30일 적격 경제유형만 반영한 일반 홀더 가치포획 점수", group: "valuation" },
-  { key: "revenueMultiple", label: "시총/집계액 · 30일", title: "현재 토큰 시총 / (최근 30일 집계액 × 365/30). 각 행의 집계 종류 확인 · 같은 종류와 기간 기준끼리 비교", group: "valuation" },
   { key: "revenueAnnual", label: "원천 30일 연환산", title: "원천 최근 30일 × 365/30. 실제 1년 합계나 미래 예측을 뜻하지 않습니다", group: "fundamentals" },
   { key: "revenue30d", label: "집계액 30일", title: "최근 30일 집계액 (원값)", group: "fundamentals" },
   { key: "fdv", label: "FDV", title: "완전희석가치 (CoinMarketCap 우선)", group: "market" },
@@ -89,9 +104,6 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
   { key: "feesChange7d", label: "수수료 변화", title: "최근 7일 vs 직전 7일 수수료 변화 (30일 변화 보조 표시)", group: "fundamentals" },
   { key: "price", label: "가격", title: "현재 토큰 가격 · USD", group: "market" },
   { key: "change1d", label: "가격 24시간", title: "토큰 가격의 24시간 변화. 포착 조건에는 반영하지 않습니다", group: "performance" },
-  { key: "multiple1y", label: "시총/집계액 · 1년", title: "현재 시총 / 최근 365일 원천 집계액 합계. 1년 미만의 이력은 연환산하지 않습니다", group: "valuation" },
-  { key: "multiple90d", label: "시총/집계액 · 90일", title: "현재 시총 / (최근 90일 집계액 × 365/90)", group: "valuation" },
-  { key: "multiple7d", label: "시총/집계액 · 7일", title: "현재 시총 / (최근 7일 집계액 × 365/7). 일시적인 집계액에 민감합니다", group: "valuation" },
   { key: "revenue7d", label: "집계액 7일", title: "최근 7일 원천 집계액. 누락은 0으로 채우지 않습니다", group: "fundamentals" },
   { key: "revenue90d", label: "집계액 90일", title: "최근 90일 원천 집계액 합계", group: "fundamentals" },
   { key: "revenue1y", label: "집계액 1년", title: "최근 365일 원천 집계액 합계 · 연환산 아님", group: "fundamentals" },
@@ -101,23 +113,10 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
 ];
 
 export const DEFAULT_VISIBLE_COLUMNS: SortKey[] = [
-  "revenueMultiple",
-  "revenue30d",
-  "mcap",
-  "fdv",
   "price",
-];
-
-export const COLUMN_PRESETS: { label: string; keys: SortKey[] }[] = [
-  { label: "종목 훑기", keys: DEFAULT_VISIBLE_COLUMNS },
-  { label: "시총/집계액 · 집계액 추이", keys: ["multiple1y", "multiple90d", "revenueMultiple", "multiple7d", "revenue30d", "mcap", "fdv", "price"] },
-  { label: "홀더 환원", keys: ["holderRoute", "payoutAsset", "holderCondition", "holderValueRunRate", "phr", "mcap", "fdv", "price"] },
-  {
-    label: "가격 · 공급",
-    keys: ["price", "mcap", "fdv", "change1d", "priceChange7d", "priceChange30d", "totalVolume"],
-  },
-  {
-    label: "점수 근거",
-    keys: ["valueScore", "scoreAxes", "confidence", "gateStatus", "captureScore", "phr", "revenueMultiple", "holderValueRunRate", "holderValueTtm", "revenueAnnual", "mcap"],
-  },
+  "mcap",
+  "psSales",
+  "pr",
+  "phr",
+  "phr90d",
 ];

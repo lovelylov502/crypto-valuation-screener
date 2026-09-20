@@ -1,0 +1,16 @@
+{
+  "venice": {
+    "id": "venice-sacra-2026-08",
+    "geckoId": "venice-token",
+    "symbol": "VVV",
+    "amountUsd": 110000000,
+    "basis": "annualized_estimate",
+    "asOf": "2026-08",
+    "reviewedAt": "2026-09-20",
+    "validUntil": "2026-10-30",
+    "publisher": "Sacra",
+    "url": "https://sacra.com/c/venice-ai/",
+    "scope": "Venice AI 사업 매출 · 구독 및 사용량 기반 API/크레딧 판매",
+    "limitation": "Sacra의 연환산 매출 추정치. 감사된 1년 실적이나 계약상 ARR이 아닙니다. VVV 토큰은 회사 지분이 아니므로 사업 매출에 대한 토큰 가치의 참고 배수입니다."
+  }
+}

@@ -9,6 +9,10 @@ import type { SortKey } from "@/lib/screenerColumns";
 import { ScoreBadge } from "./ScoreBadge";
 import { TriangleAlert } from "lucide-react";
 import { multipleLabel, feeLabel, knownRevenue } from "@/lib/fundamentals";
+import { salesMultiple, salesReason, protocolMultiple, protocolReason, holderMultiple, holderReason, datedHolderValue, type CapitalBasis } from "@/lib/valuationMetrics";
+import type { RevenueWindowDays } from "@/lib/revenueHistory";
+
+export const METRIC_DAYS: Partial<Record<SortKey, RevenueWindowDays>> = { phr: 30, phr7d: 7, phr90d: 90, phr1y: 365, pr: 30, pr7d: 7, pr90d: 90, pr1y: 365 };
 
 // 코인 외부 링크: canonical CMC 우선, 없으면 CoinGecko/DefiLlama 폴백
 export function coinUrl(c: CoinScored): string {
@@ -17,7 +21,10 @@ export function coinUrl(c: CoinScored): string {
   return `https://defillama.com/protocol/${c.slug.replace(/^parent#/, "")}`;
 }
 
-export function sortValue(c: CoinScored, key: SortKey): number | string | null {
+export function sortValue(c: CoinScored, key: SortKey, basis: CapitalBasis = "mcap"): number | string | null {
+  if (key === "psSales") return salesMultiple(c, basis);
+  if (key.startsWith("phr")) return holderMultiple(c, METRIC_DAYS[key] ?? 30, basis);
+  if (key === "pr" || key.startsWith("pr7") || key.startsWith("pr90") || key === "pr1y") return protocolMultiple(c, METRIC_DAYS[key] ?? 30, basis);
   switch (key) {
     case "price": return c.price;
     case "change1d": return c.change1d;
@@ -56,12 +63,10 @@ export function sortValue(c: CoinScored, key: SortKey): number | string | null {
       return c.valueCapture.score;
     case "revenueMultiple":
       return researchMultiple(c);
-    case "phr":
-      return c.multiples.phr;
     case "revenueAnnual":
       return c.revenueAnnual;
     case "holderValueRunRate":
-      return c.holderValue.eligibleRunRate;
+      return datedHolderValue(c).eligibleRunRate;
     case "holderValueTtm":
       return c.holderValue.rawTtm;
     case "revenue30d":
@@ -91,6 +96,7 @@ export function sortValue(c: CoinScored, key: SortKey): number | string | null {
     case "feesChange7d":
       return c.feesChange7dover7d;
   }
+  return null;
 }
 
 function changeClass(v: number | null): string {
@@ -142,7 +148,19 @@ function holderValueDetail(c: CoinScored): string {
 }
 
 // 셀 렌더 (코인 제외)
-export function renderCell(c: CoinScored, key: SortKey) {
+export function renderCell(c: CoinScored, key: SortKey, basis: CapitalBasis = "mcap") {
+  if (key === "psSales") {
+    const value = salesMultiple(c, basis), other = salesMultiple(c, basis === "mcap" ? "fdv" : "mcap");
+    return <span className="metric-reading"><strong>{fmtMult(value)}</strong><small className={value === null ? "muted" : "estimate-badge"}>{value === null ? salesReason(c) : c.sales?.basis === "annualized_estimate" ? "외부 매출 추정" : "보고 매출"}</small>{value !== null && <small>{basis === "mcap" ? "FDV" : "시총"} 기준 {fmtMult(other)}</small>}</span>;
+  }
+  if (key.startsWith("phr")) {
+    const days = METRIC_DAYS[key] ?? 30, value = holderMultiple(c, days, basis);
+    return <span className="metric-reading" title={holderReason(c, days)}><strong>{fmtMult(value)}</strong><small>{value === null ? holderReason(c, days) : days === 365 ? "365일 실제 합계" : `${days}일 연환산`}</small></span>;
+  }
+  if (key === "pr" || key === "pr7d" || key === "pr90d" || key === "pr1y") {
+    const days = METRIC_DAYS[key] ?? 30, value = protocolMultiple(c, days, basis);
+    return <span className="metric-reading"><strong>{fmtMult(value)}</strong><small>{value !== null ? "프로토콜 수익" : protocolReason(c,days)}</small></span>;
+  }
   switch (key) {
     case "price": return fmtPrice(c.price);
     case "change1d": return <span className={changeClass(c.change1d)}>{fmtPct(c.change1d)}</span>;
@@ -284,21 +302,6 @@ export function renderCell(c: CoinScored, key: SortKey) {
       );
     case "revenueMultiple":
       return <span className="metric-cell" title={multipleLabel(c)}><strong>{fmtMult(researchMultiple(c))}</strong>{researchMultiple(c) === null && !knownRevenue(c) && <span className="muted">정의 확인 필요</span>}{!c.revenueHistory && researchMultiple(c) !== null && <span className="muted">원천 기간 집계</span>}</span>;
-    case "phr":
-      return (
-        <span className="inline-flex min-w-[120px] flex-col items-end gap-0.5">
-          <strong>{fmtMult(c.multiples.phr)}</strong>
-          {c.multiples.phr === null &&
-            ((c.holderValue.rawTtm ?? 0) > 0 || c.holderValue.warning) && (
-              <span
-                className="block max-w-[160px] truncate text-[10px] text-amber-300"
-                title={holderValueDetail(c)}
-              >
-                {c.holderValue.phrUnavailableReason}
-              </span>
-            )}
-        </span>
-      );
     case "revenueAnnual":
       return fmtUsd(c.revenueAnnual);
     case "holderValueRunRate":
@@ -309,12 +312,12 @@ export function renderCell(c: CoinScored, key: SortKey) {
         >
           <strong
             className={
-              c.holderValue.eligibleRunRate !== null
+              datedHolderValue(c).eligibleRunRate !== null
                 ? "text-emerald-300"
                 : "text-[var(--color-muted)]"
             }
           >
-            {fmtUsd(c.holderValue.eligibleRunRate)}
+            {fmtUsd(datedHolderValue(c).eligibleRunRate)}
             {c.holderValue.warning && (
               <TriangleAlert size={12} className="ml-1 inline text-amber-300" />
             )}

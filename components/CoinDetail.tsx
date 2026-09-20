@@ -13,6 +13,8 @@ import { RevenuePanel } from "./RevenuePanel";
 import type { Snapshot, SnapshotChange } from "@/lib/snapshotHistory";
 import { coinUrl } from "./ScreenerCells";
 import { revenueLabel, feeLabel, multipleLabel } from "@/lib/fundamentals";
+import { ValuationEvidence } from "./ValuationEvidence";
+import { datedHolderValue, type CapitalBasis } from "@/lib/valuationMetrics";
 
 export function CoinDetail({
   coin: c,
@@ -20,12 +22,14 @@ export function CoinDetail({
   onClose,
   history,
   multipleReference,
+  capital = "mcap",
 }: {
   coin: CoinScored;
   change: SnapshotChange;
   onClose: () => void;
   history: Snapshot[];
   multipleReference: number | null;
+  capital?: CapitalBasis;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -81,6 +85,7 @@ export function CoinDetail({
           <dl className="market-summary"><div><dt>시가총액</dt><dd>{fmtUsd(c.mcap)}</dd></div><div><dt>FDV</dt><dd>{fmtUsd(c.fdv)}</dd></div><div><dt>24시간 거래량</dt><dd>{fmtUsd(c.totalVolume)}</dd></div></dl>
           <p className="detail-note muted">시세 기준 {c.marketDataUpdatedAt ? fmtKstMinute(c.marketDataUpdatedAt) : "원천 시각 미확인"}</p>
         </section>
+        <ValuationEvidence coin={c} capital={capital} />
         <section className="detail-section project-introduction">
           <h3>어떤 사업인가요?</h3>
           <p>{research?.description ?? c.descriptionKo ?? (c.description ? "한국어 소개를 준비 중입니다. 아래에서 원문을 확인할 수 있습니다." : "프로젝트 소개 자료를 확보하지 못했습니다. 원천 페이지에서 사업과 수익원을 확인해 주세요.")}</p>
@@ -89,7 +94,7 @@ export function CoinDetail({
           <div className="detail-links">{safeUrl(research?.source ?? c.descriptionSource) && <a href={safeUrl(research?.source ?? c.descriptionSource)} target="_blank" rel="noreferrer">소개 출처 <ExternalLink size={13} /></a>}{safeUrl(c.website) && <a href={safeUrl(c.website)} target="_blank" rel="noreferrer">프로젝트 홈페이지 <ExternalLink size={13} /></a>}<a href={coinUrl(c)} target="_blank" rel="noreferrer">시장 원자료 <ExternalLink size={13} /></a></div>
           {reasons.length > 0 && <div className="detail-reasons">{reasons.map(r => <span key={r}>{r}</span>)}</div>}
         </section>
-        <RevenuePanel coin={c} history={history} reference={multipleReference} />
+        <details className="detail-section"><summary>원천 집계 정의와 과거 관측 보기</summary><RevenuePanel coin={c} history={history} reference={multipleReference} /></details>
         <section className="detail-section">
           <h3>홀더에게 어떻게 귀속되나요?</h3>
           {research?.holder && <div className="holder-facts"><strong>{research.holder.route}</strong><dl>{[["재원", research.holder.funding], ["지급·소각 자산", research.holder.asset], ["수령 대상", research.holder.recipient], ["참여 조건", research.holder.condition], ["시행·검증 상태", research.holder.status]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><a href={research.holder.source} target="_blank" rel="noreferrer">공식 근거 <ExternalLink size={13} /></a><small>문서 확인 {research.reviewedAt} · 아래 금액은 원천 집계이며 정책 비율로 재계산하지 않습니다.</small></div>}
@@ -172,8 +177,8 @@ export function CoinDetail({
                   ],
                   [
                     "P/HR 적격 홀더",
-                    c.holderValue.eligiblePrevious30d,
-                    c.holderValue.eligibleCurrent30d,
+                    datedHolderValue(c).eligiblePrevious30d,
+                    datedHolderValue(c).eligibleCurrent30d,
                     flowLabel(c.opportunities.eligibleHolder),
                   ],
                 ].map(([name, prev, curr, growth]) => (

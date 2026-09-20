@@ -1,6 +1,6 @@
 /** Economic meaning travels with every amount. Unknown definitions never become sales. */
 export const FUNDAMENTAL_VERSION = "fundamental-definitions-v1";
-export const RULE_VERSION = "research-v6-fundamental-scope";
+export const RULE_VERSION = "research-v7-sales-and-holder-windows";
 export type RevenueKind = "protocol_revenue" | "service_sales" | "holder_return" | "trading_pnl" | "mixed" | "unknown";
 export type FeeKind = "user_fees" | "asset_yield" | "holder_return" | "mixed" | "unknown";
 export interface DefinitionComponent {

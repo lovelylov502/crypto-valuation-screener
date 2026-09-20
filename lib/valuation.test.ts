@@ -71,7 +71,7 @@ describe("independent opportunity signals and same-period accounting", () => {
     expect(c.multiples.pf).toBeCloseTo(raw.mcap! / (raw.fees30d! * 365 / 30));
   });
   it("preserves ratios above 100% and warns about incompatible scope or funding", () => {
-    const [c] = scoreCoins([sample({ revenue30d: 100, holderValue: { eligibleCurrent30d: 200 } })], REFERENCE);
+    const [c] = scoreCoins([sample({ revenue30d: 100_000, holderValue: { eligibleCurrent30d: 200_000 } })], REFERENCE);
     expect(c.valueCapture.eligibleHolderValueShare).toBe(2);
     expect(c.valueCapture.risks.join(" ")).toContain("분모를 초과");
     expect(c.valueCapture.score!).toBeLessThanOrEqual(100);
@@ -184,6 +184,7 @@ function fillSector(count = MIN_SECTOR_SAMPLE + 2): CoinRaw[] {
       marketCapRank: 600 + index,
       mcap: 100_000_000,
       holderValue: {
+        eligibleCurrent30d: (1_000_000 + index * 250_000) * 30 / 365,
         eligibleRunRate: 1_000_000 + index * 250_000,
         eligibleTtm: 10_000_000,
         rawTtm: 10_000_000,
@@ -220,7 +221,7 @@ function attachHolderValue(
       ...partial,
     } satisfies HolderValueSummary,
   });
-  return coin;
+  return make({ ...coin, holderHistory: undefined });
 }
 
 describe("scoreCoins discovery model", () => {
@@ -244,7 +245,7 @@ describe("scoreCoins discovery model", () => {
     const [scored] = scoreCoins([current], REFERENCE);
 
     expect(scored.multiples.phr).toBeCloseTo(120_000_000 / 12_166_666.666666666);
-    expect(SCORE_VERSION).toBe("research-v6-fundamental-scope");
+    expect(SCORE_VERSION).toBe("research-v7-sales-and-holder-windows");
   });
 
   it("leaves current P/HR unavailable when TTM is positive but current 30d is zero", () => {

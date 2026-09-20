@@ -6,17 +6,16 @@
 **🌐 라이브: https://crypto-valuation-screener.vercel.app**
 데이터: [DefiLlama](https://defillama.com) · [CoinMarketCap Keyless](https://coinmarketcap.com/api/documentation/pro-api-reference/keyless-public-api) · [CoinGecko](https://coingecko.com)
 
-## Current v6
+## Current v7
 
-- Each amount carries reviewed source definitions and an economic kind. Unknown, mixed, changed or missing definitions fail closed for multiples; generic P/S is removed.
-- The main presets compare typed amounts and holder returns. Amount sorting groups by kind and window basis; reference highlighting and multiple ranges require a selected kind. Business growth excludes buyback/burn aliases and estimated trading PnL.
-- Details begin with token price, 24h/7d/30d changes, market cap and FDV, then business descriptions, dated revenue windows, 13 non-overlapping weekly totals and holder policy evidence.
-- Official research records distinguish buybacks, burning, distributions, payout assets, recipients, conditions and policy status. Unknown facts stay explicit. Korean translations of provider descriptions fill uncovered projects, with the original available in a disclosure.
-- The list defaults to 100 rows. A native dropdown offers 50/100/200 and remembers the choice. Numbered pagination appears above and below the table; vertical scrolling follows the document with column headers held in view.
-- The review baseline moves only when explicitly acknowledged. Browser observations retain up to 60 days; unattended daily archives remain separate.
-- Large source responses bypass the 2MB fetch-cache limit. The server caches a compressed joined snapshot for 30 minutes; the refresh API adds no second response cache.
+- P/S uses separately sourced business sales, with scope, estimate status, date and expiry. P/R uses protocol-retained revenue. P/HR uses dated, eligible holder returns. Missing evidence stays unavailable.
+- The left control panel changes filters and columns independently. Column order, numerator choice, watchlist and filters persist. Details open on the right without replacing the table.
+- MCap/FDV selection applies consistently to all three multiples. Holder and protocol multiples offer 7/30/90/365-day windows; incomplete 365-day coverage is never TTM.
+- Exact asset IDs and symbol agreement replace substring ticker matching. Protocol-directory parent links eliminate duplicate child rows. Stablecoin issued supply cannot produce investment-token multiples or scores.
+- Every response checks the valuation contract. Definition drift, missing daily observations and expired sales evidence hold the affected metrics. Daily archives add a quality report and calculation-source hashes.
+- The server caches a compressed joined snapshot for 30 minutes. Browser observations retain up to 60 days and the review baseline moves only when acknowledged.
 
-Current rule version: `research-v6-fundamental-scope`. See [HANDOFF.md](./docs/HANDOFF.md) for dated validation and deployment receipts, and [SCREENER_V6.md](./docs/SCREENER_V6.md) for calculation rules, coverage and research maintenance. [SCREENER_V4.md](./docs/SCREENER_V4.md) preserves the earlier contract. Production safety remains in [DEPLOYMENT.md](./docs/DEPLOYMENT.md).
+Current rule version: `research-v7-sales-and-holder-windows`. See [SCREENER_V7.md](./docs/SCREENER_V7.md) for definitions, coverage, audit and design research; [HANDOFF.md](./docs/HANDOFF.md) for deployment receipts; [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for production guards. V6 documentation is historical.
 
 ## 개발
 

@@ -1,3 +1,4 @@
+import { eligibleCapital } from "./capitalEligibility";
 import type {
   CandidateStatus,
   CoinRaw,
@@ -11,6 +12,7 @@ import { compareFlow, deriveOpportunities } from "./signals";
 import { businessRevenue, businessFees, revenueKind, RULE_VERSION, sourceDefinitionsChanged } from "./fundamentals";
 import { revenueAmount, historyMatches, revenueBasis } from "./revenueHistory";
 import { researchMultiple } from "./research";
+import { salesMultiple, protocolMultiple, holderMultiple, datedHolderValue } from "./valuationMetrics";
 
 export const MIN_ACTIVITY_USD = 100_000;
 export const MIN_MCAP_USD = 1_000_000;
@@ -93,18 +95,17 @@ function median(values: number[]): number | null {
 }
 
 function computeMultiples(c: CoinRaw): CoinScored["multiples"] {
-  const mcap = c.identityStatus === "verified" && isPositive(c.mcap) ? c.mcap : null;
+  const mcap = eligibleCapital(c) && isPositive(c.mcap) ? c.mcap : null;
   const fees = businessFees(c) && isPositive(c.fees30d) ? c.fees30d * 365 / 30 : null;
-  const holderValue = !sourceDefinitionsChanged(c) && isPositive(c.holderValue.eligibleRunRate)
-    ? c.holderValue.eligibleRunRate
-    : null;
   const tvl = isPositive(c.tvl) ? c.tvl : null;
-  const fdv = c.identityStatus === "verified" && isPositive(c.fdv) ? c.fdv : null;
+  const fdv = eligibleCapital(c) && isPositive(c.fdv) ? c.fdv : null;
 
   return {
+    psSales: salesMultiple(c),
+    pr: protocolMultiple(c),
     pf: mcap !== null && fees !== null ? mcap / fees : null,
     revenueMultiple: researchMultiple(c),
-    phr: mcap !== null && holderValue !== null ? mcap / holderValue : null,
+    phr: holderMultiple(c),
     mcapTvl: mcap !== null && tvl !== null ? mcap / tvl : null,
     fdvTvl: fdv !== null && tvl !== null ? fdv / tvl : null,
     dilution: fdv !== null && mcap !== null ? fdv / mcap : null,
@@ -112,7 +113,7 @@ function computeMultiples(c: CoinRaw): CoinScored["multiples"] {
 }
 
 function computeEligibleHolderValueShare(c: CoinRaw): number | null {
-  if (c.identityStatus !== "verified" || !c.fundamentals.holderShareReviewed || !businessRevenue(c) || c.holderValue.eligibleCurrent30d === null) return null;
+  if (!eligibleCapital(c) || !c.fundamentals.holderShareReviewed || !businessRevenue(c) || c.holderValue.eligibleCurrent30d === null) return null;
   const denominator = isPositive(c.revenue30d) ? c.revenue30d : null;
   if (denominator === null) return null;
   return c.holderValue.eligibleCurrent30d / denominator;
@@ -132,11 +133,12 @@ function computeValueCapture({
   lowActivity: boolean;
 }): ValueCapture {
   const eligibleHolderValueShare = computeEligibleHolderValueShare(coin);
+  const datedHolder = datedHolderValue(coin);
   const hasEligibleCapture =
-    coin.identityStatus === "verified" &&
+    eligibleCapital(coin) &&
     !sourceDefinitionsChanged(coin) &&
-    (coin.holderValue.eligibleRunRate ?? 0) >= MIN_ACTIVITY_USD &&
-    (coin.holderValue.eligibleCurrent30d ?? 0) > 0;
+    (datedHolder.eligibleRunRate ?? 0) >= MIN_ACTIVITY_USD &&
+    (datedHolder.eligibleCurrent30d ?? 0) > 0;
   const hasRevenueOrFees =
     (businessRevenue(coin) && (coin.revenueAnnual ?? 0) >= MIN_ACTIVITY_USD) ||
     (businessFees(coin) && (coin.feesAnnual ?? 0) >= MIN_ACTIVITY_USD);
@@ -145,7 +147,7 @@ function computeValueCapture({
   if (eligibleHolderValueShare === null) risks.push("환원 비율 보류 · 분모 범위와 재원 일치 미확인");
   if ((eligibleHolderValueShare ?? 0) > 1) risks.push("30일 홀더 금액이 분모를 초과 · 재원·집계 범위·시차 확인 필요");
 
-  if (coin.identityStatus !== "verified") risks.push(coin.identityReason);
+  if (!eligibleCapital(coin)) risks.push(coin.capitalExclusionReason ?? coin.identityReason);
   if (hasEligibleCapture) signals.push("적격 홀더 금액 관측");
   else if (hasRevenueOrFees) {
     signals.push("정의가 확인된 사업 수익·수수료 관측");
@@ -207,7 +209,7 @@ function buildPools(rows: Staged[]): Map<string, Pool> {
     if (
       insufficientScale ||
       lowActivity ||
-      coin.identityStatus !== "verified" ||
+      !eligibleCapital(coin) ||
       !coin.category
     ) {
       continue;
@@ -246,7 +248,7 @@ function buildPriceMedians(rows: Staged[]): Map<string, number> {
   const values = new Map<string, number[]>();
   for (const { coin } of rows) {
     if (
-      coin.identityStatus !== "verified" ||
+      !eligibleCapital(coin) ||
       !coin.category ||
       coin.priceChange60d === null
     ) {
@@ -275,7 +277,7 @@ function cashflowValue(coin: CoinRaw): number {
 
 function buildCashflowRanks(rows: Staged[]): Map<string, { flow: number; mcap: number }> {
   const ranked = rows
-    .filter(({ coin }) => coin.identityStatus === "verified" && isPositive(coin.mcap) && cashflowValue(coin) > 0)
+    .filter(({ coin }) => eligibleCapital(coin) && isPositive(coin.mcap) && cashflowValue(coin) > 0)
     .sort((a, b) => cashflowValue(b.coin) - cashflowValue(a.coin));
   const caps = [...ranked].sort((a,b) => b.coin.mcap! - a.coin.mcap!);
   return new Map(ranked.map(({ coin }) => [coin.slug, {
@@ -296,7 +298,7 @@ function scoringInput(raw: CoinRaw): CoinRaw {
   const recent = revenue ? revenueAmount(raw, 30) : null;
   const fees = businessFees(raw);
   return { ...raw,
-    holderValue: sourceDefinitionsChanged(raw) ? { ...raw.holderValue, eligibleCurrent30d: null, eligiblePrevious30d: null, eligibleRunRate: null, eligibleTtm: null } : raw.holderValue,
+    holderValue: datedHolderValue(raw),
     revenue30d: recent, revenuePrev30d: revenue ? (raw.revenueHistory ? raw.revenueHistory.previous30.total : raw.revenuePrev30d) : null,
     revenueAnnual: recent !== null ? recent * 365 / 30 : null,
     revenue1y: revenue ? revenueAmount(raw, 365) : null,
@@ -453,7 +455,7 @@ export function scoreCoins(
     const matureProject = listedAgeDays !== null && listedAgeDays >= NEW_PROJECT_DAYS;
 
     const gateReasons: string[] = [];
-    if (coin.identityStatus !== "verified") gateReasons.push(coin.identityReason);
+    if (!eligibleCapital(coin)) gateReasons.push(coin.capitalExclusionReason ?? coin.identityReason);
     if (sourceDefinitionsChanged(coin)) gateReasons.push("원천 집계 정의 변경 · 재검토 필요");
     if (!marketData) gateReasons.push("CMC 시세·60일·거래량 데이터 부족/지연");
     if (!fundamentalHistory) gateReasons.push("최근·직전 30일 펀더멘털 비교 불가");
@@ -469,7 +471,7 @@ export function scoreCoins(
     const gates: ScoreGates = {
       passed: gateReasons.length === 0,
       reasons: gateReasons,
-      identity: coin.identityStatus === "verified",
+      identity: eligibleCapital(coin),
       marketData,
       fundamentalHistory,
       liquidity,
@@ -555,7 +557,7 @@ export function scoreCoins(
           )
         : 0;
     const completenessSignals = [
-      coin.identityStatus === "verified",
+      eligibleCapital(coin),
       coin.cmcId !== null,
       marketData,
       coin.fdv !== null,

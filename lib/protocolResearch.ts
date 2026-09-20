@@ -18,6 +18,11 @@ export interface ProtocolResearch {
 
 // Source-backed research records. No inferred payout asset or policy from an amount alone.
 export const PROTOCOL_RESEARCH: Record<string, ProtocolResearch> = {
+  "venice": {
+    description: "텍스트·이미지 등 여러 AI 모델을 구독과 API로 이용하는 서비스입니다. 사업 매출의 일부를 VVV 시장매입과 소각에 사용하며, 사업 매출과 소각액은 별도 지표입니다.",
+    source: "https://venice.ai/lp/vvv", reviewedAt: "2026-09-20", scope: "Venice 서비스와 VVV 공식 설명",
+    holder: { funding: "월간 사업 매출의 일부 · 비율 미확인", route: "사업 매출 일부 → VVV 시장매입 → 소각", asset: "VVV 소각 · 보유자 직접 지급 없음", recipient: "직접 수령인 없음", condition: "매입·소각과 스테이킹 보상은 별도입니다. 보유만으로 회사 매출을 받을 권리를 뜻하지 않습니다.", status: "공식 문서상 매입·소각 시행 · 개별 매입 지출은 미대조", source: "https://venice.ai/lp/vvv" },
+  },
   "pendle": {
     description: "이자가 발생하는 자산을 원금 권리와 미래 이자 권리로 나눠 거래하는 서비스입니다. 이용자는 만기까지의 수익률을 고정하거나 미래 이자에 투자할 수 있습니다. 수익과 거래에 붙는 수수료가 주요 재원이며, 그룹에는 별도 금리 상품인 Boros도 포함될 수 있습니다.",
     source: "https://docs.pendle.finance/pendle-v2/Introduction", reviewedAt: "2026-09-12", scope: "Pendle V2 중심 · 그룹 금액은 구성 제품 합산",

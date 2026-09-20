@@ -1,5 +1,13 @@
 # Handoff
 
+## 2026-09-20 — v7 implementation and all-universe audit
+
+The user authorized project-wide metric correction and a researched UX redesign after v6 failed to answer the VVV sales question. The rule version is now `research-v7-sales-and-holder-windows`; see [SCREENER_V7.md](./SCREENER_V7.md). Separately sourced business sales, protocol-only P/R and fully dated holder return windows replace the confusing generic ratio workspace. The left controls preserve selected columns; evidence opens on the right. Exact identity matching, missing protocol-directory parent links, ambiguous chart names and stablecoin numerator misuse are corrected throughout calculation, scoring, snapshots and UI.
+
+Same-source v6/v7 replay at 2026-09-20 01:55 UTC checked every one of 6,192 new joined inputs and the 741-row screenable union. Screenable rows 723 -> 584; 386 retained rows changed (including peer counts/completeness), 157 removed/grouped, 18 newly present, 180 unchanged. The narrower initial comparison reported 350; adding every existing multiple, peer, completeness and gate field identified 36 further changed rows. Retained market data/numerator changes: 61; P/HR: 17; score values: 25. Zero contract failures; all source receipts successful; payload 3,387,156 bytes. Revenue coverage and the independent-financial-audit limit are documented in V7.
+
+Local browser QA at 1920x1080 and 390x844 verified independent columns/filters, four holder windows, column order and favorites after reload, mcap/FDV arithmetic, dated sales/source evidence, missing 365-day coverage, drawer Escape/focus return and mobile control focus containment. Audit receipts and screenshots are outside Git under `C:/Users/TAE/Documents/Codex/2026-09-19/dot-plugin-browser-openai-bundled-mention/work/v7-audit/`. A separate production receipt follows the guarded deployment and canonical readback.
+
 ## 2026-09-20 — v6 production deployment
 
 Published source commit `8c6a078360eed24c362fccef1bb299fc3a5b50b5` through `npm run deploy:production`. Deployment `dpl_DSJkUcD64CafMBtKGavHBVrMLk8s` is READY in production, with unique URL https://crypto-valuation-screener-jbdodl2ct-bodycation.vercel.app and canonical URL https://crypto-valuation-screener.vercel.app. Authenticated Vercel readback confirms this exact main commit, the expected project/team and the canonical alias. This receipt is a subsequent documentation-only commit, not another application build.

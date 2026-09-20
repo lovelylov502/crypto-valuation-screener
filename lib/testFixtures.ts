@@ -1,6 +1,8 @@
 import type { CoinRaw } from './types';
 import type { HolderValueSummary } from './holderValue';
 import type { Fundamentals } from './fundamentals';
+import { holderScope } from './valuationMetrics';
+import type { RevenuePeriod } from './revenueHistory';
 const OLD_LISTING = Date.parse('2025-01-01T00:00:00.000Z') / 1000;
 export const fixtureFundamentals: Fundamentals = { version:'fundamental-definitions-v1', fingerprint:'a'.repeat(64), revenue:{kind:'protocol_revenue',fingerprint:'b'.repeat(64),components:[]},fees:{kind:'user_fees',fingerprint:'c'.repeat(64),components:[]},holders:[],holderShareReviewed:true };
 type CoinOverrides = Omit<Partial<CoinRaw>, "holderValue"> & {
@@ -12,7 +14,7 @@ export function sample(partial: Partial<CoinOverrides> = {}): CoinRaw { return m
 
 export function make(partial: CoinOverrides): CoinRaw {
   const { holderValue, ...rest } = partial;
-  return {
+  const coin: CoinRaw = {
     fundamentals: fixtureFundamentals,
     name: partial.slug,
     symbol: "TST",
@@ -81,5 +83,20 @@ export function make(partial: CoinOverrides): CoinRaw {
     maxSupply: 120_000_000,
     ...rest,
   };
+  // Synthetic dated coverage is explicit in v7; source rolling totals alone are insufficient.
+  if (partial.holderHistory === undefined) {
+    const end = Math.floor(Date.parse(coin.marketDataUpdatedAt ?? "2026-07-28") / 86400000) * 86400000 - 86400000;
+    const period = (days: number, total: number | null, offset = 0): RevenuePeriod => ({
+      days, total, reportedDays: total === null ? 0 : days,
+      start: new Date(end - (days - 1 + offset) * 86400000).toISOString().slice(0,10),
+      end: new Date(end - offset * 86400000).toISOString().slice(0,10),
+    });
+    coin.holderHistory = {
+      definitionFingerprint: holderScope(coin), source: "fixture dated observations", observedAt: new Date(end + 86400000).toISOString(),
+      periods: { 7: period(7,null), 30: period(30,coin.holderValue.eligibleCurrent30d), 90: period(90,null), 365: period(365,coin.holderValue.eligibleTtm) },
+      previous30: period(30,coin.holderValue.eligiblePrevious30d,30), weeks: [],
+    };
+  }
+  return coin;
 }
 

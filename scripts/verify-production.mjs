@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { DEPLOY_CONTRACT } from "./deploy-contract.mjs";
 
-const ADVANCED_UI_MARKERS = ["배수 참고선", "사업 수익 성장", "시총/집계액 · 집계액 추이", "집계 종류", "확인 후 변화", "최신 자료 확인", "page-size-top", "page-size-bottom"];
+const ADVANCED_UI_MARKERS = ["비교 설정", "배수 분자", "P/S · 사업 매출", "P/R · 30일", "P/HR · 30일", "차이와 계산법", "최신 자료 확인", "page-size-top", "page-size-bottom"];
 const LEGACY_UI_MARKERS = ["저평가 80+", "고평가 20 이하", "P/S 참고선", "P/S · 30일"];
 const MAX_API_BYTES = 4_500_000;
 const MAX_ATTEMPTS = 8;
@@ -84,6 +84,18 @@ function inspectApi(readback) {
       if (["unknown", "mixed"].includes(f.revenue.kind) && coin.multiples.revenueMultiple !== null) errors.push(`unreviewed multiple: ${coin.slug}`);
       if (!f.holderShareReviewed && coin.valueCapture.eligibleHolderValueShare !== null) errors.push(`unreviewed holder share: ${coin.slug}`);
       if (!["protocol_revenue", "service_sales"].includes(f.revenue.kind) && f.fees.kind !== "user_fees" && coin.opportunities.business) errors.push(`non-business growth: ${coin.slug}`);
+    }
+    for (const coin of data.coins) {
+      const check = (key, amount, days) => {
+        const value = coin.multiples[key];
+        if (value !== null && (!(amount > 0) || Math.abs(value - coin.mcap / (amount * 365 / days)) > Math.max(1,value)*1e-9)) errors.push(`invalid ${key}: ${coin.slug}`);
+      };
+      check("psSales", coin.sales?.amountUsd, 365);
+      check("phr", coin.holderHistory?.periods?.[30]?.total, 30);
+      if (coin.multiples.psSales !== null && (coin.sales?.status !== "current" || coin.sales?.geckoId !== coin.geckoId || coin.sales?.symbol !== coin.symbol)) errors.push(`sales evidence invalid: ${coin.slug}`);
+      if (coin.multiples.pr !== null && coin.fundamentals.revenue.kind !== "protocol_revenue") errors.push(`non-protocol P/R: ${coin.slug}`);
+      if (coin.multiples.phr !== null && coin.holderHistory?.periods?.[30]?.reportedDays !== 30) errors.push(`partial holder period: ${coin.slug}`);
+      if (coin.capitalExclusionReason && Object.values(coin.multiples).some(v=>v!==null)) errors.push(`ineligible capital: ${coin.slug}`);
     }
     const venice = data.coins.find(c => c.slug === "venice");
     if (!venice || venice.fundamentals?.revenue.kind !== "holder_return" || venice.fundamentals?.fees.kind !== "holder_return" || venice.opportunities.business || venice.valueCapture.eligibleHolderValueShare !== null || venice.multiples.pf !== null) errors.push("VVV scope regression");

@@ -1,5 +1,8 @@
+import { capitalExclusion, STABLECOIN_SOURCE, type StablecoinAsset } from "./capitalEligibility";
 import type { CoinRaw, IdentityStatus, SourceObservation } from "./types";
 import { fetchRevenueHistory } from "./revenueSource";
+import { fetchHolderHistory } from "./holderHistorySource";
+import { resolveSalesEvidence } from "./salesSource";
 import { koreanDescription } from "./protocolDescriptions";
 import { aggregateDefinitions, combineFundamentals, definitionReviewed } from "./fundamentalSource";
 import type { MetricDefinition, RevenueKind, FeeKind } from "./fundamentals";
@@ -99,6 +102,7 @@ async function fetchGecko(observations: SourceObservation[]): Promise<{ byId: Ma
 }
 
 interface CmcIndex {
+  byId: Map<number, Json>;
   bySlug: Map<string, Json>;
   byNameSymbol: Map<string, Json[]>;
   bySymbol: Map<string, Json[]>;
@@ -107,6 +111,7 @@ interface CmcIndex {
 async function fetchCmc(observations: SourceObservation[]): Promise<CmcIndex> {
   const url = `${CMC}/v3/cryptocurrency/listings/latest?start=1&limit=5000&convert=USD`;
   const empty = (): CmcIndex => ({
+    byId: new Map(),
     bySlug: new Map(),
     byNameSymbol: new Map(),
     bySymbol: new Map(),
@@ -119,6 +124,8 @@ async function fetchCmc(observations: SourceObservation[]): Promise<CmcIndex> {
     if (!Array.isArray(response.data) || response.data.length === 0) throw new Error("CMC response is empty");
     const index = empty();
     for (const row of response.data ?? []) {
+      const id = num(row.id);
+      if (id !== null) index.byId.set(id, row);
       const slug = str(row.slug)?.toLowerCase();
       const name = str(row.name);
       const symbol = str(row.symbol)?.toLowerCase();
@@ -148,19 +155,27 @@ function cmcQuote(row: Json | undefined): Json | undefined {
   return (row.quote as Json[]).find((quote) => str(quote.symbol) === "USD");
 }
 
-function findCmc({
+export function findCmc({
+  cmcIds = [],
   geckoId,
   groupKey,
   name,
   symbol,
   cmc,
 }: {
+  cmcIds?: number[];
   geckoId: string | null;
   groupKey: string;
   name: string;
   symbol: string | null;
   cmc: CmcIndex;
 }): Json | undefined {
+  // DefiLlama supplies canonical numeric CMC IDs. Slugs are not shared identifiers across vendors.
+  if (cmcIds.length > 1) return undefined;
+  if (cmcIds.length === 1) {
+    const exact = cmc.byId.get(cmcIds[0]);
+    return exact && (!symbol || str(exact.symbol)?.toLowerCase() === symbol.toLowerCase()) ? exact : undefined;
+  }
   const normalizedSymbol = symbol?.toLowerCase() ?? null;
   const symbolMatches = (row: Json | undefined) =>
     !!row && (!normalizedSymbol || str(row.symbol)?.toLowerCase() === normalizedSymbol);
@@ -174,6 +189,8 @@ function findCmc({
   if (geckoId) {
     const exact = cmc.bySlug.get(geckoId.toLowerCase());
     if (symbolMatches(exact)) return exact;
+    // A known different Gecko asset cannot be overwritten by a name or symbol match.
+    return undefined;
   }
 
   const projectSlug = groupKey.replace(/^parent#/, "").toLowerCase();
@@ -193,9 +210,7 @@ function findCmc({
       const projectSlugNormalized = normalize(projectSlug);
       if (
         candidateName === projectName ||
-        candidateSlug === projectSlugNormalized ||
-        (projectName.length >= 5 && candidateName.includes(projectName)) ||
-        (projectName.length >= 5 && projectName.includes(candidateName))
+        candidateSlug === projectSlugNormalized
       ) {
         return candidate;
       }
@@ -247,7 +262,7 @@ export function aggregateOverviewByGroup(
  * holder revenue는 child 경제유형을 보존해 적격 최근 30일과 raw TTM을 따로 합산한다.
  */
 export async function fetchCoins(observations: SourceObservation[] = []): Promise<CoinRaw[]> {
-  const [protocols, feesL, revL, hrL, dexsL, gecko, cmc, revenueHistories] = await Promise.all([
+  const [protocols, feesL, revL, hrL, dexsL, gecko, cmc, revenueHistories, holderHistories, stablecoins] = await Promise.all([
     getJson<Json[]>(`${LLAMA}/protocols`, observations),
     fetchOverviewList("/overview/fees", observations),
     fetchOverviewList("/overview/fees?dataType=dailyRevenue", observations),
@@ -256,11 +271,15 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
     fetchGecko(observations),
     fetchCmc(observations),
     fetchRevenueHistory(observations),
+    fetchHolderHistory(observations),
+    getJson<{ peggedAssets: StablecoinAsset[] }>(STABLECOIN_SOURCE, observations),
   ]);
 
-  // slug → parentProtocol 매핑 (overview에서만 제공됨)
+  if (!Array.isArray(stablecoins.peggedAssets) || stablecoins.peggedAssets.length === 0) throw new Error("Stablecoin identity registry unavailable");
+
+  // /protocols also carries parent links, including children absent from revenue overviews.
   const parentOf = new Map<string, string>();
-  for (const list of [feesL, revL, hrL, dexsL]) {
+  for (const list of [protocols, feesL, revL, hrL, dexsL]) {
     for (const p of list) {
       const slug = str(p.slug);
       const par = str(p.parentProtocol);
@@ -298,7 +317,10 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
     let listedAt: number | null = null;
     const memberGeckoIds = new Set<string>();
     const memberSymbols = new Set<string>();
+    const memberCmcIds = new Set<number>();
     for (const m of members) {
+      const id = typeof m.cmcId === "string" && /^\d+$/.test(m.cmcId) ? Number(m.cmcId) : num(m.cmcId);
+      if (id !== null && id > 0) memberCmcIds.add(id);
       const v = num(m.mcap);
       if (v !== null && v > 0 && (dlMcap === null || v > dlMcap)) dlMcap = v;
       const t = num(m.tvl);
@@ -333,14 +355,17 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
     const vol = volAgg.get(k);
     // CoinGecko는 명시적 gecko_id만 사용한다. symbol-only 폴백은 동명이인 오매칭 위험 때문에 금지.
     const g = geckoId ? gecko.byId.get(geckoId) : undefined;
-    const cmcRow = findCmc({ geckoId, groupKey: k, name, symbol, cmc });
+    const cmcRow = findCmc({ cmcIds: [...memberCmcIds], geckoId, groupKey: k, name, symbol, cmc });
     const quote = cmcQuote(cmcRow);
 
     let identityStatus: IdentityStatus = "review";
     let identityReason = "프로젝트와 시장 토큰의 연결을 확인하지 못함";
-    if (isParent && (memberGeckoIds.size > 1 || memberSymbols.size > 1)) {
+    if (memberCmcIds.size > 1 || (isParent && (memberGeckoIds.size > 1 || memberSymbols.size > 1))) {
       identityStatus = "ambiguous";
-      identityReason = `parent 그룹에 토큰 후보가 여러 개임 (${memberSymbols.size || memberGeckoIds.size})`;
+      identityReason = `그룹에 토큰 후보가 여러 개임 (${Math.max(memberSymbols.size, memberGeckoIds.size, memberCmcIds.size)})`;
+    } else if (memberCmcIds.size === 1 && cmcRow) {
+      identityStatus = "verified";
+      identityReason = "DefiLlama의 숫자 CMC ID와 시장 자산 ID 일치";
     } else if (isParent && memberGeckoIds.size === 1 && memberSymbols.size <= 1) {
       identityStatus = "verified";
       identityReason = "parent 구성원이 하나의 gecko_id·심볼을 공유";
@@ -359,7 +384,7 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
     const cmcMcap = quote ? num(quote.market_cap) : null;
 
     // 시총: canonical CMC 매칭을 우선하고, 없으면 DefiLlama/CoinGecko 보조값.
-    const mcap = cmcMcap ?? dlMcap ?? gMcap;
+    const mcap = cmcMcap ?? gMcap ?? dlMcap;
     if (mcap === null && tvl === null) continue; // 둘 다 없으면 의미 없음
 
     const cmcListedAt = cmcRow ? Date.parse(str(cmcRow.date_added) ?? "") : NaN;
@@ -374,7 +399,7 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       fundamentals: combineFundamentals(revenueDefinitions.get(k) as MetricDefinition<RevenueKind> | undefined, feeDefinitions.get(k) as MetricDefinition<FeeKind> | undefined, hrL.filter(h => typeof h.slug === "string" && h.doublecounted !== true && groupKey(h.slug) === k)),
       slug: k,
       name,
-      symbol,
+      symbol: (cmcRow ? str(cmcRow.symbol) : g ? str(g.symbol)?.toUpperCase() : null) ?? symbol,
       category: str(rep.category),
       chains: Array.isArray(rep.chains) ? (rep.chains as string[]) : [],
       geckoId,
@@ -385,11 +410,14 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       isParent,
       identityStatus,
       identityReason,
+      capitalExclusionReason: capitalExclusion(geckoId ?? (cmcRow ? str(cmcRow.slug) : null), (cmcRow ? str(cmcRow.symbol) : g ? str(g.symbol) : null) ?? symbol, stablecoins.peggedAssets),
       description: str(rep.description),
       descriptionKo: koreanDescription(str(rep.description)),
       descriptionSource: `https://defillama.com/protocol/${encodeURIComponent(String(rep.slug))}`,
       website: str(rep.url),
       revenueHistory: history,
+      holderHistory: holderHistories[k] ?? null,
+      sales: resolveSalesEvidence({ slug: k, geckoId, symbol, identityStatus }, new Date().toISOString()),
 
       mcap,
       tvl,

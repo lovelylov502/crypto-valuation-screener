@@ -5,6 +5,8 @@ import { gzipSync } from "node:zlib";
 import { execFileSync } from "node:child_process";
 import { fetchCoins } from "../lib/sources";
 import { assembleScreener } from "../lib/screener";
+import { fundamentalErrors } from "../lib/fundamentalContract";
+import { holderMultiple } from "../lib/valuationMetrics";
 import { makeSnapshot } from "../lib/snapshotHistory";
 import type { SourceObservation } from "../lib/types";
 
@@ -23,6 +25,12 @@ async function main() {
     "inputs.json.gz": gzipSync(JSON.stringify(raw)),
     "scored.json.gz": gzipSync(JSON.stringify(data)),
     "snapshot.json": Buffer.from(JSON.stringify(makeSnapshot(data))),
+    "quality.json": Buffer.from(JSON.stringify({
+      at, rows: data.coins.length,
+      coverage: { sales: data.coins.filter(c => c.multiples.psSales !== null).length, protocolRevenue: data.coins.filter(c => c.multiples.pr !== null).length, holder: Object.fromEntries(([7,30,90,365] as const).map(n => [n, data.coins.filter(c => holderMultiple(c,n) !== null).length])) },
+      review: data.coins.filter(c => c.sales?.status === "expired" || [...c.fundamentals.revenue.components,...c.fundamentals.fees.components,...c.fundamentals.holders].some(p => p.status === "changed")).map(c => ({slug:c.slug,issues:c.opportunities.dataIssues})),
+      errors: data.coins.flatMap(c => fundamentalErrors(c).map(error => ({slug:c.slug,error}))),
+    }, null, 2)),
   };
   await mkdir(output, { recursive: true });
   const artifacts = [];
@@ -56,6 +64,11 @@ async function main() {
     "lib/fundamentalSource.ts",
     "lib/fundamentalDefinitions.json",
     "lib/fundamentalContract.ts",
+    "lib/valuationMetrics.ts",
+    "lib/salesSource.ts",
+    "lib/salesEvidence.json",
+    "lib/holderHistorySource.ts",
+    "lib/capitalEligibility.ts",
   ]) {
     ruleHashes[name] = createHash("sha256")
       .update(await readFile(resolve(name)))
@@ -91,6 +104,7 @@ async function main() {
       scoreVersion: data.scoreVersion,
     }),
   );
+  if (data.coins.some(c => fundamentalErrors(c).length)) throw new Error("Valuation contract failed; diagnostic snapshot retained");
   if (data.cmcCoverage === 0)
     throw new Error(
       "CMC collection unavailable; partial snapshot saved for diagnosis",

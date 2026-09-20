@@ -20,7 +20,7 @@ const DAY = 86400;
 const date = (timestamp: number) => new Date(timestamp * 1000).toISOString().slice(0, 10);
 
 export function annualizedMultiple(mcap: number | null | undefined, revenue: number | null | undefined, days: number): number | null {
-  if (mcap == null || revenue == null || !Number.isFinite(mcap) || !Number.isFinite(revenue) || mcap <= 0 || revenue <= 0 || days <= 0) return null;
+  if (mcap == null || revenue == null || !Number.isFinite(mcap) || !Number.isFinite(revenue) || mcap <= 0 || revenue <= 0 || !Number.isFinite(days) || days <= 0) return null;
   return mcap / (revenue * 365 / days);
 }
 
@@ -38,16 +38,18 @@ export function revenueBasis(c: { revenueHistory?: RevenueHistory | null }): str
 }
 
 export function summarizeRevenueHistory(
-  protocols: Protocol[], chart: unknown[], now: number, source: string, fingerprints: ReadonlyMap<string, { fingerprint: string }> = new Map(),
+  protocols: Protocol[], chart: unknown[], now: number, source: string, fingerprints: ReadonlyMap<string, { fingerprint: string }> = new Map(), identityUniverse: Protocol[] = protocols,
 ): Record<string, RevenueHistory> {
   const end = Math.floor(now / 1000 / DAY) * DAY - DAY;
   const groups = new Map<string, string[]>();
   const nameCounts = new Map<string, number>();
+  for (const p of identityUniverse) {
+    if (typeof p.name === "string") nameCounts.set(p.name, (nameCounts.get(p.name) ?? 0) + 1);
+  }
   for (const p of protocols) {
     if (typeof p.slug !== "string" || typeof p.name !== "string" || p.doublecounted === true) continue;
     const key = typeof p.parentProtocol === "string" ? p.parentProtocol : p.slug;
     groups.set(key, [...(groups.get(key) ?? []), p.name]);
-    nameCounts.set(p.name, (nameCounts.get(p.name) ?? 0) + 1);
   }
   const rows = new Map<number, Record<string, unknown>>();
   for (const row of chart) {

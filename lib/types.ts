@@ -2,6 +2,7 @@ import type { HolderValueSummary } from "./holderValue";
 import type { OpportunitySignals } from "./signals";
 import type { RevenueHistory } from "./revenueHistory";
 import type { Fundamentals } from "./fundamentals";
+import type { SalesEvidence } from "./valuationMetrics";
 
 // 조인된 코인 1건의 원천 데이터 (밸류에이션 계산 전)
 export interface CoinRaw {
@@ -19,11 +20,14 @@ export interface CoinRaw {
   isParent: boolean;
   identityStatus: IdentityStatus;
   identityReason: string;
+  capitalExclusionReason?: string | null;
   description?: string | null;
   descriptionKo?: string | null;
   descriptionSource?: string | null;
   website?: string | null;
   revenueHistory?: RevenueHistory | null;
+  holderHistory?: RevenueHistory | null;
+  sales?: SalesEvidence | null;
   revenue7d?: number | null;
   revenue90d?: number | null;
 
@@ -90,6 +94,8 @@ export interface CoinScored extends CoinRaw {
   opportunities: OpportunitySignals;
   peerCounts: { phr: number; revenueMultiple: number; pf: number };
   multiples: {
+    psSales: number | null; // Current token mcap / separately sourced business sales. Scope and estimate status required.
+    pr: number | null; // Protocol-retained revenue only; not company sales.
     pf: number | null; // P/F = mcap / (fees30d * 365 / 30)
     revenueMultiple: number | null; // Current token mcap / typed 30-day amount annualized. Not generic P/S.
     phr: number | null; // P/HR = mcap / holderValue.eligibleRunRate
