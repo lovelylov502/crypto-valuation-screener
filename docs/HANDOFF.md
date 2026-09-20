@@ -1,5 +1,15 @@
 # Handoff
 
+## 2026-09-20 — v7 production receipt
+
+V7 is live at https://crypto-valuation-screener.vercel.app. Application commit `b764a3a6c50774e6046432c276fc6f42b6cf07da` was deployed from clean synchronized canonical main through `npm run deploy:production`. Deployment `dpl_FRKeT8eGhjU5TPgNp5P3kXJqkQCw` is READY in production; unique URL https://crypto-valuation-screener-gcjn2ct1s-bodycation.vercel.app. Authenticated readback confirms the application commit, main branch, expected project and canonical alias. This receipt is a later documentation-only commit.
+
+The guarded route passed 179 application tests, six deployment-contract tests, TypeScript, production build, whitespace and pinned-CLI dry run. Canonical page/API returned HTTP 200. API: 3,391,231 bytes, 585 rows, `research-v7-sales-and-holder-windows`, observation `2026-09-20T01:58:14.086Z`; all sources succeeded. Full contract validation of all 585 production rows returned zero errors. VVV: mcap/sales 11.7025x, FDV/sales 19.6042x, mcap/P-HR30 denominator 132.3881x. Sales estimate $110M (Sacra, August 2026); 365-day holder coverage remains 286/365 and unavailable.
+
+Production browser checks verified the left panel, column addition without losing sales, four holder periods, right-side evidence with source/date/formula, and Escape focus restoration. Error/warning logs were empty. The public tab was restored to the unfiltered default comparison; viewport overrides were cleared and the local server stopped. The new daily quality archive was actually generated at `2026-09-20T02:04:03.412Z` with 585 rows, zero source failures and zero contract errors.
+
+User report, screenshots, same-source row audit, production snapshot, validation records and deployment identity are retained outside Git at `C:/Users/TAE/Documents/Codex/2026-09-19/dot-plugin-browser-openai-bundled-mention/outputs/v7-report`. Reproduction response bodies remain in the task's `work/v7-audit/delivery-audit` directory. Independent business-sales coverage is still one externally estimated business; all-row automated validation must not be described as independent financial verification of every project.
+
 ## 2026-09-20 — v7 implementation and all-universe audit
 
 The user authorized project-wide metric correction and a researched UX redesign after v6 failed to answer the VVV sales question. The rule version is now `research-v7-sales-and-holder-windows`; see [SCREENER_V7.md](./SCREENER_V7.md). Separately sourced business sales, protocol-only P/R and fully dated holder return windows replace the confusing generic ratio workspace. The left controls preserve selected columns; evidence opens on the right. Exact identity matching, missing protocol-directory parent links, ambiguous chart names and stablecoin numerator misuse are corrected throughout calculation, scoring, snapshots and UI.
