@@ -1,5 +1,6 @@
 /** All windows end on the same completed UTC day. Missing days never become zero. */
-export type RevenueWindowDays = 7 | 30 | 90 | 365;
+export type RevenueWindowDays = 1 | 7 | 30 | 90 | 365;
+export const REVENUE_WINDOWS = [1, 7, 30, 90, 365] as const;
 export interface RevenuePeriod {
   days: number;
   start: string;
@@ -11,6 +12,8 @@ export interface RevenueHistory {
   definitionFingerprint?: string;
   periods: Record<RevenueWindowDays, RevenuePeriod>;
   previous30: RevenuePeriod;
+  previous?: Record<RevenueWindowDays, RevenuePeriod>;
+  peakDayShare7d?: number | null;
   weeks: RevenuePeriod[];
   source: string;
   supplementalSources?: string[];
@@ -25,10 +28,11 @@ export function annualizedMultiple(mcap: number | null | undefined, revenue: num
   return mcap / (revenue * 365 / days);
 }
 
-export function revenueAmount(c: { revenueHistory?: RevenueHistory | null; revenue7d?: number | null; revenue90d?: number | null; revenue30d: number | null; revenue1y: number | null }, days: RevenueWindowDays): number | null {
-  if (c.revenueHistory) return c.revenueHistory.periods[days].total;
+export function revenueAmount(c: { revenueHistory?: RevenueHistory | null; revenue24h?: number | null; revenue7d?: number | null; revenue90d?: number | null; revenue30d: number | null; revenue1y: number | null }, days: RevenueWindowDays): number | null {
+  if (c.revenueHistory) return c.revenueHistory.periods[days]?.total ?? null;
   // Provider total1y can be a partial year. Only dated 365/365 observations are TTM.
-  return ({ 7: c.revenue7d, 30: c.revenue30d, 90: c.revenue90d, 365: null })[days] ?? null;
+  // 24h is a dated UTC observation, never a silently substituted rolling total.
+  return ({ 1: null, 7: c.revenue7d, 30: c.revenue30d, 90: c.revenue90d, 365: null })[days] ?? null;
 }
 
 export function historyMatches(c: { fundamentals?: { revenue: { fingerprint: string } }; revenueHistory?: RevenueHistory | null }): boolean {
@@ -55,7 +59,7 @@ export function summarizeRevenueHistory(
   const rows = new Map<number, Record<string, unknown>>();
   for (const row of chart) {
     if (!Array.isArray(row) || typeof row[0] !== "number" || !row[1] || typeof row[1] !== "object" || Array.isArray(row[1])) continue;
-    if (row[0] <= end && row[0] > end - 365 * DAY) rows.set(row[0], row[1]);
+    if (row[0] <= end && row[0] > end - 730 * DAY) rows.set(row[0], row[1]);
   }
   const output: Record<string, RevenueHistory> = {};
   for (const [key, names] of groups) {
@@ -76,9 +80,13 @@ export function summarizeRevenueHistory(
       }
       return { days, start: date(last - (days - 1) * DAY), end: date(last), total: reportedDays === days ? total : null, reportedDays };
     };
+    const periods = Object.fromEntries(REVENUE_WINDOWS.map(days => [days, period(days)])) as Record<RevenueWindowDays, RevenuePeriod>;
+    const lastWeek = Array.from({ length: 7 }, (_, i) => daily.get(end - i * DAY));
     output[key] = {
       definitionFingerprint: fingerprints.get(key)?.fingerprint,
-      periods: { 7: period(7), 30: period(30), 90: period(90), 365: period(365) },
+      periods,
+      previous: Object.fromEntries(REVENUE_WINDOWS.map(days => [days, period(days, days)])) as Record<RevenueWindowDays, RevenuePeriod>,
+      peakDayShare7d: periods[7].total !== null && periods[7].total > 0 && lastWeek.every((v): v is number => v !== undefined && v >= 0) ? Math.max(...lastWeek) / periods[7].total * 100 : null,
       previous30: period(30, 30),
       weeks: Array.from({ length: 13 }, (_, i) => period(7, (12 - i) * 7)),
       source, observedAt: new Date(now).toISOString(),

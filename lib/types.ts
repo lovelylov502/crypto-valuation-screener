@@ -29,6 +29,9 @@ export interface CoinRaw {
   holderHistory?: RevenueHistory | null;
   sales?: SalesEvidence | null;
   revenue7d?: number | null;
+  revenue24h?: number | null;
+  revenuePrev24h?: number | null;
+  revenuePrev7d?: number | null;
   revenue90d?: number | null;
 
   // 시장 데이터 (CoinMarketCap Keyless 우선, CoinGecko 보조)

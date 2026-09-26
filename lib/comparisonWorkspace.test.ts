@@ -9,7 +9,7 @@ describe("table-first comparison workspace", () => {
   it("removes sales-only controls without converting their threshold into protocol revenue", () => {
     const raw=JSON.stringify({columns:["phr90d","psSales","price","pr"],capital:"fdv",search:"VVV",maxPs:20,maxPhr:90,available:"sales",sortKey:"psSales",sortDir:"asc"});
     const p=parseWorkspace(raw);
-    expect(p).toMatchObject({columns:["phr90d","price","pr"],capital:"fdv",search:"VVV",maxPr:0,maxPhr:90,rangeWindow:30,available:"all",sortKey:"name",sortDir:"asc"});
+    expect(p).toMatchObject({columns:["phr90d","price","pr"],capital:"fdv",search:"VVV",maxPr:0,maxPhr:90,rangeWindow:30,available:"all",sortKey:"pr",sortDir:"asc"});
     expect(p).not.toHaveProperty("maxPs");
     expect(workspaceMigrationNotice(raw)).toContain("P/S");
     expect(workspaceMigrationNotice(JSON.stringify(p))).toBeNull();
@@ -18,7 +18,7 @@ describe("table-first comparison workspace", () => {
     const p=parseWorkspace('{"columns":["psSales"],"sortKey":"psSales","maxPs":200}');
     expect(p.columns).toEqual(DEFAULT_VISIBLE_COLUMNS);
     expect(p.columns).not.toContain("psSales");
-    expect(p.sortKey).toBe("mcap");
+    expect(p.sortKey).toBe("pr");
     expect(p.maxPr).toBe(0);
   });
   it("keeps the exact valid personal order, independent filter periods and visible sorting after reload", () => {

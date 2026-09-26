@@ -67,7 +67,7 @@ export function holderHistoryMatches(c: CoinRaw): boolean {
 }
 export function holderAmount(c: CoinRaw, days: RevenueWindowDays): number | null {
   if (sourceDefinitionsChanged(c) || !holderHistoryMatches(c)) return null;
-  return c.holderHistory!.periods[days].total;
+  return c.holderHistory!.periods[days]?.total ?? null;
 }
 export function holderMultiple(c: CoinRaw, days: RevenueWindowDays = 30, basis: CapitalBasis = "mcap"): number | null {
   if (!eligibleCapital(c)) return null;
@@ -91,6 +91,7 @@ export function holderReason(c: CoinRaw, days: RevenueWindowDays, basis: Capital
   if (!c.holderHistory) return "일별 환원 이력 없음";
   if (!holderHistoryMatches(c)) return "환원 이력 정의 불일치";
   const p = c.holderHistory.periods[days];
+  if (!p) return "기간별 환원 자료 없음";
   if (p.total === null) return `이력 부족 ${p.reportedDays}/${days}일`;
   if (p.total <= 0) return "환원액 0 이하";
   return `${days === 365 ? "365일 합계" : `${days}일 연환산`} · ${p.end} UTC까지`;

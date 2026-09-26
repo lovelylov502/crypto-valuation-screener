@@ -12,7 +12,7 @@ export const DEPLOY_CONTRACT = Object.freeze({
     projectName: "crypto-valuation-screener",
   }),
   liveBaseUrl: "https://crypto-valuation-screener.vercel.app",
-  scoreVersion: "research-v8-coverage-and-holder-types",
+  scoreVersion: "research-v9-full-universe-and-24h",
 });
 
 export function normalizeWindowsPath(value) {

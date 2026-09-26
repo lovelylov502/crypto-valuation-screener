@@ -21,7 +21,7 @@ export function fundamentalErrors(c: CoinScored): string[] {
   }
   if (c.sales && (!/^https:\/\//.test(c.sales.url) || !(c.sales.amountUsd > 0) || !["annualized_estimate", "reported_ttm"].includes(c.sales.basis) || !Number.isFinite(Date.parse(c.sales.validUntil)))) errors.push("sales evidence schema");
   for (const h of [c.revenueHistory, c.holderHistory]) if (h) {
-    for (const days of [7, 30, 90, 365] as const) {
+    for (const days of [1, 7, 30, 90, 365] as const) {
       const p = h.periods?.[days];
       if (!p || p.days !== days || !Number.isInteger(p.reportedDays) || p.reportedDays < 0 || p.reportedDays > days || (p.total !== null && (!Number.isFinite(p.total) || p.reportedDays !== days)) || Date.parse(p.end) - Date.parse(p.start) !== (days - 1) * 86400000) errors.push("period coverage");
     }

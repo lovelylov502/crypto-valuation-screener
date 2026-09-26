@@ -14,7 +14,7 @@ export function summarizeHolderHistory(protocols: Row[], chart: unknown[], now: 
   const eligible = protocols.filter(p => p.doublecounted !== true && summaries.get(group(String(p.slug)))?.components.some(c => c.slug === p.slug && c.eligible));
   const fingerprints = new Map([...summaries].map(([key, holderValue]) => [key, { fingerprint: holderScope({ holderValue, fundamentals: combineFundamentals(undefined, undefined, protocols.filter(p => p.doublecounted !== true && group(String(p.slug)) === key)) }) }]));
   const result = summarizeRevenueHistory(eligible, chart, now, HOLDER_HISTORY_URL, fingerprints, protocols);
-  // The table needs four windows; weekly holder charts are not part of this view.
+  // Keep period totals; the table does not render weekly holder charts.
   for (const h of Object.values(result)) h.weeks = [];
   return result;
 }

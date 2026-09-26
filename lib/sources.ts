@@ -19,6 +19,7 @@ const CMC = "https://pro-api.coinmarketcap.com/public-api";
 // 각 항목은 프로젝트 구성원·심볼과 CMC 자산을 수동 검증한 뒤에만 추가한다.
 const CMC_SLUG_OVERRIDES: Record<string, string> = {
   "parent#pump": "pump-fun",
+  "parent#aerodrome": "aerodrome-finance",
 };
 
 // CoinGecko 무료 레이트리밋 대응: 상위 N페이지(페이지당 250)만 FDV 보강
@@ -223,6 +224,8 @@ export function findCmc({
 interface Agg {
   annual: number | null;
   y1: number | null;
+  d1: number | null;
+  prev1: number | null;
   d7: number | null;
   prev7: number | null;
   d30: number | null;
@@ -242,10 +245,10 @@ export function aggregateOverviewByGroup(
     const k = groupKey(slug);
     let a = m.get(k);
     if (!a) {
-      a = { annual: 0, y1: 0, d7: 0, prev7: 0, d30: 0, prev30: 0, hit: false };
+      a = { annual: 0, y1: 0, d1: 0, prev1: 0, d7: 0, prev7: 0, d30: 0, prev30: 0, hit: false };
       m.set(k, a);
     }
-    const fields = { y1: "total1y", d7: "total7d", prev7: "total14dto7d", d30: "total30d", prev30: "total60dto30d" } as const;
+    const fields = { y1: "total1y", d1: "total24h", prev1: "total48hto24h", d7: "total7d", prev7: "total14dto7d", d30: "total30d", prev30: "total60dto30d" } as const;
     for (const key of Object.keys(fields) as (keyof typeof fields)[]) {
       const value = num(p[fields[key]]);
       // A partial parent sum is not a complete period. Preserve reported zeros.
@@ -262,7 +265,7 @@ export function aggregateOverviewByGroup(
  * holder revenue는 child 경제유형을 보존해 적격 최근 30일과 raw TTM을 따로 합산한다.
  */
 export async function fetchCoins(observations: SourceObservation[] = []): Promise<CoinRaw[]> {
-  const [protocols, feesL, revL, hrL, dexsL, gecko, cmc, revenueHistories, holderHistories, stablecoins] = await Promise.all([
+  const [protocols, feesL, revL, hrL, dexsL, gecko, cmc, revenueHistories, holderHistories, stablecoins, config] = await Promise.all([
     getJson<Json[]>(`${LLAMA}/protocols`, observations),
     fetchOverviewList("/overview/fees", observations),
     fetchOverviewList("/overview/fees?dataType=dailyRevenue", observations),
@@ -273,13 +276,16 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
     fetchRevenueHistory(observations),
     fetchHolderHistory(observations),
     getJson<{ peggedAssets: StablecoinAsset[] }>(STABLECOIN_SOURCE, observations),
+    getJson<{ parentProtocols: Json[] }>(`${LLAMA}/config`, observations),
   ]);
 
   if (!Array.isArray(stablecoins.peggedAssets) || stablecoins.peggedAssets.length === 0) throw new Error("Stablecoin identity registry unavailable");
+  if (!Array.isArray(protocols) || !protocols.length || !Array.isArray(config.parentProtocols)) throw new Error("DefiLlama directory unavailable");
+  const parents = new Map(config.parentProtocols.flatMap(p => typeof p.id === "string" ? [[p.id, p] as const] : []));
 
   // /protocols also carries parent links, including children absent from revenue overviews.
   const parentOf = new Map<string, string>();
-  for (const list of [protocols, feesL, revL, hrL, dexsL]) {
+  for (const list of [feesL, revL, hrL, dexsL, protocols]) {
     for (const p of list) {
       const slug = str(p.slug);
       const par = str(p.parentProtocol);
@@ -295,9 +301,14 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
   const feeDefinitions = aggregateDefinitions(feesL, groupKey, "Fees");
   const volAgg = aggregateOverviewByGroup(dexsL, groupKey);
 
-  // protocols를 그룹키로 묶기
+  // Include fee/revenue-only projects too. One component per slug; no market-cap cutoff.
+  const directory = new Map<string, Json>();
+  for (const p of [...protocols, ...feesL, ...revL, ...hrL, ...dexsL]) {
+    const slug = str(p.slug);
+    if (slug && !directory.has(slug)) directory.set(slug, p);
+  }
   const groups = new Map<string, Json[]>();
-  for (const p of protocols) {
+  for (const p of directory.values()) {
     const slug = str(p.slug);
     if (!slug) continue;
     const k = groupKey(slug);
@@ -305,6 +316,7 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
     if (!arr) { arr = []; groups.set(k, arr); }
     arr.push(p);
   }
+  for (const [key, parent] of parents) if (!groups.has(key)) groups.set(key, [{ ...parent, slug: key }]);
 
   const coins: CoinRaw[] = [];
 
@@ -318,13 +330,14 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
     const memberGeckoIds = new Set<string>();
     const memberSymbols = new Set<string>();
     const memberCmcIds = new Set<number>();
-    for (const m of members) {
+    const parent = parents.get(k);
+    for (const m of parent ? [parent, ...members] : members) {
       const id = typeof m.cmcId === "string" && /^\d+$/.test(m.cmcId) ? Number(m.cmcId) : num(m.cmcId);
       if (id !== null && id > 0) memberCmcIds.add(id);
       const v = num(m.mcap);
       if (v !== null && v > 0 && (dlMcap === null || v > dlMcap)) dlMcap = v;
       const t = num(m.tvl);
-      if (t !== null) tvl = (tvl ?? 0) + t;
+      if (t !== null && m !== parent) tvl = (tvl ?? 0) + t;
       const memberGeckoId = str(m.gecko_id);
       if (memberGeckoId) {
         memberGeckoIds.add(memberGeckoId);
@@ -346,7 +359,7 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       members[0];
 
     const isParent = k.startsWith("parent#");
-    const name = isParent ? prettyParent(k) : (str(rep.name) ?? k);
+    const name = isParent ? str(parent?.name) ?? prettyParent(k) : (str(rep.name) ?? k);
 
     const fees = feesAgg.get(k);
     const rev = revAgg.get(k);
@@ -385,7 +398,6 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
 
     // 시총: canonical CMC 매칭을 우선하고, 없으면 DefiLlama/CoinGecko 보조값.
     const mcap = cmcMcap ?? gMcap ?? dlMcap;
-    if (mcap === null && tvl === null) continue; // 둘 다 없으면 의미 없음
 
     const cmcListedAt = cmcRow ? Date.parse(str(cmcRow.date_added) ?? "") : NaN;
     if (Number.isFinite(cmcListedAt)) listedAt = cmcListedAt / 1000;
@@ -401,20 +413,20 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       name,
       symbol: (cmcRow ? str(cmcRow.symbol) : g ? str(g.symbol)?.toUpperCase() : null) ?? symbol,
       category: str(rep.category),
-      chains: Array.isArray(rep.chains) ? (rep.chains as string[]) : [],
+      chains: [...new Set(members.flatMap(m => Array.isArray(m.chains) ? m.chains.filter((v): v is string => typeof v === "string") : []))],
       geckoId,
       cmcId: cmcRow ? num(cmcRow.id) : null,
-      cmcSlug: cmcRow ? str(cmcRow.slug) : null,
-      logo: str(rep.logo),
+      cmcSlug: cmcRow ? str(cmcRow.slug) : identityStatus === "verified" ? CMC_SLUG_OVERRIDES[k] ?? null : null,
+      logo: str(parent?.logo) ?? str(rep.logo),
       listedAt,
       isParent,
       identityStatus,
       identityReason,
       capitalExclusionReason: capitalExclusion(geckoId ?? (cmcRow ? str(cmcRow.slug) : null), (cmcRow ? str(cmcRow.symbol) : g ? str(g.symbol) : null) ?? symbol, stablecoins.peggedAssets),
-      description: str(rep.description),
-      descriptionKo: koreanDescription(str(rep.description)),
+      description: str(parent?.description) ?? str(rep.description),
+      descriptionKo: koreanDescription(str(parent?.description) ?? str(rep.description)),
       descriptionSource: `https://defillama.com/protocol/${encodeURIComponent(String(rep.slug))}`,
-      website: str(rep.url),
+      website: str(parent?.url) ?? str(rep.url),
       revenueHistory: history,
       holderHistory: holderHistories[k] ?? null,
       sales: resolveSalesEvidence({ slug: k, geckoId, symbol, identityStatus }, new Date().toISOString()),
@@ -449,6 +461,9 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       // Holder share requires separately reviewed denominator scope and the same source window.
       revenueAnnual: rev?.annual ?? null,
       revenue1y: rev?.y1 ?? null,
+      revenue24h: rev?.d1 ?? null,
+      revenuePrev24h: rev?.prev1 ?? null,
+      revenuePrev7d: rev?.prev7 ?? null,
       revenue7d: rev?.d7 ?? null,
       revenue90d: history?.periods[90].total ?? null,
       revenue30d: rev?.d30 ?? null,

@@ -1,7 +1,8 @@
 import { Buffer } from "node:buffer";
+import { pathToFileURL } from "node:url";
 import { DEPLOY_CONTRACT } from "./deploy-contract.mjs";
 
-const ADVANCED_UI_MARKERS = ["표시 설정", "필터", "표시 지표로 배수 산출", "배수 분자", "24시간 %", "P/R · 30일", "P/HR · 30일", "지표 안내", "최신 자료 확인", "page-size-top", "page-size-bottom", "표 열 순서 이동", "header-basis"];
+const ADVANCED_UI_MARKERS = ["DefiLlama 전체 종목", "열 표시", "필터", "연결 토큰", "배수 분자", "P/R · 24시간", "P/HR · 24시간", "P/R · 30일", "P/HR · 30일", "지표 안내", "최신 자료 확인", "page-size-top", "scan-table", "수익 정렬 기준"];
 const LEGACY_UI_MARKERS = ["저평가 80+", "고평가 20 이하", "P/S 참고선", "P/S · 30일", "P/S · 사업 매출", 'aria-label="결과 정렬"'];
 const MAX_API_BYTES = 4_500_000;
 const MAX_ATTEMPTS = 8;
@@ -35,7 +36,7 @@ async function readPath(pathname, attempt) {
   };
 }
 
-function inspectHome(readback) {
+export function inspectHome(readback) {
   const body = decodeUnicodeEscapes(readback.body);
   const missingMarkers = ADVANCED_UI_MARKERS.filter((marker) => !body.includes(marker));
   const legacyMarkers = LEGACY_UI_MARKERS.filter((marker) => body.includes(marker));
@@ -46,7 +47,7 @@ function inspectHome(readback) {
   return { errors, missingMarkers, legacyMarkers };
 }
 
-function inspectApi(readback) {
+export function inspectApi(readback) {
   const errors = [];
   let data;
   if (readback.status !== 200) errors.push(`API HTTP ${readback.status}`);
@@ -62,6 +63,8 @@ function inspectApi(readback) {
   if (data.scoreVersion !== DEPLOY_CONTRACT.scoreVersion) {
     errors.push(`unexpected scoreVersion: ${data.scoreVersion ?? "missing"}`);
   }
+  if (!data.pagination || data.pagination.total < data.pagination.filtered || data.pagination.filtered < data.coins?.length || ![50,100,200].includes(data.pagination.size) || data.coins?.length > data.pagination.size) errors.push("invalid paginated universe");
+  if (data.universe?.projects !== data.pagination?.total || !(data.universe?.linkedTokens > 0)) errors.push("universe coverage missing");
   if (!Array.isArray(data.coins) || data.coins.length === 0) {
     errors.push("API coins array is missing or empty");
   } else {
@@ -98,7 +101,7 @@ function inspectApi(readback) {
       if (coin.capitalExclusionReason && Object.values(coin.multiples).some(v=>v!==null)) errors.push(`ineligible capital: ${coin.slug}`);
     }
     const venice = data.coins.find(c => c.slug === "venice");
-    if (!venice || venice.fundamentals?.revenue.kind !== "holder_return" || venice.fundamentals?.fees.kind !== "holder_return" || venice.opportunities.business || venice.valueCapture.eligibleHolderValueShare !== null || venice.multiples.pf !== null) errors.push("VVV scope regression");
+    if (venice && (venice.fundamentals?.revenue.kind !== "holder_return" || venice.fundamentals?.fees.kind !== "holder_return" || venice.opportunities.business || venice.valueCapture.eligibleHolderValueShare !== null || venice.multiples.pf !== null)) errors.push("VVV scope regression");
   }
   return { errors, data };
 }
@@ -107,13 +110,16 @@ export async function verifyProduction() {
   let lastErrors = [];
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
-      const [home, api] = await Promise.all([
+      const [home, api, named] = await Promise.all([
         readPath("/", attempt),
         readPath("/api/screener", attempt),
+        readPath("/api/screener?prefs=" + encodeURIComponent(JSON.stringify({ search: "venice" })), attempt),
       ]);
       const homeInspection = inspectHome(home);
       const apiInspection = inspectApi(api);
-      lastErrors = [...homeInspection.errors, ...apiInspection.errors];
+      const namedInspection = inspectApi(named);
+      lastErrors = [...homeInspection.errors, ...apiInspection.errors, ...namedInspection.errors];
+      if (!namedInspection.data?.coins?.some(c => c.slug === "venice")) lastErrors.push("VVV lookup unavailable");
       if (lastErrors.length === 0) {
         console.log(JSON.stringify({
           path: "/",
@@ -132,6 +138,7 @@ export async function verifyProduction() {
           requestId: api.requestId,
           scoreVersion: apiInspection.data.scoreVersion,
           rows: apiInspection.data.coins.length,
+          universeRows: apiInspection.data.pagination.total,
           updatedAt: apiInspection.data.updatedAt,
         }));
         console.log("[production-readback] PASS");
@@ -147,7 +154,7 @@ export async function verifyProduction() {
   throw new Error(`Production readback failed: ${lastErrors.join("; ")}`);
 }
 
-verifyProduction().catch((error) => {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) verifyProduction().catch((error) => {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 });

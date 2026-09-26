@@ -15,90 +15,9 @@ import { METRIC_COLUMN_DAYS } from "@/lib/metricCoverage";
 
 export const METRIC_DAYS: Partial<Record<SortKey, RevenueWindowDays>> = METRIC_COLUMN_DAYS;
 
-// 코인 외부 링크: canonical CMC 우선, 없으면 CoinGecko/DefiLlama 폴백
-export function coinUrl(c: CoinScored): string {
-  if (c.cmcSlug) return `https://coinmarketcap.com/currencies/${c.cmcSlug}/`;
-  if (c.geckoId) return `https://www.coingecko.com/en/coins/${c.geckoId}`;
-  return `https://defillama.com/protocol/${c.slug.replace(/^parent#/, "")}`;
-}
+export { coinUrl } from "@/lib/coinLinks";
 
-export function sortValue(c: CoinScored, key: SortKey, basis: CapitalBasis = "mcap"): number | string | null {
-  if (key === "psSales") return salesMultiple(c, basis);
-  if (key.startsWith("phr")) return holderMultiple(c, METRIC_DAYS[key] ?? 30, basis);
-  if (key === "pr" || key.startsWith("pr7") || key.startsWith("pr90") || key === "pr1y") return protocolMultiple(c, METRIC_DAYS[key] ?? 30, basis);
-  switch (key) {
-    case "price": return c.price;
-    case "change1d": return c.change1d;
-    case "multiple7d": return researchMultiple(c, 7);
-    case "multiple90d": return researchMultiple(c, 90);
-    case "multiple1y": return researchMultiple(c, 365);
-    case "revenue7d": return revenueAmount(c, 7);
-    case "revenue90d": return revenueAmount(c, 90);
-    case "revenue1y": return revenueAmount(c, 365);
-    case "holderRoute": return protocolResearch(c)?.holder?.route ?? holderTypeSummary(c);
-    case "payoutAsset": return protocolResearch(c)?.holder?.asset ?? null;
-    case "holderCondition": return protocolResearch(c)?.holder?.recipient ?? null;
-    case "signals":
-      return (
-        Number(c.opportunities.business) +
-        Number(c.opportunities.holder) +
-        Number(c.opportunities.transition)
-      );
-    case "revenueGrowth":
-      return knownRevenue(c) ? c.opportunities.revenue.changePct : null;
-    case "holderGrowth":
-      return c.opportunities.eligibleHolder.changePct;
-    case "name":
-      return c.name.toLowerCase();
-    case "category":
-      return (c.category ?? "").toLowerCase();
-    case "valueScore":
-      return c.valueScore;
-    case "scoreAxes":
-      return c.scoreAxes.discovery;
-    case "confidence":
-      return c.confidence;
-    case "gateStatus":
-      return c.gates.passed ? 1 : 0;
-    case "captureScore":
-      return c.valueCapture.score;
-    case "revenueMultiple":
-      return researchMultiple(c);
-    case "revenueAnnual":
-      return c.revenueAnnual;
-    case "holderValueRunRate":
-      return datedHolderValue(c).eligibleRunRate;
-    case "holderValueTtm":
-      return c.holderValue.rawTtm;
-    case "revenue30d":
-      return revenueAmount(c, 30);
-    case "mcap":
-      return c.mcap;
-    case "totalVolume":
-      return c.totalVolume;
-    case "fdv":
-      return c.fdv;
-    case "tvl":
-      return c.tvl;
-    case "priceChange7d":
-      return c.priceChange7d;
-    case "priceChange14d":
-      return c.priceChange14d;
-    case "priceChange30d":
-      return c.priceChange30d;
-    case "priceChange60d":
-      return c.priceChange60d;
-    case "priceChange1y":
-      return c.priceChange1y;
-    case "athChangePercentage":
-      return c.athChangePercentage;
-    case "atlChangePercentage":
-      return c.atlChangePercentage;
-    case "feesChange7d":
-      return c.feesChange7dover7d;
-  }
-  return null;
-}
+export { sortValue } from "@/lib/screenerSort";
 
 function changeClass(v: number | null): string {
   if (v === null) return "";
@@ -171,7 +90,7 @@ export function renderCell(c: CoinScored, key: SortKey, basis: CapitalBasis = "m
     const days=METRIC_DAYS[key] ?? 30;
     return metricReading(holderMultiple(c,days,basis),holderReason(c,days,basis)+" · "+holderConditionSummary(c),basis,holderMultiple(c,days),holderTypeSummary(c,true) + (holderConditionSummary(c).includes("락업") ? " · 락업" : holderConditionSummary(c).includes("스테이킹") ? " · 스테이킹" : "") + (c.holderValue.availability === "mixed" ? " · 확인분" : ""));
   }
-  if (["pr","pr7d","pr90d","pr1y"].includes(key)) {
+  if (["pr24h","pr","pr7d","pr90d","pr1y"].includes(key)) {
     const days=METRIC_DAYS[key] ?? 30;
     return metricReading(protocolMultiple(c,days,basis),protocolReason(c,days,basis),basis,protocolMultiple(c,days),c.fundamentals.revenue.kind === "service_sales" ? "서비스 매출 집계" : undefined);
   }

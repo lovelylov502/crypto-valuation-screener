@@ -5646,5 +5646,59 @@
     "reviewedAt": "2026-09-21",
     "reviewNote": "Gross transaction fees without validator/treasury/burn split.",
     "reviewSource": "https://defillama.com/protocol/movement"
+  },
+  "aerodrome-v1": {
+    "methodology": {
+      "Revenue": "veAERO holders' share of swap fees, equal to HoldersRevenue (Aerodrome's zero-leak model routes all protocol revenue to voters).",
+      "Fees": "Total swap fees paid by traders. Per-pool fee rate read from PoolFactory.getFee (default sAMM 0.05%, vAMM 0.30%; customizable per pool) applied to each swap's input amount.",
+      "HoldersRevenue": "Fees earned by LPs staked in the gauge — forwarded to FeeVotingReward for distribution to veAERO voters. Computed per pool as fees × pool.balanceOf(gauge) / pool.totalSupply.",
+      "ProtocolRevenue": "Percentage of swap fees going to treasury",
+      "SupplySideRevenue": "Unstaked LPs' pro-rata share of swap fees, claimable directly from the pool. Computed per pool as fees × (1 − stakedShare). Aerodrome v2 has no unstaked-LP rake module, so unstaked LPs keep 100% of their share.",
+      "UserFees": "Swap fees paid by users"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "mixed",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-26",
+    "reviewNote": "Reviewed Aerodrome docs and DefiLlama adapter: swap-fee share and external voting incentives accrue to veAERO voters. Revenue and holder revenue overlap, not additive. Includes external incentives and accrual, not cash paid to every AERO holder.",
+    "holderType": "ve_voter_locker_distribution",
+    "holderReason": "스테이킹된 풀 수수료 귀속분·외부 투표 인센티브가 veAERO 투표자에게 귀속. 원천 어댑터·공식 문서 대조",
+    "holderCondition": "AERO 락업·풀 투표 필요. 투표 대상에 따라 수령액이 다름. 일반 보유자 자동 분배·신규 발행 리베이스와 구분."
+  },
+  "aerodrome-slipstream": {
+    "methodology": {
+      "Revenue": "veAERO holders' share of swap fees, equal to HoldersRevenue (Aerodrome's zero-leak model routes all protocol revenue to voters).",
+      "Fees": "Total swap fees paid by traders. Per-pool fee rate read from CLPool.fee() (tickSpacing-based default, customizable) applied to each swap's input amount.",
+      "HoldersRevenue": "Sum of (a) staked-LP fees and (b) the unstaked-LP rake (CLFactory.getUnstakedFee, default 10% of unstaked share), both routed into the gauge's CLPool.gaugeFees() accumulator. Measured on-chain as gaugeFees(toBlock) - gaugeFees(fromBlock) plus CollectFees event amounts (which drain the accumulator each Voter.distribute call).",
+      "ProtocolRevenue": "Percentage of swap fees going to treasury",
+      "SupplySideRevenue": "Unstaked LPs' net share of swap fees after the rake, accruing via the pool's feeGrowthGlobal. Computed per pool as Fees - HoldersRevenue.",
+      "UserFees": "Swap fees paid by users"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "mixed",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-26",
+    "reviewNote": "Reviewed Aerodrome docs and DefiLlama adapter: swap-fee share and external voting incentives accrue to veAERO voters. Revenue and holder revenue overlap, not additive. Includes external incentives and accrual, not cash paid to every AERO holder.",
+    "holderType": "ve_voter_locker_distribution",
+    "holderReason": "스테이킹된 풀 수수료 귀속분·외부 투표 인센티브가 veAERO 투표자에게 귀속. 원천 어댑터·공식 문서 대조",
+    "holderCondition": "AERO 락업·풀 투표 필요. 투표 대상에 따라 수령액이 다름. 일반 보유자 자동 분배·신규 발행 리베이스와 구분."
+  },
+  "aero-lite": {
+    "methodology": {
+      "Revenue": "Zero: no Voter/veAERO gauge system is deployed on Arc yet, so no fees are redirected away from LPs.",
+      "Fees": "Swap fees paid by traders, using each pool's on-chain fee rate resampled every 1000 blocks since the rate adjusts dynamically.",
+      "HoldersRevenue": "Money going to governance token holders",
+      "ProtocolRevenue": "Percentage of swap fees going to treasury",
+      "SupplySideRevenue": "All swap fees, paid to liquidity providers.",
+      "UserFees": "Swap fees paid by users"
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "reviewedAt": "2026-09-26",
+    "reviewNote": "Provider states no protocol take on Arc; all swap fees go to LPs. Preserve explicitly reported zero; do not backfill unreported dates.",
+    "holderType": "unclear_other",
+    "holderReason": "Arc에서는 veAERO 환원 구조가 없다는 원천 설명",
+    "holderCondition": "환원 비적용"
   }
 }

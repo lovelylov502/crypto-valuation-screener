@@ -43,7 +43,7 @@ export function DisplaySettings({ columns, onChange, onStatus }: {
         if (!choices.length) return null;
         return <details className="column-group" key={group} open={!!query || group !== "research"}>
           <summary>{COLUMN_GROUP_LABELS[group]}</summary>
-          {group === "valuation" && !query && <div className="period-shortcuts"><button onClick={()=>{onChange(showMetricPeriods(columns,"pr"));onStatus("P/R 4개 기간을 추가했습니다.");}}>P/R 전 기간 추가</button><button onClick={()=>{onChange(showMetricPeriods(columns,"phr"));onStatus("P/HR 4개 기간을 추가했습니다.");}}>P/HR 전 기간 추가</button></div>}
+          {group === "valuation" && !query && <div className="period-shortcuts"><button onClick={()=>{onChange(showMetricPeriods(columns,"pr"));onStatus("P/R 5개 기간을 추가했습니다.");}}>P/R 전 기간 추가</button><button onClick={()=>{onChange(showMetricPeriods(columns,"phr"));onStatus("P/HR 5개 기간을 추가했습니다.");}}>P/HR 전 기간 추가</button></div>}
           <div className="column-options">{choices.map(c=><button key={c.key} className="column-add" title={c.title} aria-label={c.label + " 추가"} onClick={()=>{onChange(addColumn(columns,c.key));onStatus(c.label + " 열을 추가했습니다.");}}><Plus size={14}/>{c.label}</button>)}</div>
         </details>;
       })}

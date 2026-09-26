@@ -18,6 +18,11 @@ export interface ProtocolResearch {
 
 // Source-backed research records. No inferred payout asset or policy from an amount alone.
 export const PROTOCOL_RESEARCH: Record<string, ProtocolResearch> = {
+  "aerodrome": {
+    description: "Base의 토큰 교환·유동성 시장입니다. 원천 수익에는 veAERO 투표자에게 귀속되는 거래 수수료와 외부 투표 인센티브가 함께 포함됩니다. AERO 신규 발행 보상은 별도이며 수익·환원액을 더하지 않습니다.",
+    source: "https://aerodrome.finance/docs", reviewedAt: "2026-09-26", scope: "Aerodrome V1·Slipstream 원천 어댑터와 공식 문서 대조 · Aero Lite는 원천상 프로토콜 귀속분 0",
+    holder: { funding: "풀 수수료 귀속분 + 외부 투표 인센티브", route: "락업·투표 후 분배", asset: "투표한 풀의 수수료·인센티브 자산", recipient: "해당 풀에 투표한 veAERO 보유자", condition: "AERO를 락업하고 풀에 투표해야 합니다. 일반 보유자 자동 분배가 아니며, 외부 인센티브와 발행 리베이스를 구분해야 합니다.", status: "공식 문서·집계 코드 확인 · 개별 지급 거래 미대조", source: "https://aerodrome.finance/docs" },
+  },
   "venice": {
     description: "텍스트·이미지 등 여러 AI 모델을 구독과 API로 이용하는 서비스입니다. 사업 매출의 일부를 VVV 시장매입과 소각에 사용하며, 사업 매출과 소각액은 별도 지표입니다.",
     source: "https://venice.ai/lp/vvv", reviewedAt: "2026-09-20", scope: "Venice 서비스와 VVV 공식 설명",

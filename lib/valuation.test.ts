@@ -246,7 +246,7 @@ describe("scoreCoins discovery model", () => {
     const [scored] = scoreCoins([current], REFERENCE);
 
     expect(scored.multiples.phr).toBeCloseTo(120_000_000 / 12_166_666.666666666);
-    expect(SCORE_VERSION).toBe("research-v8-coverage-and-holder-types");
+    expect(SCORE_VERSION).toBe("research-v9-full-universe-and-24h");
   });
 
   it("leaves current P/HR unavailable when TTM is positive but current 30d is zero", () => {

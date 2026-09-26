@@ -3,11 +3,11 @@ import { salesMultiple, protocolMultiple, holderMultiple, type CapitalBasis } fr
 import type { RevenueWindowDays } from "./revenueHistory";
 import { SCREENER_COLUMNS, type SortKey } from "./screenerColumns";
 
-export const METRIC_WINDOWS = [7, 30, 90, 365] as const;
+export const METRIC_WINDOWS = [1, 7, 30, 90, 365] as const;
 export type CoverageWindow = RevenueWindowDays | "any";
 export type AvailableMetric = "all" | "any" | "sales" | "revenue" | "holder" | "review" | "missing";
 export const AVAILABILITY_LABELS: Record<AvailableMetric, string> = { all: "전체", any: "배수 산출 가능", sales: "P/S", revenue: "P/R", holder: "P/HR", review: "원천 자료 있음 · 배수 보류", missing: "해당 기간 원천 자료 없음" };
-export function windowLabel(window: CoverageWindow): string { return window === "any" ? "확보된 기간 중 하나" : window === 365 ? "1년" : `${window}일`; }
+export function windowLabel(window: CoverageWindow): string { return window === "any" ? "확보된 기간 중 하나" : window === 1 ? "24시간" : window === 365 ? "1년" : `${window}일`; }
 
 export function metricAvailable(c: CoinRaw, metric: "sales" | "revenue" | "holder", basis: CapitalBasis, window: CoverageWindow): boolean {
   if (metric === "sales") return salesMultiple(c, basis) !== null;
@@ -18,9 +18,9 @@ export function hasSourceData(c: CoinRaw, window: CoverageWindow): boolean {
   if (c.sales) return true;
   const windows = window === "any" ? METRIC_WINDOWS : [window];
   return windows.some(days => {
-    const raw = ({7:c.revenue7d,30:c.revenue30d,90:c.revenue90d,365:c.revenue1y})[days];
+    const raw = ({1:c.revenue24h,7:c.revenue7d,30:c.revenue30d,90:c.revenue90d,365:c.revenue1y})[days];
     const holders = days === 30 ? c.holderValue.rawCurrent30d : days === 365 ? c.holderValue.rawTtm : null;
-    return raw != null || holders != null || (c.revenueHistory?.periods[days].reportedDays ?? 0) > 0 || (c.holderHistory?.periods[days].reportedDays ?? 0) > 0;
+    return raw != null || holders != null || (c.revenueHistory?.periods[days]?.reportedDays ?? 0) > 0 || (c.holderHistory?.periods[days]?.reportedDays ?? 0) > 0;
   });
 }
 export function matchesAvailability(c: CoinRaw, metric: AvailableMetric, basis: CapitalBasis, window: CoverageWindow, includeSales = true): boolean {
@@ -36,7 +36,7 @@ export function metricCoverage(coins: CoinRaw[], basis: CapitalBasis, window: Co
   return { total: coins.length, sales:count("sales"), revenue:count("revenue"), holder:count("holder"), unique:count("any"), review:count("review"), missing:count("missing"), source:coins.filter(c => hasSourceData(c,window)).length };
 }
 
-export const METRIC_COLUMN_DAYS: Partial<Record<SortKey, RevenueWindowDays>> = { pr:30, pr7d:7, pr90d:90, pr1y:365, phr:30, phr7d:7, phr90d:90, phr1y:365 };
+export const METRIC_COLUMN_DAYS: Partial<Record<SortKey, RevenueWindowDays>> = { pr24h:1, pr:30, pr7d:7, pr90d:90, pr1y:365, phr24h:1, phr:30, phr7d:7, phr90d:90, phr1y:365 };
 /** Count only the periods visible in the table, across the current filtered result. */
 export function visibleMetricCoverage(coins: CoinRaw[], basis: CapitalBasis, columns: SortKey[]) {
   const metrics = columns.flatMap(key => {

@@ -93,7 +93,7 @@ export function make(partial: CoinOverrides): CoinRaw {
     });
     coin.holderHistory = {
       definitionFingerprint: holderScope(coin), source: "fixture dated observations", observedAt: new Date(end + 86400000).toISOString(),
-      periods: { 7: period(7,null), 30: period(30,coin.holderValue.eligibleCurrent30d), 90: period(90,null), 365: period(365,coin.holderValue.eligibleTtm) },
+      periods: { 1: period(1,null), 7: period(7,null), 30: period(30,coin.holderValue.eligibleCurrent30d), 90: period(90,null), 365: period(365,coin.holderValue.eligibleTtm) },
       previous30: period(30,coin.holderValue.eligiblePrevious30d,30), weeks: [],
     };
   }

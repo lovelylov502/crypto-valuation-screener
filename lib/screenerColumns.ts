@@ -1,6 +1,9 @@
 export type SortKey =
   | "psSales"
   | "pr"
+  | "pr24h"
+  | "phr24h"
+  | "revenue24h"
   | "pr7d"
   | "pr90d"
   | "pr1y"
@@ -70,6 +73,9 @@ export const COLUMN_GROUP_LABELS: Record<ColumnGroup, string> = {
 };
 
 export const SCREENER_COLUMNS: ScreenerColumn[] = [
+  { key: "pr24h", label: "P/R · 24시간", title: "현재 토큰 가치 ÷ (최근 완료 UTC 하루 수익 × 365). 하루 급증에 민감합니다", group: "valuation" },
+  { key: "phr24h", label: "P/HR · 24시간", title: "현재 토큰 가치 ÷ (최근 완료 UTC 하루 적격 환원액 × 365)", group: "valuation" },
+  { key: "revenue24h", label: "수익 · 24시간", title: "최근 완료 UTC 하루 수익. 변화율은 직전 하루 대비", group: "fundamentals" },
   { key: "pr1y", label: "P/R · 1년", title: "현재 토큰 가치 ÷ 프로토콜 귀속 수익 365일 합계. 이력이 부족하면 보류", group: "valuation" },
   { key: "pr90d", label: "P/R · 90일", title: "현재 토큰 가치 ÷ (프로토콜 귀속 수익 90일 × 365/90)", group: "valuation" },
   { key: "pr", label: "P/R · 30일", title: "현재 토큰 가치 ÷ (프로토콜 귀속 수익 30일 × 365/30). 회사 전체 매출·순이익과 다릅니다", group: "valuation" },
@@ -98,25 +104,31 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
   { key: "category", label: "섹터", title: "카테고리", group: "market" },
   { key: "captureScore", label: "포획", title: "최근 30일 확인된 환원 방식에 대한 실험 점수. 소각·조건부 분배를 포함하며 현금 배당 점수가 아닙니다", group: "research" },
   { key: "revenueAnnual", label: "원천 30일 연환산", title: "원천 최근 30일 × 365/30. 실제 1년 합계나 미래 예측을 뜻하지 않습니다", group: "fundamentals" },
-  { key: "revenue30d", label: "집계액 30일", title: "최근 30일 집계액 (원값)", group: "fundamentals" },
+  { key: "revenue30d", label: "수익 · 30일", title: "최근 30일 프로토콜 수익 · 변화율은 직전 30일 대비", group: "fundamentals" },
   { key: "fdv", label: "FDV", title: "완전희석가치 (CoinMarketCap 우선)", group: "market" },
   { key: "tvl", label: "TVL", title: "예치자산", group: "market" },
   { key: "priceChange14d", label: "14일", title: "CoinGecko 14일 가격 변화율", group: "performance" },
   { key: "feesChange7d", label: "수수료 변화", title: "최근 7일 vs 직전 7일 수수료 변화 (30일 변화 보조 표시)", group: "fundamentals" },
   { key: "price", label: "가격", title: "현재 토큰 가격 · USD", group: "market" },
   { key: "change1d", label: "24시간 %", title: "토큰 가격의 24시간 변화. 포착 조건에는 반영하지 않습니다", group: "performance" },
-  { key: "revenue7d", label: "집계액 7일", title: "최근 7일 원천 집계액. 누락은 0으로 채우지 않습니다", group: "fundamentals" },
-  { key: "revenue90d", label: "집계액 90일", title: "최근 90일 원천 집계액 합계", group: "fundamentals" },
-  { key: "revenue1y", label: "집계액 1년", title: "최근 365일 원천 집계액 합계 · 연환산 아님", group: "fundamentals" },
+  { key: "revenue7d", label: "수익 · 7일", title: "최근 7일 프로토콜 수익 · 변화율은 직전 7일 대비", group: "fundamentals" },
+  { key: "revenue90d", label: "수익 · 90일", title: "최근 90일 프로토콜 수익 · 변화율은 직전 90일 대비", group: "fundamentals" },
+  { key: "revenue1y", label: "수익 · 1년", title: "최근 365일 프로토콜 수익 합계 · 변화율은 직전 365일 대비", group: "fundamentals" },
   { key: "holderRoute", label: "환원 방식", title: "공식 문서 확인 경로 우선. 미확인 종목은 원천 설명의 자동 분류를 구분해 표시", group: "fundamentals" },
   { key: "payoutAsset", label: "지급 자산", title: "보유자가 받는 자산 또는 소각 대상. 금액만으로 추정하지 않습니다", group: "fundamentals" },
   { key: "holderCondition", label: "수령 대상", title: "일반 보유자·스테이커·락업·투표자 등 공식 확인 대상", group: "fundamentals" },
 ];
 
 export const DEFAULT_VISIBLE_COLUMNS: SortKey[] = [
-  "price",
-  "change1d",
-  "mcap",
-  "pr",
-  "phr",
+  "pr24h", "pr7d", "pr", "pr90d", "pr1y",
+  "revenue24h", "revenue7d", "revenue30d", "revenue90d", "revenue1y",
+  "phr24h", "phr7d", "phr", "phr90d", "phr1y", "holderRoute",
 ];
+
+export const REVENUE_COLUMN_DAYS = { revenue24h: 1, revenue7d: 7, revenue30d: 30, revenue90d: 90, revenue1y: 365 } as const;
+export function columnBand(key: SortKey): string {
+  if (["pr24h", "pr7d", "pr", "pr90d", "pr1y"].includes(key)) return "수익 배수 P/R";
+  if (key in REVENUE_COLUMN_DAYS) return "프로토콜 수익";
+  if (["phr24h", "phr7d", "phr", "phr90d", "phr1y"].includes(key)) return "홀더 배수 P/HR";
+  return "추가 지표";
+}

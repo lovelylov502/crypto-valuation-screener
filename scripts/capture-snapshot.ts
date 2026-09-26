@@ -27,7 +27,7 @@ async function main() {
     "snapshot.json": Buffer.from(JSON.stringify(makeSnapshot(data))),
     "quality.json": Buffer.from(JSON.stringify({
       at, rows: data.coins.length,
-      coverage: Object.fromEntries((["mcap","fdv"] as const).map(basis=>[basis,Object.fromEntries(([7,30,90,365,"any"] as const).map(window=>[window,metricCoverage(data.coins,basis,window)]))])),
+      coverage: Object.fromEntries((["mcap","fdv"] as const).map(basis=>[basis,Object.fromEntries(([1,7,30,90,365,"any"] as const).map(window=>[window,metricCoverage(data.coins,basis,window)]))])),
       review: definitionReviewQueue(data.coins),
       errors: data.coins.flatMap(c => fundamentalErrors(c).map(error => ({slug:c.slug,error}))),
     }, null, 2)),
@@ -71,6 +71,9 @@ async function main() {
     "lib/completeHistorySource.ts",
     "lib/metricCoverage.ts",
     "lib/capitalEligibility.ts",
+    "lib/revenueTrend.ts",
+    "lib/screenerQuery.ts",
+    "lib/serverScreener.ts",
   ]) {
     ruleHashes[name] = createHash("sha256")
       .update(await readFile(resolve(name)))

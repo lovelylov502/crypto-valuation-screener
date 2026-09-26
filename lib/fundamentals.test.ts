@@ -28,6 +28,15 @@ function venice() {
 }
 
 describe("economic scope regression", () => {
+  it("binds AERO's conditional voter distribution to reviewed adapter definitions", () => {
+    const rows = [row("aerodrome-v1", { total30d: 100 }), row("aerodrome-slipstream", { total30d: 200 }), row("aero-lite", { total30d: 0 })];
+    expect(definitions(rows).revenue.kind).toBe("protocol_revenue");
+    expect(definitions(rows).holderShareReviewed).toBe(false);
+    const holder = aggregateHolderValueByGroup(rows, () => "parent", definitionReviewed).get("parent")!;
+    expect(holder.eligibleCurrent30d).toBe(300);
+    expect(holder.components.filter(c => c.eligible).every(c => c.economicType === "ve_voter_locker_distribution")).toBe(true);
+    expect(definitionReviewed(row("aerodrome-v1", { methodology: { ...registry["aerodrome-v1"].methodology, HoldersRevenue: "New recipient" } }))).toBe(false);
+  });
   it("preserves VVV's burn denominator without sales, fee growth, share or duplicate scoring", () => {
     const [c] = scoreCoins([venice()], at);
     expect(c.fundamentals.revenue.kind).toBe("holder_return");

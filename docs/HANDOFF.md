@@ -1,5 +1,15 @@
 # Handoff
 
+## 2026-09-26 — Full directory and inline research screen (local)
+
+Branch `codex/complete-universe-inline-screener` implements the selected image mockup: 24h/7d/30d/90d/1y P/R, protocol revenue and P/HR; inline market/growth/holder detail; CMC-first market links; combinable growth/holder conditions; and preserved favorites/custom columns. Default sorting is 30-day P/R ascending. P/S retains its distinct business-sales meaning in detail. No production deployment occurred.
+
+The directory is the union of DefiLlama public protocol/parent/overview lists and is no longer filtered by market cap. Parent identity recovery includes AERO. Exact AERO adapter definitions were reviewed; long P/R periods remain explicitly withheld when Aero Lite coverage is incomplete. 24h means the last completed UTC day, not live rolling 24h. The API now filters/sorts server-side and returns 50/100/200-row pages; total counts live in `pagination`. Hashed snapshot chunks avoid Next's 2 MB cache entry limit. Both HTML and API use the single joined-snapshot freshness policy.
+
+Local observation at 2026-09-26 05:33:09 UTC: 7,123 projects, 2,798 linked eligible tokens, MCap/any-period P/R 140, P/HR 74, distinct 168; 1,527 source-present withheld and 5,428 missing. All source requests succeeded in that receipt. Full pagination replay retained all 7,123 rows without duplication; maximum 200-row response 1,610,781 bytes. See [SCREENER_V9.md](./SCREENER_V9.md) for definitions, evidence and limitations.
+
+214 application tests, six deploy-contract probes, TypeScript and production build pass. Local production `/`, default API and targeted VVV API pass the revised readback inspector. Browser interaction and responsive evidence is recorded in [design-qa.md](../design-qa.md). Local preview uses `http://127.0.0.1:3000/`; it is separate from the live service. Production release still requires the canonical guarded route after review and a clean synchronized main.
+
 ## 2026-09-21 — CoinMarketCap-informed UI production receipt
 
 Application commit `80eec7ef0865ba452cc92668ecda6a5564904742` is live through the canonical `npm run deploy:production` route. Deployment `dpl_1335g2ys2cLtRL55GMUzgYeMowtY`, unique URL https://crypto-valuation-screener-8y44uf0kx-bodycation.vercel.app, is READY in production. Authenticated readback confirms that commit, the expected project/team, and https://crypto-valuation-screener.vercel.app. This is a subsequent documentation-only receipt.

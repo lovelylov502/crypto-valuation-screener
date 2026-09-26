@@ -25,7 +25,7 @@ export async function completeHistorySource(protocols: Row[], chart: unknown[], 
         if (!response.ok) throw new Error("history source unavailable");
         const summary = await response.json();
         if (!sameHistoryIdentity(p,summary) || !Array.isArray(summary.totalDataChart)) throw new Error("history scope mismatch");
-        const points = summary.totalDataChart.filter((point: unknown): point is [number,number] => Array.isArray(point) && typeof point[0] === "number" && typeof point[1] === "number" && Number.isFinite(point[1]) && point[0] <= end && point[0] > end-365*DAY);
+        const points = summary.totalDataChart.filter((point: unknown): point is [number,number] => Array.isArray(point) && typeof point[0] === "number" && typeof point[1] === "number" && Number.isFinite(point[1]) && point[0] <= end && point[0] > end-730*DAY);
         // A conflicting overlap cannot be silently patched with a differently valued series.
         if (points.some(([t,v]:[number,number]) => { const old=rows.get(t)?.[String(p.name)]; return typeof old === "number" && Math.abs(old-v)>Math.max(1,Math.abs(v))*1e-8; })) throw new Error("history values conflict");
         for (const [t,v] of points) { const row=rows.get(t) ?? {}; row[String(p.name)]=v; rows.set(t,row); }

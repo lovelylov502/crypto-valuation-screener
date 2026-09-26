@@ -5,7 +5,7 @@ import {
 } from "./screener";
 
 describe("filterScreenableCoins", () => {
-  it("keeps the same $1M-and-above universe for the page and API payload", () => {
+  it("keeps missing-cap and small projects in the complete universe", () => {
     const coins = [
       { slug: "missing", mcap: null },
       { slug: "micro", mcap: 999_999 },
@@ -14,6 +14,8 @@ describe("filterScreenableCoins", () => {
     ];
 
     expect(filterScreenableCoins(coins).map((coin) => coin.slug)).toEqual([
+      "missing",
+      "micro",
       "boundary",
       "large",
     ]);

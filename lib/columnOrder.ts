@@ -1,8 +1,8 @@
 import type { SortKey } from "./screenerColumns";
 
 export const PERIOD_COLUMNS: Record<"pr" | "phr", SortKey[]> = {
-  pr: ["pr1y", "pr90d", "pr", "pr7d"],
-  phr: ["phr1y", "phr90d", "phr", "phr7d"],
+  pr: ["pr24h", "pr7d", "pr", "pr90d", "pr1y"],
+  phr: ["phr24h", "phr7d", "phr", "phr90d", "phr1y"],
 };
 
 /** Move one column, retaining every other column's relative order. */
@@ -26,7 +26,7 @@ export function addColumn(columns: SortKey[], key: SortKey): SortKey[] {
   return [...columns.slice(0, at), key, ...columns.slice(at)];
 }
 
-/** Explicit four-period action groups that metric at its first current position. */
+/** Group all five periods at the metric's first current position. */
 export function showMetricPeriods(columns: SortKey[], metric: "pr" | "phr"): SortKey[] {
   const family = PERIOD_COLUMNS[metric];
   const first = columns.findIndex(k => family.includes(k));
