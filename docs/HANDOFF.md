@@ -1,5 +1,15 @@
 # Handoff
 
+## 2026-09-27 — TOVENIT branding production receipt
+
+The user selected TOVENIT (토베닛) and requested branding, logo images and application across the site. Application commit `2f9a05869e90dba01ce775e95ba7693ddec85d55` introduces the mint T symbol, uppercase wordmark, tagline `토큰의 가치를 읽는 기준`, navy/mint palette, browser and Apple icons, sharing cover, page metadata and branded JSON export filename. The built-in image generator created the artwork; [BRAND.md](./BRAND.md) records the assets, usage and exact prompts. Financial calculations, source definitions and preference keys remain unchanged.
+
+The canonical `npm run deploy:production` route passed clean synchronized main, authenticated project/team identity, six deployment-contract probes, 214 application tests, TypeScript, production build, whitespace checks, pinned CLI dry run and canonical HTML/API readback. Deployment `dpl_BMVEqRMqyy8bQC87oZ1Cf2EGwdJP`, unique URL https://crypto-valuation-screener-h6gkw3r9w-bodycation.vercel.app, is READY in production. Authenticated readback confirms the exact application commit and https://crypto-valuation-screener.vercel.app alias. The canonical API returned 100 rows from 7,125 projects, `research-v9-full-universe-and-24h`, observed at `2026-09-26T23:08:56.172Z`. This is a subsequent documentation-only receipt.
+
+The public logo, social cover and both icons returned HTTP 200 and matched the committed files byte-for-byte. Local browser checks covered desktop 1440 px, mobile 390/320 px, search, saved FDV/favorite/query state after reload, and guide Escape/focus return. Live checks confirmed the TOVENIT title/header, AERO search, inline details, exact CMC link, 24-hour P/R/P-HR and revenue, and preserved five custom columns with market-cap descending sort. Temporary verification columns and search were removed. Browser warning/error logs and document horizontal overflow were zero; viewport overrides were reset and the local preview server was stopped.
+
+Evidence is outside Git in `C:/Users/TAE/Documents/Codex/2026-09-27/tovenit-branding`: deployment log, authenticated identity, exact asset readback, local/live browser receipts and screenshots. No new hosted daily-snapshot run is claimed.
+
 ## 2026-09-26 — Full directory and inline screen production receipt
 
 The user explicitly requested deployment. Application commit `2a84f32fa9111822781a0f5bb6133ee0a37f91d4` is live through the canonical `npm run deploy:production` route. Deployment `dpl_4kUc3y6g3QMrKT6TLBZJFvW72rgD`, unique URL https://crypto-valuation-screener-6h5qodact-bodycation.vercel.app, is READY in production. Authenticated readback confirms the exact main commit, expected project/team and https://crypto-valuation-screener.vercel.app alias. This entry is a subsequent documentation-only receipt.
