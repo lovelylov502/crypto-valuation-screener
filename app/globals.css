@@ -8,7 +8,7 @@
   --color-border: #293246;
   --color-muted: #a1adc4;
   --color-text: #edf1f9;
-  --color-accent: #7795ff;
+  --color-accent: #58dcc4;
 }
 
 * {
@@ -40,11 +40,11 @@ summary {
   -webkit-tap-highlight-color: transparent;
 }
 :focus-visible {
-  outline: 2px solid #83adff;
+  outline: 2px solid var(--color-accent);
   outline-offset: 3px;
 }
 input[type="checkbox"] {
-  accent-color: #739fff;
+  accent-color: var(--color-accent);
   width: 16px;
   height: 16px;
   flex-shrink: 0;
@@ -1709,9 +1709,9 @@ body {
 .settings-body { padding:18px 24px 24px; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:#566581 transparent; font-size:13px; line-height:1.7; }
 .settings-content > footer { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:14px 24px; border-top:1px solid #354059; background:#202535; flex-shrink:0; }
 .settings-content > footer span { color:#a6b5cf; font-size:12px; }
-.settings-content .button.primary { color:#fff; border:0; background:#4166ed; min-width:82px; }
-.settings-content .button.primary:hover { background:#5277ff; }
-.settings-dialog input[type=checkbox] { accent-color:#6483f5; }
+.settings-content .button.primary { color:#0d1421; border:0; background:var(--color-accent); min-width:82px; }
+.settings-content .button.primary:hover { background:#81ead7; }
+.settings-dialog input[type=checkbox] { accent-color:var(--color-accent); }
 .settings-dialog .sidebar-label { margin:20px 0; font-size:13px; }
 .settings-dialog input:not([type=checkbox]):not([type=range]), .settings-dialog select { background:#151e30; border-color:#405170; color:#e2ebfc; }
 .settings-dialog .sidebar-hint { color:#a4b3cd; font-size:12px; line-height:1.65; margin:8px 0 14px; }

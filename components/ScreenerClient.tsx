@@ -21,6 +21,7 @@ import { DisplaySettings } from "./DisplaySettings";
 import { InlineCoinDetail, signedUsd, tone } from "./InlineCoinDetail";
 import { pageUrl, useScreenerPage } from "./useScreenerPage";
 import { growthLabel, revenueTrend } from "@/lib/revenueTrend";
+import { BRAND } from "@/lib/brand";
 
 const FAVORITES_KEY = "crypto-valuation-favorites-v1";
 
@@ -115,7 +116,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
         if (coins.length >= next.pagination.filtered) break;
       }
       const url = URL.createObjectURL(new Blob([JSON.stringify({ updatedAt: at, preferences: prefs, coins })], { type: "application/json" }));
-      const a = document.createElement("a"); a.href = url; a.download = "screener-results.json"; a.click(); URL.revokeObjectURL(url);
+      const a = document.createElement("a"); a.href = url; a.download = "tovenit-results.json"; a.click(); URL.revokeObjectURL(url);
       setStatus(`${coins.length}개 검색 결과를 내보냈습니다.`);
     } catch (e) { setStatus(e instanceof Error ? e.message : "내보내기 실패"); }
     finally { setExporting(false); }
@@ -124,7 +125,10 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
   return <main className="research-app valuation-workspace scan-workspace">
     <a className="skip-link" href="#screener-results">결과 표로 이동</a>
     <header className="valuation-header">
-      <div className="brand-mark" aria-hidden="true">V</div><div className="brand-title"><h1>크립토 밸류 스캐너</h1><p>수익 배수 · 성장 · 홀더 환원</p></div>
+      <a className="brand-home" href="/" aria-label={`${BRAND.name} ${BRAND.koreanName} 홈`}>
+        <img className="brand-mark" src="/brand/tovenit-mark.png" alt="" width={44} height={44}/>
+        <div className="brand-title"><h1>{BRAND.name}<span className="sr-only"> {BRAND.koreanName}</span></h1><p>{BRAND.tagline}</p></div>
+      </a>
       <div className="header-actions"><span className="header-status">{data ? fmtKstMinute(data.updatedAt) : "자료 준비 중"}{stale ? " · 갱신 필요" : sourceFailures ? " · 일부 자료 미수집" : ""}</span><button className="icon-button" aria-label="최신 자료 확인" title="최신 자료 확인" disabled={refreshing} onClick={refresh}><RefreshCw size={16} className={refreshing ? "spinning" : ""}/></button><button className="icon-button" aria-label="지표 안내" title="지표 안내" onClick={() => setSourceOpen(true)}><Info size={17}/></button></div>
     </header>
     {data && <p className="mobile-data-status" role="status">{fmtKstMinute(data.updatedAt)}{stale ? " · 갱신 필요" : sourceFailures ? " · 일부 자료 미수집" : " · 수집 완료"}</p>}
