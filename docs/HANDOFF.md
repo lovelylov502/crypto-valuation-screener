@@ -1,5 +1,15 @@
 # Handoff
 
+## 2026-09-26 — Full directory and inline screen production receipt
+
+The user explicitly requested deployment. Application commit `2a84f32fa9111822781a0f5bb6133ee0a37f91d4` is live through the canonical `npm run deploy:production` route. Deployment `dpl_4kUc3y6g3QMrKT6TLBZJFvW72rgD`, unique URL https://crypto-valuation-screener-6h5qodact-bodycation.vercel.app, is READY in production. Authenticated readback confirms the exact main commit, expected project/team and https://crypto-valuation-screener.vercel.app alias. This entry is a subsequent documentation-only receipt.
+
+The guarded route passed clean synchronized canonical main, authenticated remote identity, six deployment-contract tests, 214 application tests, TypeScript, production build, whitespace checks and the pinned CLI dry run. Canonical HTML and API returned HTTP 200 on the first readback attempt, with all v9 UI markers and no legacy markers; the targeted VVV scope check also passed. The default API returned 100 rows in 882,987 bytes, `research-v9-full-universe-and-24h`, and observation `2026-09-26T06:10:49.731Z`. That observation has 7,123 projects, 2,798 linked eligible tokens, MCap/any-period P/R 141, P/HR 75, distinct 169, source-present withheld 1,526 and missing 5,428. No source requests failed.
+
+Live browser checks verified AERO search, inline price/cap/FDV/supply/turnover facts, the exact Aerodrome CMC link, 24-hour P/R and P/HR (both 9.02x at this observation), and 24-hour revenue $270.2K with +10.6% versus the preceding completed UTC day. AERO's 30/90/365-day P/R remains unavailable because the complete combined revenue history has only nine days; its separately complete 30-day holder history yields P/HR 5.10x. The browser retained the existing five custom columns, circulating-cap basis and market-cap descending sort after reload. Temporary verification columns and AERO search were removed; popups and details are closed. Console warning/error logs and document horizontal overflow were zero. No viewport override was applied, and the local preview server was stopped.
+
+Evidence remains outside Git in `C:/Users/TAE/Documents/Codex/2026-09-26/crypto-screener-v9-qa`: `production-deployment.log`, `production-identity.json`, `production-api.json`, `production-browser.json` and `production-aero.png`. Local full-pagination and responsive checks are recorded below and in [design-qa.md](../design-qa.md); this receipt does not claim a new hosted daily-snapshot run.
+
 ## 2026-09-26 — Full directory and inline research screen (local)
 
 Branch `codex/complete-universe-inline-screener` implements the selected image mockup: 24h/7d/30d/90d/1y P/R, protocol revenue and P/HR; inline market/growth/holder detail; CMC-first market links; combinable growth/holder conditions; and preserved favorites/custom columns. Default sorting is 30-day P/R ascending. P/S retains its distinct business-sales meaning in detail. No production deployment occurred.
