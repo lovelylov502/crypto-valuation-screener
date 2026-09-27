@@ -24,7 +24,7 @@ This is the only documented normal production command. It runs, in order:
 2. deterministic pass, duplicate-root, legacy-root, branch/worktree/sync, remote-drift, Vercel-drift, and credential-output-redaction probes;
 3. all Vitest tests, TypeScript, production build, and `git diff --check`;
 4. an authenticated pinned-CLI `--dry` check followed by production deployment through the verified local project/team link;
-5. independent readback of the canonical `/` and `/api/screener` URLs.
+5. independent readback of the canonical `/` and `/api/screener` URLs, followed by a full-universe source and quote audit.
 
 The wrapper captures and redacts Vercel CLI child output. Do not replace that subprocess with inherited terminal output or print command arguments containing credentials.
 
@@ -40,9 +40,13 @@ npm run verify:local
 
 ## Post-deploy readback gate
 
-`npm run verify:production` requires both canonical endpoints to return HTTP 200. The page must contain `DefiLlama 전체 종목`, `열 표시`, `필터`, `연결 토큰`, `배수 분자`, `P/R · 24시간`, `P/HR · 24시간`, `P/R · 30일`, `P/HR · 30일`, `지표 안내`, `최신 자료 확인`, `page-size-top`, `scan-table`, and `수익 정렬 기준`. Main HTML must not contain `저평가 80+`, `고평가 20 이하`, a P/S table heading, or the removed `결과 정렬` dropdown. P/S evidence is still available in client-opened coin details. The API must return `scoreVersion=research-v9-full-universe-and-24h`, valid pagination and universe coverage, row fields including `opportunities` and `peerCounts`, a non-empty result, and a payload below 4.5 MB. At least one row must have usable completed-day revenue history with positive 30-day revenue and 13 weekly observations. The source-root, repository, branch, remote, credential, and Vercel identity guards are unchanged.
+`npm run verify:production` requires both canonical endpoints to return HTTP 200. The page must contain `DefiLlama 전체 종목`, `열 표시`, `필터`, `연결 토큰`, `배수 분자`, `P/R · 24시간`, `P/HR · 24시간`, `P/R · 30일`, `P/HR · 30일`, `지표 안내`, `최신 자료 확인`, `page-size-top`, `scan-table`, and `수익 정렬 기준`. Main HTML must not contain `저평가 80+`, `고평가 20 이하`, a P/S table heading, or the removed `결과 정렬` dropdown. P/S evidence is still available in client-opened coin details. The API must return `scoreVersion=research-v10-source-revenue-recovery`, valid pagination and universe coverage, row fields including `opportunities` and `peerCounts`, a non-empty result, and a payload below 4.5 MB. At least one row must have usable completed-day revenue history with positive 30-day revenue and 13 weekly observations. The source-root, repository, branch, remote, credential, and Vercel identity guards are unchanged.
 
 The readback requires the `descriptionKo` API field with at least one usable Korean introduction. It rejects legacy `multiples.ps`, unknown/mixed multiples, unreviewed holder shares and non-business growth. A separate paginated search must find the live VVV row and verify that it remains holder-return scoped for both Revenue and Fees, with no business growth or inferred 100% share.
+
+V10 additionally requires source membership, quote lookup accounting and field provenance, zero failed quote lookups, and no hidden provider Revenue amounts. The named FWA query must return positive cap, reviewed protocol Revenue, P/R and P/HR. `audit:coverage` reads every page from one snapshot, compares independent fresh protocol/parent/overview lists and Revenue amounts, and re-queries all linked assets with missing quote fields. Any missing source member, available-but-dropped amount, failed source request or FWA regression fails verification. Set `SCREENER_AUDIT_DIR` outside the repository to retain the report and raw audit evidence. A provider's absent value remains explicitly unavailable; the gate does not manufacture a quote or approve an unreviewed definition.
+
+The first API request can take 2–3 minutes because all CoinGecko IDs are queried at the public rate limit. Readback warms that shared snapshot before checking the page; requests allow 300 seconds. The verified Vercel project uses Fluid compute with a 300-second function limit. The daily job has a 12-minute budget for collection, baseline comparison, artifact retention and cache warm-up. It downloads the previous successful run's `collection-state.json`; the first release initializes that baseline. Later losses remain failures for review rather than silently replacing the last successful baseline.
 
 After every production deployment, also retain the Vercel deployment ID and unique URL from CLI output or `vercel inspect`. A successful payload upload alone is not a completed deployment until the canonical alias passes the readback gate.
 

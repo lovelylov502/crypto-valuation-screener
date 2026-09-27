@@ -21,6 +21,8 @@ import { DisplaySettings } from "./DisplaySettings";
 import { InlineCoinDetail, signedUsd, tone } from "./InlineCoinDetail";
 import { pageUrl, useScreenerPage } from "./useScreenerPage";
 import { growthLabel, revenueTrend } from "@/lib/revenueTrend";
+import { revenueReading } from "@/lib/revenueReading";
+import { businessRevenue } from "@/lib/fundamentals";
 import { BRAND } from "@/lib/brand";
 
 const FAVORITES_KEY = "crypto-valuation-favorites-v1";
@@ -85,13 +87,17 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
   const coverage = data?.coverage;
   const stale = data && Date.now() - Date.parse(data.updatedAt) > 12 * 3600000;
   const sourceFailures = data?.sources.filter(s => s.status === "error").length ?? 0;
+  const sourceWithheld = data?.sources.filter(s => s.status === "withheld").length ?? 0;
   const sortIcon = (key: SortKey) => prefs.sortKey === key ? prefs.sortDir === "asc" ? <ArrowUp size={12}/> : <ArrowDown size={12}/> : null;
 
   const cell = (c: CoinScored, key: SortKey) => {
     const revenueDays = REVENUE_COLUMN_DAYS[key as keyof typeof REVENUE_COLUMN_DAYS];
     if (revenueDays) {
       const trend = revenueTrend(c, revenueDays);
-      return <span className="revenue-reading" title={`직전 ${windowLabel(revenueDays)} ${fmtUsd(trend.previous)} · 증가액 ${signedUsd(trend.delta)}${c.revenueHistory ? " · 완료 UTC 날짜" : " · 제공처 기간 집계"}`}><strong>{fmtUsd(trend.current)}</strong><small className={tone(trend.delta)}>{prefs.revenueSort === "delta" ? signedUsd(trend.delta) : growthLabel(trend)}</small></span>;
+      const reading = revenueReading(c, revenueDays);
+      const provider = reading.basis === "provider_total" || reading.basis === "provider_partial";
+      const note = reading.amount === null ? reading.basisLabel : !businessRevenue(c) ? reading.kindLabel : provider ? reading.basisLabel : prefs.revenueSort === "delta" ? signedUsd(trend.delta) : growthLabel(trend);
+      return <span className="revenue-reading" title={`${reading.kindLabel} · ${reading.basisLabel} · 직전 ${windowLabel(revenueDays)} ${fmtUsd(trend.previous)} · 증가액 ${signedUsd(trend.delta)}`}><strong>{fmtUsd(reading.amount)}</strong><small className={tone(trend.delta)}>{note}</small>{provider && !businessRevenue(c) && <small>{reading.basisLabel}</small>}</span>;
     }
     const days = METRIC_COLUMN_DAYS[key];
     if (days) {
@@ -129,9 +135,9 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
         <img className="brand-mark" src="/brand/tovenit-mark.png" alt="" width={44} height={44}/>
         <div className="brand-title"><h1>{BRAND.name}<span className="sr-only"> {BRAND.koreanName}</span></h1><p>{BRAND.tagline}</p></div>
       </a>
-      <div className="header-actions"><span className="header-status">{data ? fmtKstMinute(data.updatedAt) : "자료 준비 중"}{stale ? " · 갱신 필요" : sourceFailures ? " · 일부 자료 미수집" : ""}</span><button className="icon-button" aria-label="최신 자료 확인" title="최신 자료 확인" disabled={refreshing} onClick={refresh}><RefreshCw size={16} className={refreshing ? "spinning" : ""}/></button><button className="icon-button" aria-label="지표 안내" title="지표 안내" onClick={() => setSourceOpen(true)}><Info size={17}/></button></div>
+      <div className="header-actions"><span className="header-status">{data ? fmtKstMinute(data.updatedAt) : "자료 준비 중"}{stale ? " · 갱신 필요" : sourceFailures ? " · 일부 자료 미수집" : sourceWithheld ? " · 일부 보완 보류" : ""}</span><button className="icon-button" aria-label="최신 자료 확인" title="최신 자료 확인" disabled={refreshing} onClick={refresh}><RefreshCw size={16} className={refreshing ? "spinning" : ""}/></button><button className="icon-button" aria-label="지표 안내" title="지표 안내" onClick={() => setSourceOpen(true)}><Info size={17}/></button></div>
     </header>
-    {data && <p className="mobile-data-status" role="status">{fmtKstMinute(data.updatedAt)}{stale ? " · 갱신 필요" : sourceFailures ? " · 일부 자료 미수집" : " · 수집 완료"}</p>}
+    {data && <p className="mobile-data-status" role="status">{fmtKstMinute(data.updatedAt)}{stale ? " · 갱신 필요" : sourceFailures ? " · 일부 자료 미수집" : sourceWithheld ? " · 일부 보완 보류" : " · 수집 완료"}</p>}
     {error && <div className="workspace-status" role="alert">{error} {data && "기존 결과를 표시하고 있습니다."}<button className="text-button" onClick={refresh}>다시 시도</button></div>}
     {storageError && <p className="notice">브라우저 저장소를 사용할 수 없어 설정·관심종목이 유지되지 않을 수 있습니다.</p>}
     {migrationNotice && <div className="migration-notice" role="status"><Info size={15}/><span>{migrationNotice}</span><button className="icon-button" aria-label="설정 변경 안내 닫기" onClick={() => setMigrationNotice(null)}><X size={16}/></button></div>}
@@ -150,7 +156,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
     </div>
     <div ref={tableRef} className="table-scroll scan-table-scroll thin-scroll" role="region" aria-label="프로토콜 비교 표 · 가로 스크롤 가능" tabIndex={0} aria-busy={refreshing}>
       <table className="screener-table scan-table"><caption className="sr-only">프로토콜 수익 배수, 수익 성장, 홀더 환원 비교. 종목을 누르면 행 아래 상세를 엽니다. 빈 값은 0이 아닙니다.</caption>
-        <thead><tr><th className="coin-column" rowSpan={2} scope="col" aria-sort={prefs.sortKey === "name" ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort("name")}>종목 · {capitalName}{sortIcon("name")}</button></th>{bands.map((band, i) => <th key={i} colSpan={band.count} scope="colgroup" className="band-heading">{band.label}{band.label === "프로토콜 수익" && <select aria-label="수익 정렬 기준" value={prefs.revenueSort} onChange={e => { setPrefs(p => ({ ...p, revenueSort: e.target.value as WorkspacePreferences["revenueSort"], sortKey: p.sortKey in REVENUE_COLUMN_DAYS ? p.sortKey : selectedCols.find(c => c.key in REVENUE_COLUMN_DAYS)!.key, sortDir: "desc" })); setPage(1); }}><option value="amount">금액</option><option value="percent">증가율</option><option value="delta">증가액</option></select>}</th>)}</tr>
+        <thead><tr><th className="coin-column" rowSpan={2} scope="col" aria-sort={prefs.sortKey === "name" ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort("name")}>종목 · {capitalName}{sortIcon("name")}</button></th>{bands.map((band, i) => <th key={i} colSpan={band.count} scope="colgroup" className="band-heading">{band.label}{selectedCols[band.start].key in REVENUE_COLUMN_DAYS && <select aria-label="수익 정렬 기준" value={prefs.revenueSort} onChange={e => { setPrefs(p => ({ ...p, revenueSort: e.target.value as WorkspacePreferences["revenueSort"], sortKey: p.sortKey in REVENUE_COLUMN_DAYS ? p.sortKey : selectedCols.find(c => c.key in REVENUE_COLUMN_DAYS)!.key, sortDir: "desc" })); setPage(1); }}><option value="amount">금액</option><option value="percent">증가율</option><option value="delta">증가액</option></select>}</th>)}</tr>
           <tr>{selectedCols.map((col, i) => { const days = METRIC_COLUMN_DAYS[col.key] ?? REVENUE_COLUMN_DAYS[col.key as keyof typeof REVENUE_COLUMN_DAYS]; return <th key={col.key} className={`${bands.some(b => b.start === i) ? "band-start " : ""}${prefs.sortKey === col.key ? "active-sort" : ""}`} scope="col" title={col.title} aria-sort={prefs.sortKey === col.key ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort(col.key)} aria-label={col.label + " 정렬"}>{days ? windowLabel(days) : col.label}{sortIcon(col.key)}</button></th>; })}</tr>
         </thead>
         <tbody>{rows.map(c => <Fragment key={c.slug}>
@@ -163,7 +169,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
       </table>
     </div>
     {!rows.length && <div className="empty-state"><Search size={26}/><h3>{!data ? "자료를 준비하고 있습니다" : prefs.view === "favorites" && !favorites.size ? "별표로 관심종목을 모아 보세요" : "조건에 맞는 종목이 없습니다"}</h3><p>{!data ? "공개 자료 응답을 기다립니다." : "검색어 또는 필터 조건을 조절하세요."}</p><button className="button" onClick={!data ? refresh : resetFilters}>{!data ? "다시 확인" : "조건 초기화"}</button></div>}
-    <div className="scan-footer"><p>24h는 UTC 완료 하루 · 7·30·90일과 함께 연환산 · 1년은 실제 합계 · 성장률은 직전 동일 기간 대비 · ‘–’는 자료 부족·보류·비적용</p><Pagination total={total} page={currentPage} size={pageSize} position="top" onPage={goPage} onSize={s => { setPageSize(s); setPage(1); }}/></div>
+    <div className="scan-footer"><p>배수: 24h는 UTC 완료 하루 · 1·7·30·90일 연환산 · 1년은 365일 합계. Revenue 원본의 ‘제공처 집계’는 별도 표시하며, 원본 금액의 표시와 배수·성장률 계산 가능 여부는 구분합니다.</p><Pagination total={total} page={currentPage} size={pageSize} position="top" onPage={goPage} onSize={s => { setPageSize(s); setPage(1); }}/></div>
     <span className="sr-only" role="status" aria-live="polite">{status}</span>
 
     {popup === "columns" && <SettingsDialog title="열 표시" wide onClose={() => setPopup(null)} headerAction={<button className="text-button" onClick={() => { setPrefs(p => withVisibleColumns(p, [...DEFAULT_VISIBLE_COLUMNS])); setStatus("기본 열을 복원했습니다."); }}><RotateCcw size={15}/>기본 열 복원</button>}><DisplaySettings columns={prefs.columns} onChange={columns => setPrefs(p => withVisibleColumns(p, columns))} onStatus={setStatus}/><button className="button export-results" disabled={exporting || !data} onClick={() => void exportResults()}><Download size={15}/>{exporting ? "전체 결과 준비 중…" : "검색 결과 전체 내보내기"}</button><p role="status">{exporting || status.includes("내보") ? status : ""}</p></SettingsDialog>}

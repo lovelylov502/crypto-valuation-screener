@@ -1,6 +1,7 @@
 import { capitalExclusion, STABLECOIN_SOURCE, type StablecoinAsset } from "./capitalEligibility";
-import type { CoinRaw, IdentityStatus, SourceObservation } from "./types";
+import type { CoinRaw, IdentityStatus, QuoteLookup, SourceObservation } from "./types";
 import { fetchRevenueHistory } from "./revenueSource";
+import { REVENUE_OVERVIEW_URL } from "./revenueReading";
 import { fetchHolderHistory } from "./holderHistorySource";
 import { resolveSalesEvidence } from "./salesSource";
 import { koreanDescription } from "./protocolDescriptions";
@@ -22,33 +23,38 @@ const CMC_SLUG_OVERRIDES: Record<string, string> = {
   "parent#aerodrome": "aerodrome-finance",
 };
 
-// CoinGecko 무료 레이트리밋 대응: 상위 N페이지(페이지당 250)만 FDV 보강
-const GECKO_PAGES = 4; // 상위 ~1000개
-
 type Json = Record<string, unknown>;
 
-async function getJson<T>(url: string, observations: SourceObservation[]): Promise<T> {
+async function getJson<T>(url: string, observations: SourceObservation[], options: { timeout?: number; beforeAttempt?: () => Promise<void>; deadline?: number } = {}): Promise<T> {
+  const { timeout = 30_000, beforeAttempt, deadline = Infinity } = options;
+  let httpStatus: number | undefined;
   try {
   for (let attempt = 0; attempt < 3; attempt++) {
+    await beforeAttempt?.();
+    if (Date.now() >= deadline) throw new Error("Source request budget exhausted");
     const res = await fetch(url, {
       // The server caches the compressed joined snapshot; source responses can exceed 2 MB.
       cache: "no-store",
       headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(Math.min(timeout, deadline - Date.now())),
     });
+    httpStatus = res.status;
     if (res.ok) {
       const result = (await res.json()) as T;
       observations.push({ url, observedAt: new Date().toISOString(), status: "ok" });
       return result;
     }
-    if (res.status !== 429 || attempt === 2) {
+    if ((res.status !== 429 && res.status < 500) || attempt === 2) {
       throw new Error(`fetch ${url} -> ${res.status}`);
     }
-    await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+    const retryAfter = Number(res.headers.get("retry-after"));
+    const delay = res.status === 429 && beforeAttempt ? Math.max(60_000, Number.isFinite(retryAfter) ? retryAfter * 1000 : 0) : 500 * 2 ** attempt;
+    if (Date.now() + delay >= deadline) throw new Error("Source retry exceeds request budget");
+    await new Promise((resolve) => setTimeout(resolve, delay));
   }
   throw new Error(`fetch ${url} failed`);
   } catch (error) {
-    observations.push({ url, observedAt: new Date().toISOString(), status: "error" });
+    observations.push({ url, observedAt: new Date().toISOString(), status: "error", httpStatus });
     throw error;
   }
 }
@@ -59,6 +65,13 @@ const str = (v: unknown): string | null =>
   typeof v === "string" && v.length > 0 ? v : null;
 const normalize = (v: string): string =>
   v.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+function quoteLookup(id: string, row: Json | undefined, vendor: "gecko" | "cmc", failed = false): QuoteLookup {
+  const quote = vendor === "cmc" ? cmcQuote(row) : row;
+  const fields = vendor === "cmc" ? { mcap: "market_cap", price: "price", fdv: "fully_diluted_market_cap" } : { mcap: "market_cap", price: "current_price", fdv: "fully_diluted_valuation" };
+  return { id, status: failed ? "error" : row ? "received" : "not_returned", observedAt: new Date().toISOString(),
+    available: (Object.keys(fields) as (keyof typeof fields)[]).filter(key => num(quote?.[fields[key]]) !== null) };
+}
 
 // "parent#hyperliquid" → "Hyperliquid"
 function prettyParent(key: string): string {
@@ -81,25 +94,47 @@ async function fetchOverviewList(path: string, observations: SourceObservation[]
   return data.protocols;
 }
 
-// CoinGecko 상위 코인: 명시적 gecko_id 보강용
-async function fetchGecko(observations: SourceObservation[]): Promise<{ byId: Map<string, Json> }> {
+// Every explicit ID is queried. Rank changes cannot move a token outside the collector.
+export async function fetchGecko(ids: string[], observations: SourceObservation[]) {
   const byId = new Map<string, Json>();
-  for (let page = 1; page <= GECKO_PAGES; page++) {
-    const url = `${GECKO}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${page}&price_change_percentage=7d,14d,30d,1y`;
+  const lookups = new Map<string, QuoteLookup>();
+  let nextAt = 0;
+  const deadline = Date.now() + 260_000;
+  const pace = async () => {
+    const delay = Math.max(0, nextAt - Date.now());
+    if (Date.now() + delay > deadline) throw new Error("CoinGecko request budget exhausted");
+    if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+    nextAt = Date.now() + 12_500; // Public keyless API can be limited to five calls/minute.
+  };
+  await quoteBatches([...new Set(ids)].sort(), async batch => {
+    const url = `${GECKO}/coins/markets?vs_currency=usd&ids=${batch.map(encodeURIComponent).join(",")}&per_page=250&price_change_percentage=7d,14d,30d,1y`;
     try {
-      const rows = await getJson<Json[]>(url, observations);
-      if (!Array.isArray(rows) || rows.length === 0) throw new Error("CoinGecko response is empty");
+      const rows = await getJson<Json[]>(url, observations, { timeout: 10_000, beforeAttempt: pace, deadline });
+      if (!Array.isArray(rows)) throw new Error("CoinGecko response is invalid");
       for (const r of rows) {
         const id = str(r.id);
-        if (id) byId.set(id, r);
+        if (id && batch.includes(id)) byId.set(id, r);
       }
+      for (const id of batch) lookups.set(id, quoteLookup(id, byId.get(id), "gecko"));
     } catch {
       const observation = observations.find(s => s.url === url);
       if (observation) observation.status = "error";
-      break; // 레이트리밋/실패 시 부분 보강 — FDV는 옵셔널
+      for (const id of batch) lookups.set(id, quoteLookup(id, undefined, "gecko", true));
     }
-  }
-  return { byId };
+  }, 1);
+  return { byId, lookups };
+}
+
+// At most two in-flight quote requests, with no silent truncation after a failed batch.
+async function quoteBatches<T>(ids: T[], read: (batch: T[]) => Promise<void>, concurrency = 2) {
+  let offset = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, Math.ceil(ids.length / 250)) }, async () => {
+    while (offset < ids.length) {
+      const batch = ids.slice(offset, offset + 250);
+      offset += 250;
+      await read(batch);
+    }
+  }));
 }
 
 interface CmcIndex {
@@ -107,6 +142,21 @@ interface CmcIndex {
   bySlug: Map<string, Json>;
   byNameSymbol: Map<string, Json[]>;
   bySymbol: Map<string, Json[]>;
+}
+
+function indexCmcRows(index: CmcIndex, rows: Json[]) {
+  for (const row of rows) {
+    const id = num(row.id);
+    if (id !== null && index.byId.has(id)) continue;
+    if (id !== null) index.byId.set(id, row);
+    const slug = str(row.slug)?.toLowerCase(), name = str(row.name), symbol = str(row.symbol)?.toLowerCase();
+    if (slug) index.bySlug.set(slug, row);
+    if (name && symbol) {
+      const key = `${normalize(name)}#${symbol}`;
+      index.byNameSymbol.set(key, [...(index.byNameSymbol.get(key) ?? []), row]);
+    }
+    if (symbol) index.bySymbol.set(symbol, [...(index.bySymbol.get(symbol) ?? []), row]);
+  }
 }
 
 async function fetchCmc(observations: SourceObservation[]): Promise<CmcIndex> {
@@ -124,31 +174,33 @@ async function fetchCmc(observations: SourceObservation[]): Promise<CmcIndex> {
     );
     if (!Array.isArray(response.data) || response.data.length === 0) throw new Error("CMC response is empty");
     const index = empty();
-    for (const row of response.data ?? []) {
-      const id = num(row.id);
-      if (id !== null) index.byId.set(id, row);
-      const slug = str(row.slug)?.toLowerCase();
-      const name = str(row.name);
-      const symbol = str(row.symbol)?.toLowerCase();
-      if (slug) index.bySlug.set(slug, row);
-      if (name && symbol) {
-        const key = `${normalize(name)}#${symbol}`;
-        const rows = index.byNameSymbol.get(key) ?? [];
-        rows.push(row);
-        index.byNameSymbol.set(key, rows);
-      }
-      if (symbol) {
-        const rows = index.bySymbol.get(symbol) ?? [];
-        rows.push(row);
-        index.bySymbol.set(symbol, rows);
-      }
-    }
+    indexCmcRows(index, response.data);
     return index;
   } catch {
     const observation = observations.find(s => s.url === url);
     if (observation) observation.status = "error";
     return empty();
   }
+}
+
+async function completeCmc(ids: number[], index: CmcIndex, observations: SourceObservation[]) {
+  const lookups = new Map<number, QuoteLookup>();
+  for (const [id, row] of index.byId) lookups.set(id, quoteLookup(String(id), row, "cmc"));
+  await quoteBatches([...new Set(ids)].filter(id => !index.byId.has(id)).sort((a,b) => a-b), async batch => {
+    const url = `${CMC}/v3/cryptocurrency/quotes/latest?id=${batch.join(",")}&convert=USD&skip_invalid=true`;
+    try {
+      const response = await getJson<{ data?: Json[] } | Json[]>(url, observations, { timeout: 10_000 });
+      const rows = Array.isArray(response) ? response : response.data;
+      if (!Array.isArray(rows)) throw new Error("CMC quote response is invalid");
+      indexCmcRows(index, rows.filter(row => batch.includes(Number(row.id))));
+      for (const id of batch) lookups.set(id, quoteLookup(String(id), index.byId.get(id), "cmc"));
+    } catch {
+      const observation = observations.find(s => s.url === url);
+      if (observation) observation.status = "error";
+      for (const id of batch) lookups.set(id, quoteLookup(String(id), undefined, "cmc", true));
+    }
+  });
+  return lookups;
 }
 
 function cmcQuote(row: Json | undefined): Json | undefined {
@@ -260,21 +312,33 @@ export function aggregateOverviewByGroup(
   return m;
 }
 
+/** Partial source sums are display evidence only; they never replace a complete valuation denominator. */
+export function aggregateRevenueSource(list: Json[], groupKey: (slug: string) => string) {
+  const groups = new Map<string, Json[]>();
+  for (const p of list) if (typeof p.slug === "string" && p.doublecounted !== true) {
+    const key = groupKey(p.slug);
+    groups.set(key, [...(groups.get(key) ?? []), p]);
+  }
+  return new Map([...groups].map(([key, rows]) => [key, Object.fromEntries(([1, 7, 30, 365] as const).map(days => {
+    const field = ({ 1: "total24h", 7: "total7d", 30: "total30d", 365: "total1y" })[days];
+    const values = rows.flatMap(p => num(p[field]) !== null ? [Number(p[field])] : []);
+    return [days, { total: values.length ? values.reduce((a,b) => a+b, 0) : null, reported: values.length, expected: rows.length }];
+  })) as NonNullable<CoinRaw["revenueSource"]>["periods"]]));
+}
+
 /**
  * DefiLlama 4종 + CMC + CoinGecko를 조인하되, **parent protocol 단위로 묶어** 집계한다.
  * holder revenue는 child 경제유형을 보존해 적격 최근 30일과 raw TTM을 따로 합산한다.
  */
 export async function fetchCoins(observations: SourceObservation[] = []): Promise<CoinRaw[]> {
-  const [protocols, feesL, revL, hrL, dexsL, gecko, cmc, revenueHistories, holderHistories, stablecoins, config] = await Promise.all([
+  const histories = Promise.all([fetchRevenueHistory(observations), fetchHolderHistory(observations)]);
+  const [protocols, feesL, revL, hrL, dexsL, cmc, stablecoins, config] = await Promise.all([
     getJson<Json[]>(`${LLAMA}/protocols`, observations),
     fetchOverviewList("/overview/fees", observations),
     fetchOverviewList("/overview/fees?dataType=dailyRevenue", observations),
     fetchOverviewList("/overview/fees?dataType=dailyHoldersRevenue", observations),
     fetchOverviewList("/overview/dexs", observations),
-    fetchGecko(observations),
     fetchCmc(observations),
-    fetchRevenueHistory(observations),
-    fetchHolderHistory(observations),
     getJson<{ peggedAssets: StablecoinAsset[] }>(STABLECOIN_SOURCE, observations),
     getJson<{ parentProtocols: Json[] }>(`${LLAMA}/config`, observations),
   ]);
@@ -282,6 +346,12 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
   if (!Array.isArray(stablecoins.peggedAssets) || stablecoins.peggedAssets.length === 0) throw new Error("Stablecoin identity registry unavailable");
   if (!Array.isArray(protocols) || !protocols.length || !Array.isArray(config.parentProtocols)) throw new Error("DefiLlama directory unavailable");
   const parents = new Map(config.parentProtocols.flatMap(p => typeof p.id === "string" ? [[p.id, p] as const] : []));
+  const identityRows = [...protocols, ...feesL, ...revL, ...hrL, ...dexsL, ...config.parentProtocols];
+  const [gecko, cmcLookups, [revenueHistories, holderHistories]] = await Promise.all([
+    fetchGecko(identityRows.flatMap(p => str(p.gecko_id) ? [String(p.gecko_id)] : []), observations),
+    completeCmc(identityRows.map(p => Number(p.cmcId)).filter(id => Number.isSafeInteger(id) && id > 0), cmc, observations),
+    histories,
+  ]);
 
   // /protocols also carries parent links, including children absent from revenue overviews.
   const parentOf = new Map<string, string>();
@@ -296,10 +366,16 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
 
   const feesAgg = aggregateOverviewByGroup(feesL, groupKey);
   const revAgg = aggregateOverviewByGroup(revL, groupKey);
+  const sourceRevAgg = aggregateRevenueSource(revL, groupKey);
   const holderValues = aggregateHolderValueByGroup(hrL, groupKey, definitionReviewed);
   const revenueDefinitions = aggregateDefinitions(revL, groupKey, "Revenue");
   const feeDefinitions = aggregateDefinitions(feesL, groupKey, "Fees");
   const volAgg = aggregateOverviewByGroup(dexsL, groupKey);
+  const identities = new Map<string, Json[]>();
+  for (const p of identityRows) if (typeof p.slug === "string") {
+    const key = groupKey(p.slug);
+    identities.set(key, [...(identities.get(key) ?? []), p]);
+  }
 
   // Include fee/revenue-only projects too. One component per slug; no market-cap cutoff.
   const directory = new Map<string, Json>();
@@ -331,13 +407,15 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
     const memberSymbols = new Set<string>();
     const memberCmcIds = new Set<number>();
     const parent = parents.get(k);
-    for (const m of parent ? [parent, ...members] : members) {
+    for (const m of members) {
+      const t = num(m.tvl);
+      if (t !== null && m !== parent) tvl = (tvl ?? 0) + t;
+    }
+    for (const m of [...(parent ? [parent] : []), ...(identities.get(k) ?? members)]) {
       const id = typeof m.cmcId === "string" && /^\d+$/.test(m.cmcId) ? Number(m.cmcId) : num(m.cmcId);
       if (id !== null && id > 0) memberCmcIds.add(id);
       const v = num(m.mcap);
       if (v !== null && v > 0 && (dlMcap === null || v > dlMcap)) dlMcap = v;
-      const t = num(m.tvl);
-      if (t !== null && m !== parent) tvl = (tvl ?? 0) + t;
       const memberGeckoId = str(m.gecko_id);
       if (memberGeckoId) {
         memberGeckoIds.add(memberGeckoId);
@@ -373,7 +451,7 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
 
     let identityStatus: IdentityStatus = "review";
     let identityReason = "프로젝트와 시장 토큰의 연결을 확인하지 못함";
-    if (memberCmcIds.size > 1 || (isParent && (memberGeckoIds.size > 1 || memberSymbols.size > 1))) {
+    if (memberCmcIds.size > 1 || memberGeckoIds.size > 1 || (isParent && memberSymbols.size > 1)) {
       identityStatus = "ambiguous";
       identityReason = `그룹에 토큰 후보가 여러 개임 (${Math.max(memberSymbols.size, memberGeckoIds.size, memberCmcIds.size)})`;
     } else if (memberCmcIds.size === 1 && cmcRow) {
@@ -398,6 +476,7 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
 
     // 시총: canonical CMC 매칭을 우선하고, 없으면 DefiLlama/CoinGecko 보조값.
     const mcap = cmcMcap ?? gMcap ?? dlMcap;
+    const cmcId = cmcRow ? num(cmcRow.id) : memberCmcIds.size === 1 ? [...memberCmcIds][0] : null;
 
     const cmcListedAt = cmcRow ? Date.parse(str(cmcRow.date_added) ?? "") : NaN;
     if (Number.isFinite(cmcListedAt)) listedAt = cmcListedAt / 1000;
@@ -410,6 +489,7 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
     coins.push({
       fundamentals: combineFundamentals(revenueDefinitions.get(k) as MetricDefinition<RevenueKind> | undefined, feeDefinitions.get(k) as MetricDefinition<FeeKind> | undefined, hrL.filter(h => typeof h.slug === "string" && h.doublecounted !== true && groupKey(h.slug) === k)),
       slug: k,
+      sourceSlugs: [...new Set([k, ...members.map(m => String(m.slug))])],
       name,
       symbol: (cmcRow ? str(cmcRow.symbol) : g ? str(g.symbol)?.toUpperCase() : null) ?? symbol,
       category: str(rep.category),
@@ -428,21 +508,29 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       descriptionSource: `https://defillama.com/protocol/${encodeURIComponent(String(rep.slug))}`,
       website: str(parent?.url) ?? str(rep.url),
       revenueHistory: history,
+      revenueSource: { url: REVENUE_OVERVIEW_URL, observedAt: observations.find(s => s.url === REVENUE_OVERVIEW_URL && s.status === "ok")!.observedAt, periods: sourceRevAgg.get(k) },
       holderHistory: holderHistories[k] ?? null,
       sales: resolveSalesEvidence({ slug: k, geckoId, symbol, identityStatus }, new Date().toISOString()),
 
       mcap,
+      marketSources: {
+        mcap: cmcMcap !== null ? "CoinMarketCap" : gMcap !== null ? "CoinGecko" : dlMcap !== null ? "DefiLlama" : null,
+        price: num(quote?.price) !== null ? "CoinMarketCap" : num(g?.current_price) !== null ? "CoinGecko" : null,
+        fdv: num(quote?.fully_diluted_market_cap) !== null ? "CoinMarketCap" : num(g?.fully_diluted_valuation) !== null ? "CoinGecko" : null,
+        gecko: geckoId ? gecko.lookups.get(geckoId) ?? null : null,
+        cmc: cmcId !== null ? !cmcRow && cmc.byId.has(cmcId) ? { ...cmcLookups.get(cmcId)!, status: "identity_mismatch" } : cmcLookups.get(cmcId) ?? null : null,
+      },
       tvl,
-      change1d: quote ? num(quote.percent_change_24h) : g ? num(g.price_change_percentage_24h) : null,
-      change7d: quote ? num(quote.percent_change_7d) : g ? num(g.price_change_percentage_7d_in_currency) : null,
-      price: quote ? num(quote.price) : g ? num(g.current_price) : null,
+      change1d: num(quote?.percent_change_24h) ?? num(g?.price_change_percentage_24h),
+      change7d: num(quote?.percent_change_7d) ?? num(g?.price_change_percentage_7d_in_currency),
+      price: num(quote?.price) ?? num(g?.current_price),
       marketCapRank: cmcRow ? num(cmcRow.cmc_rank) : g ? num(g.market_cap_rank) : null,
-      totalVolume: quote ? num(quote.volume_24h) : g ? num(g.total_volume) : null,
+      totalVolume: num(quote?.volume_24h) ?? num(g?.total_volume),
       numMarketPairs: cmcRow ? num(cmcRow.num_market_pairs) : null,
-      marketDataUpdatedAt: quote ? str(quote.last_updated) : null,
-      priceChange7d: quote ? num(quote.percent_change_7d) : g ? num(g.price_change_percentage_7d_in_currency) : null,
+      marketDataUpdatedAt: str(quote?.last_updated) ?? str(g?.last_updated),
+      priceChange7d: num(quote?.percent_change_7d) ?? num(g?.price_change_percentage_7d_in_currency),
       priceChange14d: g ? num(g.price_change_percentage_14d_in_currency) : null,
-      priceChange30d: quote ? num(quote.percent_change_30d) : g ? num(g.price_change_percentage_30d_in_currency) : null,
+      priceChange30d: num(quote?.percent_change_30d) ?? num(g?.price_change_percentage_30d_in_currency),
       priceChange60d: quote ? num(quote.percent_change_60d) : null,
       priceChange90d: quote ? num(quote.percent_change_90d) : null,
       priceChange1y: g ? num(g.price_change_percentage_1y_in_currency) : null,
@@ -474,12 +562,16 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       volumeAnnual: vol?.annual ?? null,
       volume30d: vol?.d30 ?? null,
 
-      fdv: quote ? num(quote.fully_diluted_market_cap) : g ? num(g.fully_diluted_valuation) : null,
-      circulatingSupply: cmcRow ? num(cmcRow.circulating_supply) : g ? num(g.circulating_supply) : null,
-      totalSupply: cmcRow ? num(cmcRow.total_supply) : g ? num(g.total_supply) : null,
-      maxSupply: cmcRow ? num(cmcRow.max_supply) : g ? num(g.max_supply) : null,
+      fdv: num(quote?.fully_diluted_market_cap) ?? num(g?.fully_diluted_valuation),
+      circulatingSupply: num(cmcRow?.circulating_supply) ?? num(g?.circulating_supply),
+      totalSupply: num(cmcRow?.total_supply) ?? num(g?.total_supply),
+      maxSupply: num(cmcRow?.max_supply) ?? num(g?.max_supply),
     });
   }
 
+  const represented = new Set(coins.flatMap(c => c.sourceSlugs!));
+  const expected = [...directory.keys(), ...parents.keys()];
+  if (new Set(coins.map(c => c.slug)).size !== coins.length || expected.some(slug => !represented.has(slug))) throw new Error("Source directory coverage mismatch");
+  if (coins.some(c => c.geckoId && !c.marketSources?.gecko)) throw new Error("Unattempted CoinGecko identity");
   return coins;
 }

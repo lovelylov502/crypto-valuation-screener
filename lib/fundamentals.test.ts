@@ -28,6 +28,16 @@ function venice() {
 }
 
 describe("economic scope regression", () => {
+  it("reviews FWA V1/V2 separately and binds their classifications to the source IDs", () => {
+    const rows = [row("fake-world-assets-v1", { defillamaId: "8292", total30d: 300 }), row("fake-world-assets-v2", { defillamaId: "8767", total30d: 100 })];
+    expect(definitions(rows).revenue.kind).toBe("protocol_revenue");
+    expect(definitions(rows).holderShareReviewed).toBe(false);
+    const holder = aggregateHolderValueByGroup(rows, () => "parent", definitionReviewed).get("parent")!;
+    expect(holder.components.map(c => c.economicType)).toEqual(["market_buyback", "buyback_and_burn"]);
+    expect(holder.eligibleCurrent30d).toBe(400);
+    expect(definitionReviewed({ ...rows[0], defillamaId: "8767" })).toBe(false);
+    expect(definitionReviewed({ ...rows[1], methodology: { ...registry["fake-world-assets-v2"].methodology, HoldersRevenue: "Paid to NFT depositors" } })).toBe(false);
+  });
   it("binds AERO's conditional voter distribution to reviewed adapter definitions", () => {
     const rows = [row("aerodrome-v1", { total30d: 100 }), row("aerodrome-slipstream", { total30d: 200 }), row("aero-lite", { total30d: 0 })];
     expect(definitions(rows).revenue.kind).toBe("protocol_revenue");

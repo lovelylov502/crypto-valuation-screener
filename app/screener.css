@@ -59,7 +59,7 @@
 .unavailable-metric { color:#98aac2; }
 .revenue-reading { display:flex; flex-direction:column; align-items:center; gap:4px; white-space:nowrap; }
 .revenue-reading strong { font-size:14px; font-weight:500; }
-.revenue-reading small { font-size:12px; }
+.revenue-reading small { font-size:12px; max-width:130px; white-space:normal; line-height:1.4; }
 .scan-workspace .route-cell { min-width:106px; max-width:170px; font-size:12px; line-height:1.55; text-align:left; }
 .scan-workspace .route-cell small { font-size:9px; margin-top:4px; }
 .scan-workspace .scan-table .inline-detail-row > td { padding:0; background:#0f2035; border:1px solid #399d91; border-top:0; white-space:normal; text-align:left; }
@@ -81,6 +81,10 @@
 .inline-price-changes { display:flex; gap:18px; flex-wrap:wrap; padding:0 12px 10px; color:#adc6e6; font-size:13px; }
 .inline-price-changes b { margin-left:5px; font-weight:500; }
 .inline-growth { border-top:1px solid #2b4867; border-bottom:1px solid #2b4867; padding:11px 12px; }
+.inline-source-revenue { border-top:1px solid #2b4867; padding:11px 12px; }
+.inline-source-revenue h4 { margin:0; font-size:14px; font-weight:600; }
+.inline-source-revenue p, .inline-source-revenue small { color:#adc9e7; font-size:12px; }
+.inline-source-revenue a { color:#98c7ff; }
 .inline-growth h4 { margin:0 0 5px; font-size:14px; font-weight:600; }
 .growth-equation { display:flex; gap:32px; align-items:center; justify-content:center; flex-wrap:wrap; }
 .growth-equation > span { display:flex; gap:18px; align-items:center; color:#b5cce8; }

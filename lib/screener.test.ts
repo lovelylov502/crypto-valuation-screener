@@ -33,7 +33,7 @@ describe("summarizeMarketDataFreshness", () => {
         { marketDataUpdatedAt: "2026-08-17T02:33:00.000Z" },
       ]),
     ).toEqual({
-      source: "CoinMarketCap",
+      source: "CoinMarketCap + CoinGecko",
       oldestAt: "2026-08-17T02:33:00.000Z",
       newestAt: "2026-08-17T02:35:00.000Z",
       timestampedCoinCount: 2,

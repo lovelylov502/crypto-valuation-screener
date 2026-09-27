@@ -20,7 +20,7 @@ export function useScreenerPage(initial: ScreenerPage | null, prefs: WorkspacePr
     const controller = new AbortController();
     setRefreshing(true);
     setError("");
-    const deadline = setTimeout(() => controller.abort("timeout"), 90000);
+    const deadline = setTimeout(() => controller.abort("timeout"), 300000);
     const timer = setTimeout(async () => {
       try {
         const response = await fetch(url, { cache: "no-store", signal: controller.signal });

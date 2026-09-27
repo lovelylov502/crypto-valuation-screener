@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: screener-observations
@@ -15,7 +16,7 @@ concurrency:
 jobs:
   capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,7 +25,24 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci --no-audit --no-fund
+      - name: Read the last successful collection baseline
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            fs.mkdirSync('snapshot-baseline', { recursive: true });
+            const runs = await github.rest.actions.listWorkflowRuns({ ...context.repo, workflow_id: 'daily-snapshot.yml', status: 'success', per_page: 1 });
+            if (!runs.data.workflow_runs.length) return;
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({ ...context.repo, run_id: runs.data.workflow_runs[0].id });
+            const artifact = artifacts.data.artifacts.find(a => a.name.startsWith('screener-') && !a.expired);
+            if (!artifact) return;
+            const download = await github.rest.actions.downloadArtifact({ ...context.repo, artifact_id: artifact.id, archive_format: 'zip' });
+            fs.writeFileSync('snapshot-baseline.zip', Buffer.from(download.data));
+      - name: Expand baseline
+        run: if [ -f snapshot-baseline.zip ]; then unzip -q snapshot-baseline.zip -d snapshot-baseline; fi
       - run: npm run snapshot:capture
+        env:
+          SCREENER_BASELINE_DIR: snapshot-baseline
       - uses: actions/upload-artifact@v7
         if: always()
         with:

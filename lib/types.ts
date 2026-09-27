@@ -26,6 +26,15 @@ export interface CoinRaw {
   descriptionSource?: string | null;
   website?: string | null;
   revenueHistory?: RevenueHistory | null;
+  revenueSource?: { url: string; observedAt: string; periods?: Partial<Record<1 | 7 | 30 | 365, { total: number | null; reported: number; expected: number }>> };
+  sourceSlugs?: string[];
+  marketSources?: {
+    mcap: "CoinMarketCap" | "CoinGecko" | "DefiLlama" | null;
+    price: "CoinMarketCap" | "CoinGecko" | null;
+    fdv: "CoinMarketCap" | "CoinGecko" | null;
+    gecko: QuoteLookup | null;
+    cmc: QuoteLookup | null;
+  };
   holderHistory?: RevenueHistory | null;
   sales?: SalesEvidence | null;
   revenue7d?: number | null;
@@ -76,7 +85,7 @@ export interface CoinRaw {
   volumeAnnual: number | null;
   volume30d: number | null;
 
-  // 공급/희석 (CoinGecko /coins/markets, 상위 코인만 보강)
+  // 공급/희석 (확인된 자산 ID 전체 조회)
   fdv: number | null; // 완전희석가치
   circulatingSupply: number | null;
   totalSupply: number | null;
@@ -168,10 +177,17 @@ export type ValueCaptureLabel =
   | "판단보류";
 
 export interface MarketDataFreshness {
-  source: "CoinMarketCap";
+  source: "CoinMarketCap" | "CoinMarketCap + CoinGecko";
   oldestAt: string | null;
   newestAt: string | null;
   timestampedCoinCount: number;
+}
+
+export interface QuoteLookup {
+  id: string;
+  status: "received" | "not_returned" | "error" | "identity_mismatch";
+  observedAt: string;
+  available: ("mcap" | "price" | "fdv")[];
 }
 
 export interface ScreenerResponse {
@@ -185,10 +201,19 @@ export interface ScreenerResponse {
   discoveryCandidateCount: number;
   scoreVersion: string;
   sources: SourceObservation[];
+  collection?: {
+    projects: number; sourceSlugs: number; errors: number;
+    gecko: { requested: number; received: number; notReturned: number; failed: number };
+    cmc: { requested: number; received: number; notReturned: number; failed: number };
+    marketCap: number; price: number; fdv: number;
+    sourceRevenue30d: number; displayedRevenue30d: number; partialRevenue30d: number;
+  };
 }
 
 export interface SourceObservation {
   url: string;
   observedAt: string; // 이 수집에서 응답을 읽은 시각. 원천 데이터 생성 시각과 다름
-  status: "ok" | "error";
+  status: "ok" | "error" | "withheld";
+  reason?: "scope_mismatch" | "value_conflict";
+  httpStatus?: number;
 }

@@ -2,6 +2,7 @@ import { fetchCoins } from "./sources";
 import { SCORE_VERSION, scoreCoins } from "./valuation";
 import type { CoinRaw, MarketDataFreshness, ScreenerResponse, SourceObservation } from "./types";
 import { fundamentalErrors } from "./fundamentalContract";
+import { collectionCoverage, collectionErrors } from "./collectionQuality";
 
 export function filterScreenableCoins<T extends { mcap: number | null }>(
   coins: T[],
@@ -17,7 +18,7 @@ export function summarizeMarketDataFreshness<
     .filter((timestamp) => Number.isFinite(timestamp));
 
   return {
-    source: "CoinMarketCap",
+    source: "CoinMarketCap + CoinGecko",
     oldestAt:
       timestamps.length > 0 ? new Date(Math.min(...timestamps)).toISOString() : null,
     newestAt:
@@ -34,6 +35,8 @@ export async function buildScreener(): Promise<ScreenerResponse> {
 }
 
 export function assembleScreener(raw: CoinRaw[], updatedAt: string, sources: SourceObservation[]): ScreenerResponse {
+  const dropped = collectionErrors(raw);
+  if (dropped.length) throw new Error(`Collection contract: ${dropped.join(", ")}`);
   // Preserve the entire directory. Page responses at the transport boundary, never by valuation eligibility.
   const coins = filterScreenableCoins(scoreCoins(raw, updatedAt));
   if (coins.length === 0) throw new Error("스크리닝 가능한 데이터 없음");
@@ -69,5 +72,6 @@ export function assembleScreener(raw: CoinRaw[], updatedAt: string, sources: Sou
     discoveryCandidateCount,
     scoreVersion: SCORE_VERSION,
     sources,
+    collection: collectionCoverage(coins),
   };
 }

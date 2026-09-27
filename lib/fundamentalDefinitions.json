@@ -4046,6 +4046,42 @@
     "holderShareReviewed": false,
     "reviewedAt": "2026-09-19"
   },
+  "fake-world-assets-v1": {
+    "defillamaId": "8292",
+    "methodology": {
+      "Revenue": "Team share of the protocol's cut of acquisition and settlement fees, plus any fees diverted to FWA-token buybacks.",
+      "Fees": "Net Acquisition fees paid by NFT purchasers, plus settlement fees taken from listing backings.",
+      "HoldersRevenue": "FWA-token buybacks funded from protocol fees, plus retroactive scheduled buybacks funded from previously earned team fees.",
+      "ProtocolRevenue": "Team share of the protocol's fee cut, per the Splitter contract's live split.",
+      "SupplySideRevenue": "Share of net acquisition fees distributed to NFT depositors (equal split across active listings plus the top-listing pot), plus the snapshot soulbound-NFT holders' share of protocol fees via the Splitter.",
+      "UserFees": null
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "holderType": "market_buyback",
+    "holderReason": "프로토콜 수수료와 과거 팀 귀속 수수료를 재원으로 실행된 FWA 매입 집계",
+    "reviewedAt": "2026-09-27",
+    "reviewNote": "DefiLlama ID 8292의 V1 명칭 분리 확인. fees/fwa 원천의 6개 정의는 기존 검토와 일치. 과거 수수료 재원 바이백을 포함해 같은 기간의 Revenue 대비 환원 비율은 보류."
+  },
+  "fake-world-assets-v2": {
+    "defillamaId": "8767",
+    "methodology": {
+      "Revenue": "Protocol's cut of fees after builder rewards, kept by the team or spent on burned FWA.",
+      "Fees": "Acquisition fees net of quick-sell payouts, plus settlement fees, retained penalties and early crown exit fees.",
+      "HoldersRevenue": "FWA bought back with protocol fees and burned.",
+      "ProtocolRevenue": "Protocol's cut of fees paid to the team.",
+      "SupplySideRevenue": "Fees paid to NFT depositors, builder rewards, and the FWA rewards and caller incentive paid from buybacks.",
+      "UserFees": null
+    },
+    "revenueKind": "protocol_revenue",
+    "feeKind": "user_fees",
+    "holderShareReviewed": false,
+    "holderType": "buyback_and_burn",
+    "holderReason": "실행된 매입의 ETH 지출 중 실제 소각 FWA에 해당하는 금액",
+    "reviewedAt": "2026-09-27",
+    "reviewNote": "DefiLlama ID 8767 및 fees/fwa-v2 adapter 검토. Revenue는 builder 보상 차감 후 팀 귀속분과 소각 재원이며, HoldersRevenue는 실행된 매입·소각이다. 예치자·구매자 보상과 실행자 보상은 SupplySideRevenue로 분리. 귀속 시점 차이로 환원 비율은 보류."
+  },
   "fake-world-assets": {
     "methodology": {
       "Revenue": "Team share of the protocol's cut of acquisition and settlement fees, plus any fees diverted to FWA-token buybacks.",

@@ -20,7 +20,7 @@ export function hasSourceData(c: CoinRaw, window: CoverageWindow): boolean {
   return windows.some(days => {
     const raw = ({1:c.revenue24h,7:c.revenue7d,30:c.revenue30d,90:c.revenue90d,365:c.revenue1y})[days];
     const holders = days === 30 ? c.holderValue.rawCurrent30d : days === 365 ? c.holderValue.rawTtm : null;
-    return raw != null || holders != null || (c.revenueHistory?.periods[days]?.reportedDays ?? 0) > 0 || (c.holderHistory?.periods[days]?.reportedDays ?? 0) > 0;
+    return raw != null || (days !== 90 && c.revenueSource?.periods?.[days]?.total != null) || holders != null || (c.revenueHistory?.periods[days]?.reportedDays ?? 0) > 0 || (c.holderHistory?.periods[days]?.reportedDays ?? 0) > 0;
   });
 }
 export function matchesAvailability(c: CoinRaw, metric: AvailableMetric, basis: CapitalBasis, window: CoverageWindow, includeSales = true): boolean {

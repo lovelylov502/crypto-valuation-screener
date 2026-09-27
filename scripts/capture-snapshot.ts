@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
@@ -9,6 +9,7 @@ import { fundamentalErrors } from "../lib/fundamentalContract";
 import { metricCoverage, definitionReviewQueue } from "../lib/metricCoverage";
 import { makeSnapshot } from "../lib/snapshotHistory";
 import type { SourceObservation } from "../lib/types";
+import { collectionState, collectionRegressions } from "../lib/collectionQuality";
 
 async function main() {
   const startedAt = new Date().toISOString();
@@ -16,6 +17,15 @@ async function main() {
   const raw = await fetchCoins(sources);
   const at = new Date().toISOString();
   const data = assembleScreener(raw, at, sources);
+  const state = collectionState(data);
+  let regressions: ReturnType<typeof collectionRegressions> = [];
+  const baselineDir = process.env.SCREENER_BASELINE_DIR;
+  if (baselineDir) {
+    const files = await readdir(baselineDir, { recursive: true });
+    const baseline = files.find(file => file.endsWith("collection-state.json"));
+    if (baseline) regressions = collectionRegressions(JSON.parse(await readFile(resolve(baselineDir, baseline), "utf8")), state);
+    else console.log("Collection baseline initialized; no prior state artifact.");
+  }
   const output = resolve(
     process.argv[2] ?? "snapshot-output",
     at.replace(/[:.]/g, "-"),
@@ -25,8 +35,10 @@ async function main() {
     "inputs.json.gz": gzipSync(JSON.stringify(raw)),
     "scored.json.gz": gzipSync(JSON.stringify(data)),
     "snapshot.json": Buffer.from(JSON.stringify(makeSnapshot(data))),
+    "collection-state.json": Buffer.from(JSON.stringify(state)),
     "quality.json": Buffer.from(JSON.stringify({
       at, rows: data.coins.length,
+      collection: data.collection, regressions,
       coverage: Object.fromEntries((["mcap","fdv"] as const).map(basis=>[basis,Object.fromEntries(([1,7,30,90,365,"any"] as const).map(window=>[window,metricCoverage(data.coins,basis,window)]))])),
       review: definitionReviewQueue(data.coins),
       errors: data.coins.flatMap(c => fundamentalErrors(c).map(error => ({slug:c.slug,error}))),
@@ -58,6 +70,9 @@ async function main() {
     "lib/screener.ts",
     "lib/revenueHistory.ts",
     "lib/revenueSource.ts",
+    "lib/revenueReading.ts",
+    "lib/parentHistorySource.ts",
+    "lib/collectionQuality.ts",
     "lib/research.ts",
     "lib/protocolResearch.ts",
     "lib/fundamentals.ts",
@@ -105,6 +120,8 @@ async function main() {
       output,
       rows: data.coins.length,
       sourceFailures: sources.filter((s) => s.status === "error").length,
+      sourceWithheld: sources.filter((s) => s.status === "withheld").length,
+      collection: data.collection, regressions: regressions.length,
       bytes: artifacts.reduce((sum, a) => sum + a.bytes, 0),
       scoreVersion: data.scoreVersion,
     }),
@@ -114,6 +131,8 @@ async function main() {
     await writeFile(process.env.GITHUB_STEP_SUMMARY,`FDV coverage: ${c.unique}/${c.total} distinct rows; P/R ${c.revenue}, P/HR ${c.holder}, P/S ${c.sales} (overlapping).\n\nWithheld with source data: ${c.review}. Missing period sources: ${c.missing}. Review queue: ${queue.length} rows; details in quality.json.\n`,{flag:"a"});
   }
   if (data.coins.some(c => fundamentalErrors(c).length)) throw new Error("Valuation contract failed; diagnostic snapshot retained");
+  if (regressions.length) throw new Error(`Collection regression: ${regressions.length} losses require review; see quality.json`);
+  if (sources.some(s => s.status === "error")) throw new Error("Source requests failed; diagnostic snapshot retained");
   if (data.cmcCoverage === 0)
     throw new Error(
       "CMC collection unavailable; partial snapshot saved for diagnosis",

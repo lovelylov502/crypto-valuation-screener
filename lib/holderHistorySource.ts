@@ -4,6 +4,7 @@ import { combineFundamentals, definitionReviewed } from "./fundamentalSource";
 import { holderScope } from "./valuationMetrics";
 import type { SourceObservation } from "./types";
 import { completeHistorySource } from "./completeHistorySource";
+import { fetchParentHistorySources, mergeParentHistories } from "./parentHistorySource";
 
 export const HOLDER_HISTORY_URL = "https://api.llama.fi/overview/fees?dataType=dailyHoldersRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false";
 type Row = Record<string, unknown>;
@@ -22,19 +23,24 @@ let cached: { at: number; value: Record<string, RevenueHistory>; sources: Source
 let pending: Promise<void> | undefined;
 export async function fetchHolderHistory(observations: SourceObservation[]): Promise<Record<string, RevenueHistory>> {
   try {
-    if (!cached || Date.now() - cached.at > 1800_000) {
+    if (!cached || Date.now() - cached.at > 1800_000 || Math.floor(Date.now() / 86400_000) !== Math.floor(cached.at / 86400_000)) {
       pending ??= (async () => {
         const response = await fetch(HOLDER_HISTORY_URL, { cache: "no-store", signal: AbortSignal.timeout(30000), headers: { accept: "application/json" } });
         if (!response.ok) throw new Error(`Holder history ${response.status}`);
         const data = await response.json();
-        if (!Array.isArray(data.protocols) || !Array.isArray(data.totalDataChartBreakdown) || !data.totalDataChartBreakdown.length) throw new Error("Holder history missing");
+        if (!Array.isArray(data.protocols) || !Array.isArray(data.totalDataChartBreakdown)) throw new Error("Holder history missing");
         const at = Date.now();
         const parent = new Map<string,string>(data.protocols.map((p: Row)=>[String(p.slug),String(p.parentProtocol ?? p.slug)]));
         const summaries = aggregateHolderValueByGroup(data.protocols,s=>parent.get(s) ?? s,definitionReviewed);
         const sources: SourceObservation[] = [];
-        const chart = await completeHistorySource(data.protocols,data.totalDataChartBreakdown,at,"dailyHoldersRevenue",p=>!!summaries.get(parent.get(String(p.slug)) ?? String(p.slug))?.components.some(c=>c.slug === p.slug && c.eligible) && typeof p.total30d === "number",sources);
+        const eligible = (p: Row) => !!summaries.get(parent.get(String(p.slug)) ?? String(p.slug))?.components.some(c=>c.slug === p.slug && c.eligible);
+        const [chart, parentSources] = await Promise.all([
+          completeHistorySource(data.protocols,data.totalDataChartBreakdown,at,"dailyHoldersRevenue",p=>eligible(p) && typeof p.total30d === "number",sources),
+          fetchParentHistorySources(data.protocols,data.totalDataChartBreakdown,at,"dailyHoldersRevenue",eligible,sources),
+        ]);
         cached = { at, value: summarizeHolderHistory(data.protocols, chart, at), sources };
         for (const [key,h] of Object.entries(cached.value)) h.supplementalSources = sources.filter(s=>s.status === "ok" && (parent.get(decodeURIComponent(new URL(s.url).pathname.split("/").at(-1)!)) ?? "") === key).map(s=>s.url);
+        mergeParentHistories(cached.value, chart, parentSources, at, sources);
       })().finally(() => { pending = undefined; });
       await pending;
     }

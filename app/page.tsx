@@ -5,7 +5,7 @@ import "./screener.css";
 
 // The joined snapshot owns freshness; do not stack a second 30-minute HTML cache.
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export default async function Home() {
   // The client can recover from initial collection failure and retain filters on refresh.

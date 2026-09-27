@@ -10,6 +10,8 @@ import { holderEconomicTypeLabel } from "@/lib/holderValue";
 import { REVENUE_WINDOWS, revenueAmount } from "@/lib/revenueHistory";
 import { windowLabel } from "@/lib/metricCoverage";
 import { ValuationEvidence } from "./ValuationEvidence";
+import { revenueReading } from "@/lib/revenueReading";
+import { marketDataReason } from "@/lib/collectionQuality";
 
 export const signedUsd = (v: number | null) => v === null ? "–" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${fmtUsd(Math.abs(v))}`;
 export const tone = (v: number | null) => v === null || v === 0 ? "muted" : v > 0 ? "positive" : "negative";
@@ -28,13 +30,18 @@ export function InlineCoinDetail({ coin: c, capital, onClose }: { coin: CoinScor
       <div><a href={coinUrl(c)} target="_blank" rel="noreferrer">{c.cmcSlug ? "CoinMarketCap에서 보기" : "DefiLlama에서 보기"}<ExternalLink size={14}/></a><button onClick={onClose} className="text-button" aria-label={c.name + " 상세 접기"}>접기<ChevronUp size={17}/></button></div>
     </header>
     <dl className="inline-market">
-      <div><dt>현재 가격</dt><dd className="inline-price">{fmtPrice(c.price)}</dd></div>
-      <div><dt>유통 시총</dt><dd>{fmtUsd(c.mcap)}</dd></div>
-      <div><dt>FDV</dt><dd>{fmtUsd(c.fdv)}</dd><small>{c.mcap && c.fdv ? `시총의 ${(c.fdv / c.mcap).toFixed(2)}배` : "희석 규모 미확인"}</small></div>
+      <div><dt>현재 가격</dt><dd className="inline-price">{fmtPrice(c.price)}</dd><small>{marketDataReason(c, "price")}</small></div>
+      <div><dt>유통 시총</dt><dd>{fmtUsd(c.mcap)}</dd><small>{marketDataReason(c, "mcap")}</small></div>
+      <div><dt>FDV</dt><dd>{fmtUsd(c.fdv)}</dd><small>{marketDataReason(c, "fdv")} · {c.mcap && c.fdv ? `시총의 ${(c.fdv / c.mcap).toFixed(2)}배` : "희석 규모 미확인"}</small></div>
       <div><dt>유통량</dt><dd>{supply(c.circulatingSupply)} <span>{c.symbol}</span></dd><small>총발행량 {supply(c.totalSupply)} {c.symbol}</small></div>
       <div><dt>24시간 거래대금</dt><dd>{fmtUsd(c.totalVolume)}</dd></div>
     </dl>
     <div className="inline-price-changes"><span>가격 변화</span>{[["24시간", c.change1d], ["7일", c.priceChange7d], ["30일", c.priceChange30d]].map(([label, value]) => <span key={String(label)}>{label} <b className={tone(value as number | null)}>{fmtPct(value as number | null)}</b></span>)}</div>
+    <section className="inline-source-revenue" aria-label="Revenue 원본과 집계 기준">
+      <h4>Revenue 원본 · {revenueReading(c, 30).kindLabel}</h4>
+      <div className="inline-periods">{REVENUE_WINDOWS.map(days => { const reading = revenueReading(c, days); return <div key={days}><b>{windowLabel(days)} · {fmtUsd(reading.amount)}</b><span>{reading.start ? `${reading.start} ~ ${reading.end} UTC` : reading.basisLabel}</span><span>P/R · {protocolReason(c, days, capital)}</span><a href={reading.source} target="_blank" rel="noreferrer">DefiLlama 원본 ↗</a><small>수집 {reading.observedAt ? fmtKstMinute(reading.observedAt) : "시각 미확인"}</small></div>; })}</div>
+      <p>원본 금액은 정의 검토나 이력이 부족해도 표시합니다. 일부 구성요소만 확보하면 ‘부분 집계’로 표시합니다. 부분 집계와 365일 미확인 집계는 배수·성장률 계산에 사용하지 않습니다.</p>
+    </section>
     <section className="inline-growth" aria-labelledby={`growth-${c.slug}`}>
       <h4 id={`growth-${c.slug}`}>최근 7일 수익 변화</h4>
       <div className="growth-equation"><span>직전 7일 <strong>{fmtUsd(trend.previous)}</strong></span><ArrowRight size={24}/><span>최근 7일 <strong>{fmtUsd(trend.current)}</strong></span><strong className={tone(trend.delta)}>{signedUsd(trend.delta)} <span>{trend.fromZero ? "(0에서 발생)" : trend.percent !== null ? `(${fmtPct(trend.percent)})` : ""}</span></strong></div>

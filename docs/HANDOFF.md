@@ -1,5 +1,25 @@
 # Handoff
 
+## 2026-09-28 — Full source coverage release preparation
+
+The follow-up incident was still running v9: the earlier repair had not been committed or deployed. The new audit also reproduced an independent FWA quote loss from the CoinGecko top-1,000 limit and found that all-child-absent histories could miss parent recovery. V10 now queries every explicit Gecko ID, supplements canonical CMC IDs directly, preserves partial raw Revenue, records field/lookup provenance, covers all-child-absent parent dates, and refreshes dated caches across UTC boundaries. The canonical production gate includes full source-universe and missing-quote reconciliation plus a mandatory positive FWA cap/P-R/P-HR check. Daily archives compare the previous successful collection for losses. See [SCREENER_V10.md](./SCREENER_V10.md).
+
+Local full audit at snapshot `2026-09-27T23:25:47.705Z` passes: 7,126 unique projects, 9,427/9,427 source members, 1,591/1,591 displayed 30-day source amounts (25 partial summaries), zero failed source requests, and zero available-but-omitted quotes across 2,024 independent missing-field ID checks. FWA cap is $16,993,067, 30-day Revenue $312,957 with 30/30 daily observations, P/R 4.4628828828 and P/HR 3.1904517382. Local browser search shows those amounts and ratios. 241 application tests and TypeScript pass. Production deployment and its receipt remain the final release step; this entry alone is not production validation.
+
+Evidence is outside Git in `C:/Users/TAE/Documents/Codex/2026-09-28/fwa-coverage-repair`, including `local-audit/coverage-audit.json`, `all-coins.json` and the independently fetched source universe. A public provider's absent quote, ambiguous identity or unreviewed definition stays explicit; no zero or current quote is fabricated.
+
+## 2026-09-27 — FWA and source revenue repair (local)
+
+Branch `codex/revenue-source-coverage` repairs the hidden Revenue amounts reported with FWA. Source display now survives an unreviewed definition or incomplete dated history, with meaning, provider-period labels, source links and observation times. P/R and growth approval remain separate. FWA V1/V2 have ID-bound, exact-methodology reviews. Reviewed groups can recover explicit parent dates only after exact component-scope and overlap checks. Renamed parent URLs use current provider links. Browser preference keys and column IDs remain unchanged. See [SCREENER_V10.md](./SCREENER_V10.md).
+
+Frozen replay of the original 7,125-row audit recovers all 931 hidden positive 30-day source amounts (215 linked eligible tokens, including the 131 unregistered/missing-definition subset). Eight archived exact-scope parent series recover 30 observations; the live collector recovers the six reviewed groups, while unreviewed Curve and Pyth retain source amounts and withheld calculations.
+
+Final local production-build API observation `2026-09-27T14:15:11.709Z`: all 7,125 unique rows across 36 pages share one snapshot, maximum response 1,674,444 bytes; all 1,076 rows with positive provider 30-day revenue have a displayed amount. FWA has completed 30-day revenue $281,185, holder revenue $405,997, circulating-cap P/R 5.4799709936 and P/HR 3.7953128812 at that observation. Request failures are zero. Sixteen received parent supplements have different aggregation scopes and are explicitly `withheld`; the guide distinguishes them from collection failures, and existing child histories remain intact.
+
+230 application tests, six deployment-contract tests, TypeScript, production build, local HTML/API readback and whitespace checks pass. Browser verification covers FWA amounts/multiples, source links and dates, Pyth's visible unreviewed amount with P/R withheld, the preserved amount/growth sorting control, reload persistence, 390 px source cards, guide Escape behavior and the 16 scope-withheld labels. Browser warning/error logs and document horizontal overflow are zero. Temporary viewport overrides are reset, verification search/details are cleared, and the local preview server and temporary tab are closed. Evidence is outside Git under `C:/Users/TAE/Documents/Codex/2026-09-27/fwa-source-audit/repair`.
+
+This is a local implementation and validation receipt. No commit, push or production deployment has been performed for this repair. Production still requires the canonical guarded release from clean synchronized `main`.
+
 ## 2026-09-27 — TOVENIT branding production receipt
 
 The user selected TOVENIT (토베닛) and requested branding, logo images and application across the site. Application commit `2f9a05869e90dba01ce775e95ba7693ddec85d55` introduces the mint T symbol, uppercase wordmark, tagline `토큰의 가치를 읽는 기준`, navy/mint palette, browser and Apple icons, sharing cover, page metadata and branded JSON export filename. The built-in image generator created the artwork; [BRAND.md](./BRAND.md) records the assets, usage and exact prompts. Financial calculations, source definitions and preference keys remain unchanged.

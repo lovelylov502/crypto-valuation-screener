@@ -13,7 +13,8 @@
     "test:deploy-preflight": "node --test scripts/deploy-contract.test.mjs",
     "deploy:preflight": "node scripts/deploy-preflight.mjs",
     "verify:local": "npm run deploy:preflight && npm run test:deploy-preflight && npm test && npm run typecheck && npm run build && git diff --check",
-    "verify:production": "node scripts/verify-production.mjs",
+    "audit:coverage": "tsx scripts/audit-coverage.ts",
+    "verify:production": "node scripts/verify-production.mjs && npm run audit:coverage",
     "deploy:production": "node scripts/deploy-production.mjs"
   },
   "dependencies": {

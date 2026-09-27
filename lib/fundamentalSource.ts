@@ -3,7 +3,7 @@ import registry from "./fundamentalDefinitions.json";
 import { FUNDAMENTAL_VERSION, type Fundamentals, type RevenueKind, type FeeKind, type MetricDefinition, type DefinitionComponent } from "./fundamentals";
 
 type Row = Record<string, unknown>;
-type Review = { methodology: Record<string, string | null>; revenueKind: RevenueKind; feeKind: FeeKind; holderShareReviewed: boolean; reviewedAt: string; reviewNote?: string };
+type Review = { methodology: Record<string, string | null>; defillamaId?: string; revenueKind: RevenueKind; feeKind: FeeKind; holderShareReviewed: boolean; reviewedAt: string; reviewNote?: string };
 const reviews = registry as Record<string, Review>;
 const text = (v: unknown) => typeof v === "string" && v.trim() ? v.trim().replace(/\s+/g, " ") : null;
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -11,7 +11,13 @@ const method = (row: Row) => row.methodology && typeof row.methodology === "obje
 
 export function definitionReviewed(row: Row): boolean {
   const review = reviews[String(row.slug)];
-  return !!review && ["Revenue", "Fees", "HoldersRevenue", "ProtocolRevenue", "SupplySideRevenue", "UserFees"].every(k => text(method(row)[k]) === text(review.methodology[k]));
+  return !!review && (!review.defillamaId || String(row.defillamaId) === review.defillamaId) && sameMethodology(method(row), review.methodology);
+}
+
+export function sameMethodology(a: unknown, b: unknown): boolean {
+  const left = a && typeof a === "object" ? a as Row : {};
+  const right = b && typeof b === "object" ? b as Row : {};
+  return ["Revenue", "Fees", "HoldersRevenue", "ProtocolRevenue", "SupplySideRevenue", "UserFees"].every(k => text(left[k]) === text(right[k]));
 }
 
 export function aggregateDefinitions(rows: Row[], groupKey: (slug: string) => string, field: "Revenue" | "Fees"): Map<string, MetricDefinition<RevenueKind | FeeKind>> {

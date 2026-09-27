@@ -1,7 +1,7 @@
 import type { CoinScored } from "./types";
 import type { SortKey } from "./screenerColumns";
 import { researchMultiple } from "./research";
-import { revenueAmount } from "./revenueHistory";
+import { revenueReading } from "./revenueReading";
 import { protocolResearch } from "./protocolResearch";
 import { holderEconomicTypeLabel } from "./holderValue";
 import { knownRevenue } from "./fundamentals";
@@ -18,9 +18,10 @@ export function sortValue(c: CoinScored, key: SortKey, basis: CapitalBasis = "mc
     case "multiple7d": return researchMultiple(c, 7);
     case "multiple90d": return researchMultiple(c, 90);
     case "multiple1y": return researchMultiple(c, 365);
-    case "revenue7d": return revenueAmount(c, 7);
-    case "revenue90d": return revenueAmount(c, 90);
-    case "revenue1y": return revenueAmount(c, 365);
+    case "revenue24h": return revenueReading(c, 1).amount;
+    case "revenue7d": return revenueReading(c, 7).amount;
+    case "revenue90d": return revenueReading(c, 90).amount;
+    case "revenue1y": return revenueReading(c, 365).amount;
     case "holderRoute": return protocolResearch(c)?.holder?.route ?? c.holderValue.components.map(p => holderEconomicTypeLabel(p.economicType)).join("+");
     case "payoutAsset": return protocolResearch(c)?.holder?.asset ?? null;
     case "holderCondition": return protocolResearch(c)?.holder?.recipient ?? null;
@@ -57,7 +58,7 @@ export function sortValue(c: CoinScored, key: SortKey, basis: CapitalBasis = "mc
     case "holderValueTtm":
       return c.holderValue.rawTtm;
     case "revenue30d":
-      return revenueAmount(c, 30);
+      return revenueReading(c, 30).amount;
     case "mcap":
       return c.mcap;
     case "totalVolume":

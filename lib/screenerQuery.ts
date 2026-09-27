@@ -6,6 +6,7 @@ import { matchesAvailability, metricCoverage, visibleMetricCoverage } from "./me
 import { sortValue } from "./screenerSort";
 import { REVENUE_COLUMN_DAYS } from "./screenerColumns";
 import { revenueTrend } from "./revenueTrend";
+import { revenueReading } from "./revenueReading";
 
 export interface ScreenerPage extends ScreenerResponse {
   pagination: { page: number; size: number; total: number; filtered: number; favorites: number };
@@ -36,7 +37,7 @@ export function queryScreener(data: ScreenerResponse, prefs: WorkspacePreference
   const value = (c: typeof rows[number]) => {
     if (!days) return sortValue(c, prefs.sortKey, prefs.capital);
     const trend = revenueTrend(c, days);
-    return prefs.revenueSort === "percent" ? trend.percent : prefs.revenueSort === "delta" ? trend.delta : trend.current;
+    return prefs.revenueSort === "percent" ? trend.percent : prefs.revenueSort === "delta" ? trend.delta : revenueReading(c, days).amount;
   };
   // Compute expensive semantic checks once per coin, not on every comparator call.
   const values = new Map(rows.map(c => [c.slug, value(c)]));

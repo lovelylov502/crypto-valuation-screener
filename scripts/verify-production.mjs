@@ -23,7 +23,7 @@ async function readPath(pathname, attempt) {
   const response = await fetch(url, {
     cache: "no-store",
     headers: { "cache-control": "no-cache" },
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(300_000),
   });
   const body = await response.text();
   return {
@@ -65,6 +65,10 @@ export function inspectApi(readback) {
   }
   if (!data.pagination || data.pagination.total < data.pagination.filtered || data.pagination.filtered < data.coins?.length || ![50,100,200].includes(data.pagination.size) || data.coins?.length > data.pagination.size) errors.push("invalid paginated universe");
   if (data.universe?.projects !== data.pagination?.total || !(data.universe?.linkedTokens > 0)) errors.push("universe coverage missing");
+  const coverage = data.collection;
+  if (!coverage || coverage.projects !== data.pagination?.total || coverage.errors !== 0 || coverage.gecko.failed !== 0 || coverage.cmc?.failed !== 0 ||
+    coverage.gecko.requested !== coverage.gecko.received + coverage.gecko.notReturned + coverage.gecko.failed ||
+    coverage.displayedRevenue30d < coverage.sourceRevenue30d) errors.push("collection coverage incomplete");
   if (!Array.isArray(data.coins) || data.coins.length === 0) {
     errors.push("API coins array is missing or empty");
   } else {
@@ -79,6 +83,11 @@ export function inspectApi(readback) {
       errors.push("API has no Korean protocol descriptions");
     }
     for (const coin of data.coins) {
+      if (!Array.isArray(coin.sourceSlugs) || !coin.sourceSlugs.includes(coin.slug) || !coin.marketSources) errors.push(`source accounting missing: ${coin.slug}`);
+      if (coin.geckoId && coin.marketSources?.gecko?.id !== coin.geckoId) errors.push(`unqueried asset: ${coin.slug}`);
+      for (const lookup of [coin.marketSources?.gecko, coin.marketSources?.cmc]) if (lookup?.status === "received") {
+        for (const field of lookup.available ?? []) if (coin[field] === null) errors.push(`source-backed ${field} missing: ${coin.slug}`);
+      }
       const f = coin.fundamentals;
       if (!f || f.version !== "fundamental-definitions-v1" || !Array.isArray(f.revenue?.components) || !Array.isArray(f.fees?.components) || !Array.isArray(f.holders)) {
         errors.push(`definition metadata missing: ${coin.slug}`); break;
@@ -110,16 +119,20 @@ export async function verifyProduction() {
   let lastErrors = [];
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
-      const [home, api, named] = await Promise.all([
+      const api = await readPath("/api/screener", attempt);
+      const [home, named, fwa] = await Promise.all([
         readPath("/", attempt),
-        readPath("/api/screener", attempt),
         readPath("/api/screener?prefs=" + encodeURIComponent(JSON.stringify({ search: "venice" })), attempt),
+        readPath("/api/screener?prefs=" + encodeURIComponent(JSON.stringify({ search: "fwa" })), attempt),
       ]);
       const homeInspection = inspectHome(home);
       const apiInspection = inspectApi(api);
       const namedInspection = inspectApi(named);
-      lastErrors = [...homeInspection.errors, ...apiInspection.errors, ...namedInspection.errors];
+      const fwaInspection = inspectApi(fwa);
+      lastErrors = [...homeInspection.errors, ...apiInspection.errors, ...namedInspection.errors, ...fwaInspection.errors];
       if (!namedInspection.data?.coins?.some(c => c.slug === "venice")) lastErrors.push("VVV lookup unavailable");
+      const fwaCoin = fwaInspection.data?.coins?.find(c => c.slug === "parent#fake-world-assets");
+      if (!fwaCoin || !(fwaCoin.mcap > 0) || !(fwaCoin.revenue30d > 0) || fwaCoin.fundamentals?.revenue.kind !== "protocol_revenue" || !(fwaCoin.multiples.pr > 0) || !(fwaCoin.multiples.phr > 0)) lastErrors.push("FWA source/quote/history regression");
       if (lastErrors.length === 0) {
         console.log(JSON.stringify({
           path: "/",
