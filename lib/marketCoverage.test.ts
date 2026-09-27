@@ -1,9 +1,45 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { fetchCoins, fetchGecko } from "./sources";
+import { fetchCoins, fetchGecko, fetchCmc } from "./sources";
 import { collectionErrors } from "./collectionQuality";
 import type { SourceObservation } from "./types";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); vi.useRealTimers(); });
+
+it("continues CMC discovery past 5000 and reports a failed later page without hiding it", async () => {
+  const pages = [Array.from({length:5000},(_,i)=>({id:i+1,slug:`asset-${i+1}`})),[{id:5001,slug:"low-ranked"}]];
+  const observations: SourceObservation[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+    const start = Number(new URL(input).searchParams.get("start"));
+    return new Response(JSON.stringify({data:pages[start===1?0:1]}));
+  }));
+  expect((await fetchCmc(observations)).bySlug.get("low-ranked")?.id).toBe(5001);
+  expect(observations.every(s=>s.status==="ok")).toBe(true);
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+    if (new URL(input).searchParams.get("start") !== "1") throw new TypeError("fetch failed");
+    return new Response(JSON.stringify({data:pages[0]}));
+  }));
+  const failures: SourceObservation[] = [];
+  expect((await fetchCmc(failures)).byId.size).toBe(5000);
+  expect(failures.at(-1)).toMatchObject({status:"error"});
+});
+
+it.each([0, 200])("does not let an unverified zero CMC cap hide a Gecko cap (%s), while retaining actual zeros", async geckoCap => {
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+    const url = String(input);
+    const body = url.endsWith("/protocols") ? [{slug:"token",name:"Token",symbol:"T",gecko_id:"token"}]
+      : url.endsWith("/config") ? {parentProtocols:[]}
+      : url.includes("/coins/markets") ? [{id:"token",symbol:"t",market_cap:geckoCap,circulating_supply:100,current_price:2,fully_diluted_valuation:400}]
+      : url.includes("coinmarketcap") ? {data:[{id:1,slug:"token",symbol:"T",circulating_supply:0,quote:[{symbol:"USD",market_cap:0,price:0,fully_diluted_market_cap:0}]}]}
+      : url.includes("stablecoins") ? {peggedAssets:[{gecko_id:"usdd",symbol:"USDD"}]}
+      : {protocols:[{slug:"token",name:"Token",total30d:0}],totalDataChartBreakdown:[]};
+    return new Response(JSON.stringify(body));
+  }));
+  const [coin] = await fetchCoins([]);
+  expect(coin).toMatchObject({mcap:geckoCap,price:2,fdv:400,revenue30d:0});
+  expect(coin.marketSources?.mcap).toBe(geckoCap ? "CoinGecko" : "CoinMarketCap");
+  if (geckoCap) expect(coin.circulatingSupply).toBe(100);
+  expect(collectionErrors([coin])).toEqual([]);
+});
 
 it("backs off on rate limits and bounds retries inside the server time budget", async () => {
   vi.useFakeTimers();

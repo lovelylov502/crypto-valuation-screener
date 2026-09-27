@@ -16,6 +16,7 @@ export function collectionErrors(coins: CoinRaw[]): string[] {
       if (c.geckoId && c.marketSources.gecko?.id !== c.geckoId) errors.push(`${c.slug}: unaccounted Gecko ID`);
       for (const lookup of [c.marketSources.gecko, c.marketSources.cmc]) if (lookup?.status === "received") {
         for (const field of lookup.available) if (c[field] === null) errors.push(`${c.slug}: dropped ${field}`);
+        for (const field of lookup.positive ?? []) if (!(c[field]! > 0)) errors.push(`${c.slug}: dropped positive ${field}`);
       }
       for (const field of ["mcap", "price", "fdv"] as const) if ((c[field] !== null) !== (c.marketSources[field] !== null)) errors.push(`${c.slug}: ${field} source mismatch`);
     }
@@ -74,8 +75,9 @@ export function collectionRegressions(previous: CollectionState, next: Collectio
       if (old.sourceSlugs.some(s => !represented.has(s))) changes.push({ slug, issue: "project_removed" });
       continue;
     }
-    if (old.identity !== current.identity) changes.push({ slug, issue: "identity_changed" });
+    if (old.identity.split(":").some((id, i) => id && id !== current.identity.split(":")[i])) changes.push({ slug, issue: "identity_changed" });
     for (const field of ["mcap", "price", "fdv"] as const) if (old[field] !== null && current[field] === null) changes.push({ slug, issue: `${field}_lost` });
+    for (const field of ["mcap", "price", "fdv"] as const) if (old[field]! > 0 && current[field] !== null && current[field]! <= 0) changes.push({ slug, issue: `${field}_positive_lost` });
     REVENUE_WINDOWS.forEach((days, i) => {
       if (old.revenue[i] !== null && current.revenue[i] === null) changes.push({ slug, issue: `revenue_${days}d_lost` });
       if (old.revenueDays[i] === days && current.revenueDays[i] < days) changes.push({ slug, issue: `revenue_${days}d_history_lost` });

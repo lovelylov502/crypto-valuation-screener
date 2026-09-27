@@ -11,9 +11,23 @@ const members = [
 ];
 const chart = Array.from({ length: 30 }, (_, i) => [end - i * 86400, i < 9 ? { V1: 10, V2: 2 } : { V1: 10 }]);
 const summary = () => ({ defillamaId: key, parentProtocol: null, childProtocols: members.map(({ name, defillamaId, methodology }) => ({ name, defillamaId, methodology })), totalDataChart: Array.from({ length: 30 }, (_, i) => [end - i * 86400, i < 9 ? 12 : 10]) });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe("verified parent histories", () => {
+  it.each([503, 429, "network"])("recovers transient %s failures instead of discarding a previously complete history", async failure => {
+    vi.useFakeTimers();
+    const fetcher = vi.fn().mockImplementationOnce(async () => {
+      if (typeof failure !== "number") throw new TypeError("fetch failed");
+      return new Response("", {status: failure, headers:{"retry-after":"1"}});
+    }).mockImplementation(async () => new Response(JSON.stringify(summary())));
+    vi.stubGlobal("fetch", fetcher);
+    const observations: SourceObservation[] = [];
+    const pending = fetchParentHistorySources(members, chart, now, "dailyRevenue", () => true, observations);
+    await vi.runAllTimersAsync();
+    expect(await pending).toHaveLength(1);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(observations).toEqual([]);
+  });
   it("recovers the provider's full parent without fabricating a child's missing observations", async () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify(summary())));
     vi.stubGlobal("fetch", fetcher);
@@ -67,6 +81,6 @@ describe("verified parent histories", () => {
     expect(sources[0]).toMatchObject({ status: "withheld", reason: "scope_mismatch" });
     vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 503 })));
     await fetchParentHistorySources(members, chart, now, "dailyRevenue", () => true, sources);
-    expect(sources[1].status).toBe("error");
+    expect(sources[1]).toMatchObject({status:"error",httpStatus:503});
   });
 });

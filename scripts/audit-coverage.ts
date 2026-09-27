@@ -91,7 +91,7 @@ async function main() {
     for (const c of coins) {
       const lookup = c.marketSources?.[vendor];
       const id = vendor === "gecko" ? c.geckoId : lookup?.id;
-      if (!id || lookup?.status === "identity_mismatch" || ![c.mcap,c.price,c.fdv].some(v => v === null)) continue;
+      if (!id || lookup?.status === "identity_mismatch" || ![c.mcap,c.price,c.fdv].some(v => v === null || v <= 0)) continue;
       candidates.set(id, [...(candidates.get(id) ?? []), c]);
     }
     const ids = [...candidates.keys()].sort();
@@ -106,7 +106,10 @@ async function main() {
         const quote = vendor === "gecko" ? row : row.quote?.find((q: Row) => q.symbol === "USD");
         for (const c of candidates.get(String(row.id)) ?? []) {
           const fields = { mcap: "market_cap", price: vendor === "gecko" ? "current_price" : "price", fdv: vendor === "gecko" ? "fully_diluted_valuation" : "fully_diluted_market_cap" } as const;
-          for (const field of Object.keys(fields) as (keyof typeof fields)[]) if (c[field] === null && typeof quote?.[fields[field]] === "number") errors.push(`${c.slug}: ${vendor} has missing ${field}`);
+          for (const field of Object.keys(fields) as (keyof typeof fields)[]) {
+            const value = quote?.[fields[field]];
+            if (typeof value === "number" && Number.isFinite(value) && (c[field] === null || (c[field]! <= 0 && value > 0))) errors.push(`${c.slug}: ${vendor} has missing ${field}`);
+          }
         }
       }
     }

@@ -7,7 +7,7 @@ import type { ScreenerResponse } from "./types";
 
 // Content-addressed chunks stay below Next's 2 MB entry limit. Publish the manifest
 // only after every chunk is stored: a page must never mix two collection times.
-const VERSION = "full-universe-coverage-v10-shared";
+const VERSION = "full-universe-coverage-v10-all-quotes";
 // Next includes callback.toString() in its key. Bound callbacks have a stable
 // representation across independently minified HTML/API bundles; explicit keys
 // below carry every cache dependency (namespace, version, hash or UTC date).

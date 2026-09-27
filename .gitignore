@@ -7,6 +7,8 @@ out
 next-env.d.ts
 .DS_Store
 snapshot-output/
+snapshot-baseline/
+snapshot-baseline.zip
 
 .vercel
 .hermes/

@@ -188,6 +188,7 @@ export interface QuoteLookup {
   status: "received" | "not_returned" | "error" | "identity_mismatch";
   observedAt: string;
   available: ("mcap" | "price" | "fdv")[];
+  positive?: ("mcap" | "price" | "fdv")[];
 }
 
 export interface ScreenerResponse {

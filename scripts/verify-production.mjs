@@ -88,6 +88,7 @@ export function inspectApi(readback) {
       if (coin.geckoId && coin.marketSources?.gecko?.id !== coin.geckoId) errors.push(`unqueried asset: ${coin.slug}`);
       for (const lookup of [coin.marketSources?.gecko, coin.marketSources?.cmc]) if (lookup?.status === "received") {
         for (const field of lookup.available ?? []) if (coin[field] === null) errors.push(`source-backed ${field} missing: ${coin.slug}`);
+        for (const field of lookup.positive ?? []) if (!(coin[field] > 0)) errors.push(`source-backed positive ${field} missing: ${coin.slug}`);
       }
       const f = coin.fundamentals;
       if (!f || f.version !== "fundamental-definitions-v1" || !Array.isArray(f.revenue?.components) || !Array.isArray(f.fees?.components) || !Array.isArray(f.holders)) {

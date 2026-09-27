@@ -70,7 +70,15 @@ function quoteLookup(id: string, row: Json | undefined, vendor: "gecko" | "cmc",
   const quote = vendor === "cmc" ? cmcQuote(row) : row;
   const fields = vendor === "cmc" ? { mcap: "market_cap", price: "price", fdv: "fully_diluted_market_cap" } : { mcap: "market_cap", price: "current_price", fdv: "fully_diluted_valuation" };
   return { id, status: failed ? "error" : row ? "received" : "not_returned", observedAt: new Date().toISOString(),
-    available: (Object.keys(fields) as (keyof typeof fields)[]).filter(key => num(quote?.[fields[key]]) !== null) };
+    available: (Object.keys(fields) as (keyof typeof fields)[]).filter(key => num(quote?.[fields[key]]) !== null),
+    positive: (Object.keys(fields) as (keyof typeof fields)[]).filter(key => (num(quote?.[fields[key]]) ?? 0) > 0) };
+}
+
+// A provider can report zero when supply is unverified. Prefer a positive quote
+// from an identified asset; retain explicit zero only if no provider has one.
+function marketQuote<T extends "CoinMarketCap" | "CoinGecko" | "DefiLlama">(...quotes: [number | null, T][]) {
+  const selected = quotes.find(([value]) => value !== null && value > 0) ?? quotes.find(([value]) => value !== null);
+  return { value: selected?.[0] ?? null, source: selected?.[1] ?? null };
 }
 
 // "parent#hyperliquid" → "Hyperliquid"
@@ -159,28 +167,30 @@ function indexCmcRows(index: CmcIndex, rows: Json[]) {
   }
 }
 
-async function fetchCmc(observations: SourceObservation[]): Promise<CmcIndex> {
-  const url = `${CMC}/v3/cryptocurrency/listings/latest?start=1&limit=5000&convert=USD`;
+export async function fetchCmc(observations: SourceObservation[]): Promise<CmcIndex> {
   const empty = (): CmcIndex => ({
     byId: new Map(),
     bySlug: new Map(),
     byNameSymbol: new Map(),
     bySymbol: new Map(),
   });
-  try {
-    const response = await getJson<{ data?: Json[] }>(
-      url,
-      observations,
-    );
-    if (!Array.isArray(response.data) || response.data.length === 0) throw new Error("CMC response is empty");
-    const index = empty();
-    indexCmcRows(index, response.data);
-    return index;
-  } catch {
-    const observation = observations.find(s => s.url === url);
-    if (observation) observation.status = "error";
-    return empty();
+  const index = empty(), deadline = Date.now() + 60_000;
+  for (let start = 1; ; start += 5000) {
+    const url = `${CMC}/v3/cryptocurrency/listings/latest?start=${start}&limit=5000&convert=USD`;
+    try {
+      const response = await getJson<{ data?: Json[] }>(url, observations, { timeout: 10_000, deadline });
+      if (!Array.isArray(response.data) || (start === 1 && !response.data.length)) throw new Error("CMC response is empty");
+      const before = index.byId.size;
+      indexCmcRows(index, response.data);
+      if (response.data.length && index.byId.size === before) throw new Error("CMC pagination did not advance");
+      if (response.data.length < 5000) break;
+    } catch {
+      const observation = observations.find(s => s.url === url);
+      if (observation) observation.status = "error";
+      break;
+    }
   }
+  return index;
 }
 
 async function completeCmc(ids: number[], index: CmcIndex, observations: SourceObservation[]) {
@@ -474,8 +484,9 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
     const gMcap = g ? num(g.market_cap) : null;
     const cmcMcap = quote ? num(quote.market_cap) : null;
 
-    // 시총: canonical CMC 매칭을 우선하고, 없으면 DefiLlama/CoinGecko 보조값.
-    const mcap = cmcMcap ?? gMcap ?? dlMcap;
+    const cap = marketQuote([cmcMcap, "CoinMarketCap"], [gMcap, "CoinGecko"], [dlMcap, "DefiLlama"]);
+    const price = marketQuote([num(quote?.price), "CoinMarketCap"], [num(g?.current_price), "CoinGecko"]);
+    const fdv = marketQuote([num(quote?.fully_diluted_market_cap), "CoinMarketCap"], [num(g?.fully_diluted_valuation), "CoinGecko"]);
     const cmcId = cmcRow ? num(cmcRow.id) : memberCmcIds.size === 1 ? [...memberCmcIds][0] : null;
 
     const cmcListedAt = cmcRow ? Date.parse(str(cmcRow.date_added) ?? "") : NaN;
@@ -512,18 +523,18 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       holderHistory: holderHistories[k] ?? null,
       sales: resolveSalesEvidence({ slug: k, geckoId, symbol, identityStatus }, new Date().toISOString()),
 
-      mcap,
+      mcap: cap.value,
       marketSources: {
-        mcap: cmcMcap !== null ? "CoinMarketCap" : gMcap !== null ? "CoinGecko" : dlMcap !== null ? "DefiLlama" : null,
-        price: num(quote?.price) !== null ? "CoinMarketCap" : num(g?.current_price) !== null ? "CoinGecko" : null,
-        fdv: num(quote?.fully_diluted_market_cap) !== null ? "CoinMarketCap" : num(g?.fully_diluted_valuation) !== null ? "CoinGecko" : null,
+        mcap: cap.source,
+        price: price.source,
+        fdv: fdv.source,
         gecko: geckoId ? gecko.lookups.get(geckoId) ?? null : null,
         cmc: cmcId !== null ? !cmcRow && cmc.byId.has(cmcId) ? { ...cmcLookups.get(cmcId)!, status: "identity_mismatch" } : cmcLookups.get(cmcId) ?? null : null,
       },
       tvl,
       change1d: num(quote?.percent_change_24h) ?? num(g?.price_change_percentage_24h),
       change7d: num(quote?.percent_change_7d) ?? num(g?.price_change_percentage_7d_in_currency),
-      price: num(quote?.price) ?? num(g?.current_price),
+      price: price.value,
       marketCapRank: cmcRow ? num(cmcRow.cmc_rank) : g ? num(g.market_cap_rank) : null,
       totalVolume: num(quote?.volume_24h) ?? num(g?.total_volume),
       numMarketPairs: cmcRow ? num(cmcRow.num_market_pairs) : null,
@@ -562,8 +573,8 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       volumeAnnual: vol?.annual ?? null,
       volume30d: vol?.d30 ?? null,
 
-      fdv: num(quote?.fully_diluted_market_cap) ?? num(g?.fully_diluted_valuation),
-      circulatingSupply: num(cmcRow?.circulating_supply) ?? num(g?.circulating_supply),
+      fdv: fdv.value,
+      circulatingSupply: cap.source === "CoinGecko" ? num(g?.circulating_supply) : num(cmcRow?.circulating_supply) ?? num(g?.circulating_supply),
       totalSupply: num(cmcRow?.total_supply) ?? num(g?.total_supply),
       maxSupply: num(cmcRow?.max_supply) ?? num(g?.max_supply),
     });

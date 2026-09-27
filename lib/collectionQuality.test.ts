@@ -53,10 +53,25 @@ describe("source completeness independently of financial calculation", () => {
     next.coins.sample.mcap = null; next.coins.sample.revenue[2] = null; next.coins.sample.holderDays[2] = 29;
     expect(collectionRegressions(old,next)).toEqual(expect.arrayContaining([{slug:"sample",issue:"mcap_lost"},{slug:"sample",issue:"revenue_30d_lost"},{slug:"sample",issue:"holder_30d_history_lost"}]));
     next.coins.sample.mcap = 0; next.coins.sample.revenue[2] = 0; next.coins.sample.holderDays[2] = 30;
+    expect(collectionRegressions(old,next)).toEqual([{slug:"sample",issue:"mcap_positive_lost"}]);
+    next.coins.sample.mcap = old.coins.sample.mcap;
     expect(collectionRegressions(old,next)).toEqual([]);
     next.coins = { renamed: next.coins.sample };
     expect(collectionRegressions(old,next)).toEqual([]);
     next.coins.renamed.sourceSlugs = ["other"];
     expect(collectionRegressions(old,next)).toEqual([{slug:"sample",issue:"project_removed"}]);
+  });
+  it("allows additional vendor identity but flags replacement or disappearance of an existing identity", () => {
+    const old = collectionState(assembleScreener([coin()],at,[]));
+    old.coins.sample.identity = "token:";
+    const next = structuredClone(old); next.coins.sample.identity = "token:38139";
+    expect(collectionRegressions(old,next)).toEqual([]);
+    expect(collectionRegressions(next,old)).toContainEqual({slug:"sample",issue:"identity_changed"});
+    next.coins.sample.identity = "other:38139";
+    expect(collectionRegressions(old,next)).toContainEqual({slug:"sample",issue:"identity_changed"});
+  });
+  it("rejects a zero quote that masks a positive quote from an identified source", () => {
+    const c = coin(); c.mcap = 0; c.marketSources!.gecko!.positive = ["mcap"];
+    expect(collectionErrors([c])).toContain("sample: dropped positive mcap");
   });
 });
