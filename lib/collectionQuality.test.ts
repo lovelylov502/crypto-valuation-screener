@@ -3,7 +3,7 @@ import { collectionCoverage, collectionErrors, collectionRegressions, collection
 import { sample } from "./testFixtures";
 import { assembleScreener } from "./screener";
 import { queryScreener } from "./screenerQuery";
-import { inspectApi } from "../scripts/verify-production.mjs";
+import { inspectApi, inspectHome } from "../scripts/verify-production.mjs";
 import { aggregateRevenueSource } from "./sources";
 import { revenueReading } from "./revenueReading";
 import { protocolMultiple } from "./valuationMetrics";
@@ -15,6 +15,11 @@ function coin() {
     gecko: { id: "test-token", status: "received", observedAt: at, available: ["mcap", "price", "fdv"] } } });
 }
 describe("source completeness independently of financial calculation", () => {
+  it("rejects a page collected separately from the API snapshot", () => {
+    const home = { status:200, body: `<script>{"updatedAt":"${at}"}</script>` };
+    expect(inspectHome(home, at).errors).not.toContain("HTML and API snapshots differ");
+    expect(inspectHome(home, "2026-09-28T00:03:00Z").errors).toContain("HTML and API snapshots differ");
+  });
   it("rejects a lost source-backed quote even if all multiples are withheld", () => {
     const c = coin(); c.mcap = null; c.marketSources!.mcap = null;
     expect(collectionErrors([c])).toContain("sample: dropped mcap");

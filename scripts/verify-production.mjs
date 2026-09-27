@@ -36,7 +36,7 @@ async function readPath(pathname, attempt) {
   };
 }
 
-export function inspectHome(readback) {
+export function inspectHome(readback, expectedSnapshot) {
   const body = decodeUnicodeEscapes(readback.body);
   const missingMarkers = ADVANCED_UI_MARKERS.filter((marker) => !body.includes(marker));
   const legacyMarkers = LEGACY_UI_MARKERS.filter((marker) => body.includes(marker));
@@ -44,6 +44,7 @@ export function inspectHome(readback) {
   if (readback.status !== 200) errors.push(`home HTTP ${readback.status}`);
   if (missingMarkers.length > 0) errors.push(`missing UI markers: ${missingMarkers.join(", ")}`);
   if (legacyMarkers.length > 0) errors.push(`legacy UI markers remain: ${legacyMarkers.join(", ")}`);
+  if (expectedSnapshot && !body.includes(expectedSnapshot)) errors.push("HTML and API snapshots differ");
   return { errors, missingMarkers, legacyMarkers };
 }
 
@@ -125,8 +126,8 @@ export async function verifyProduction() {
         readPath("/api/screener?prefs=" + encodeURIComponent(JSON.stringify({ search: "venice" })), attempt),
         readPath("/api/screener?prefs=" + encodeURIComponent(JSON.stringify({ search: "fwa" })), attempt),
       ]);
-      const homeInspection = inspectHome(home);
       const apiInspection = inspectApi(api);
+      const homeInspection = inspectHome(home, apiInspection.data?.updatedAt);
       const namedInspection = inspectApi(named);
       const fwaInspection = inspectApi(fwa);
       lastErrors = [...homeInspection.errors, ...apiInspection.errors, ...namedInspection.errors, ...fwaInspection.errors];

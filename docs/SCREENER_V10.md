@@ -39,6 +39,8 @@ CoinGecko requests are serialized at least 12.5 seconds apart, with a 60-second 
 
 The production gate adds a named FWA assertion plus all-page `audit:coverage`: independently fetched DefiLlama source lists must be represented, finite source Revenue amounts must remain visible, and missing quote fields are directly re-queried at both providers. HTTP 200 and a valid JSON shape alone no longer pass a source-loss incident.
 
+Public readback found another recurrence risk: Next includes the cache callback's string representation in its key, and independent HTML/API minification changed that representation. The first deployed API snapshot was `2026-09-27T23:39:13.873Z`, while HTML collected again at `23:41:40.095Z`. Bound callbacks now keep that representation stable; explicit version, namespace, date and content-hash keys identify every dependency. The deployment gate requires the page to contain the exact API snapshot timestamp, catching separate cold collections as well as stale HTML.
+
 Provider references: [CoinGecko ID batches](https://docs.coingecko.com/reference/coins-markets), [public rate limits](https://support.coingecko.com/hc/en-us/articles/4538771776153-What-is-the-rate-limit-for-CoinGecko-API-public-plan), [CMC Keyless API](https://coinmarketcap.com/api/documentation/pro-api-reference/keyless-public-api), [Vercel function limits](https://vercel.com/docs/functions/limitations).
 
 ## Evidence and limits

@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 
 const cache = vi.hoisted(() => ({ entries: new Map<string, unknown>(), bypass: false, sizes: [] as number[], build: vi.fn() }));
 vi.mock("next/cache", () => ({ unstable_cache: (fn: () => Promise<unknown>, keys: string[]) => async () => {
-  const key = keys.join(":");
+  const key = keys.join(":") + ":" + fn.toString();
   if (!cache.bypass && cache.entries.has(key)) return cache.entries.get(key);
   const value = await fn();
   cache.sizes.push(Buffer.byteLength(JSON.stringify(value)));

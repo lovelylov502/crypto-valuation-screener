@@ -7,11 +7,14 @@ import type { ScreenerResponse } from "./types";
 
 // Content-addressed chunks stay below Next's 2 MB entry limit. Publish the manifest
 // only after every chunk is stored: a page must never mix two collection times.
-const VERSION = "full-universe-coverage-v10";
-const chunk = (hash: string, contents?: string) => unstable_cache(async () => {
+const VERSION = "full-universe-coverage-v10-shared";
+// Next includes callback.toString() in its key. Bound callbacks have a stable
+// representation across independently minified HTML/API bundles; explicit keys
+// below carry every cache dependency (namespace, version, hash or UTC date).
+const chunk = (hash: string, contents?: string) => unstable_cache((async () => {
   if (contents === undefined) throw new Error("Snapshot chunk unavailable");
   return contents;
-}, ["screener-chunk", VERSION, hash], { revalidate: false })();
+}).bind(null), ["screener-chunk", VERSION, hash], { revalidate: false })();
 
 async function buildManifest() {
   const data = await buildScreener();
@@ -26,7 +29,7 @@ async function buildManifest() {
   memory = data;
   return { hashes, updatedAt: data.updatedAt };
 }
-const cachedManifest = () => unstable_cache(buildManifest, ["screener-manifest", SCORE_VERSION, VERSION, new Date().toISOString().slice(0, 10)], { revalidate: 1800 })();
+const cachedManifest = () => unstable_cache(buildManifest.bind(null), ["screener-manifest", SCORE_VERSION, VERSION, new Date().toISOString().slice(0, 10)], { revalidate: 1800 })();
 let memory: ScreenerResponse | undefined;
 let pending: Promise<ScreenerResponse> | undefined;
 
