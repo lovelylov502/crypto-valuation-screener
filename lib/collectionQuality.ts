@@ -75,6 +75,7 @@ export function collectionRegressions(previous: CollectionState, next: Collectio
       if (old.sourceSlugs.some(s => !represented.has(s))) changes.push({ slug, issue: "project_removed" });
       continue;
     }
+    if (old.sourceSlugs.some(s => !represented.has(s))) changes.push({ slug, issue: "source_membership_lost" });
     if (old.identity.split(":").some((id, i) => id && id !== current.identity.split(":")[i])) changes.push({ slug, issue: "identity_changed" });
     for (const field of ["mcap", "price", "fdv"] as const) if (old[field] !== null && current[field] === null) changes.push({ slug, issue: `${field}_lost` });
     for (const field of ["mcap", "price", "fdv"] as const) if (old[field]! > 0 && current[field] !== null && current[field]! <= 0) changes.push({ slug, issue: `${field}_positive_lost` });

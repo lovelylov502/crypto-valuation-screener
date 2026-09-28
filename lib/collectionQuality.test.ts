@@ -70,6 +70,14 @@ describe("source completeness independently of financial calculation", () => {
     next.coins.sample.identity = "other:38139";
     expect(collectionRegressions(old,next)).toContainEqual({slug:"sample",issue:"identity_changed"});
   });
+  it("detects a missing child even when its parent and quotes survive, while allowing regrouping", () => {
+    const old = collectionState(assembleScreener([coin()],at,[]));
+    old.coins.sample.sourceSlugs.push("child");
+    const next = structuredClone(old); next.coins.sample.sourceSlugs = ["sample"];
+    expect(collectionRegressions(old,next)).toEqual([{slug:"sample",issue:"source_membership_lost"}]);
+    next.coins.child = {...next.coins.sample,sourceSlugs:["child"]};
+    expect(collectionRegressions(old,next)).toEqual([]);
+  });
   it("rejects a zero quote that masks a positive quote from an identified source", () => {
     const c = coin(); c.mcap = 0; c.marketSources!.gecko!.positive = ["mcap"];
     expect(collectionErrors([c])).toContain("sample: dropped positive mcap");
