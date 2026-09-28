@@ -1,6 +1,7 @@
 import { sameMethodology } from "./fundamentalSource";
 import { summarizeRevenueHistory, type RevenueHistory } from "./revenueHistory";
 import type { SourceObservation } from "./types";
+import { readHistorySummary } from "./historyRequest";
 
 type Row = Record<string, unknown>;
 type ParentSource = { key: string; members: Row[]; summary: Row; url: string; uniqueNames: boolean };
@@ -39,34 +40,16 @@ export async function fetchParentHistorySources(protocols: Row[], chart: unknown
       const name = members.map(p => Array.isArray(p.linkedProtocols) ? p.linkedProtocols[0] : null).find(n => typeof n === "string");
       const slug = typeof name === "string" ? name.toLowerCase().replace(/\s+/g, "-") : key.replace(/^parent#/, "");
       const url = `https://api.llama.fi/summary/fees/${encodeURIComponent(slug)}?dataType=${dataType}`;
-      let httpStatus: number | undefined;
       try {
-        let summary: Row | undefined;
-        for (let attempt = 0; attempt < 2; attempt++) {
-          let delay = 500;
-          try {
-            const remaining = deadline - Date.now();
-            if (remaining <= 0) throw new Error("parent history time budget exhausted");
-            httpStatus = undefined;
-            const response = await fetch(url, { cache: "no-store", headers: { accept: "application/json" }, signal: AbortSignal.timeout(Math.min(15_000, remaining)) });
-            httpStatus = response.status;
-            delay = Math.max(delay, (Number(response.headers.get("retry-after")) || 0) * 1000);
-            if (!response.ok) throw new Error("parent history unavailable");
-            summary = await response.json();
-            break;
-          } catch (error) {
-            if (attempt === 1 || (httpStatus !== undefined && httpStatus !== 429 && httpStatus < 500) || Date.now() + delay >= deadline) throw error;
-            await new Promise(resolve => setTimeout(resolve, delay));
-          }
-        }
-        if (!summary) throw new Error("parent history missing");
+        const summary = await readHistorySummary(url, now, deadline, observations);
+        if (!summary) continue;
         if (!sameParentScope(key, members, summary)) {
           observations.push({ url, observedAt: new Date(now).toISOString(), status: "withheld", reason: "scope_mismatch" });
           continue;
         }
         if (!Array.isArray(summary.totalDataChart)) throw new Error("parent history missing");
         output.push({ key, members, summary, url, uniqueNames: members.every(p => nameCounts.get(String(p.name)) === 1) });
-      } catch { observations.push({ url, observedAt: new Date(now).toISOString(), status: "error", httpStatus }); }
+      } catch { observations.push({ url, observedAt: new Date(now).toISOString(), status: "error", httpStatus: 200 }); }
     }
   }));
   return output;

@@ -72,6 +72,7 @@ async function main() {
     "lib/revenueSource.ts",
     "lib/revenueReading.ts",
     "lib/parentHistorySource.ts",
+    "lib/historyRequest.ts",
     "lib/collectionQuality.ts",
     "lib/research.ts",
     "lib/protocolResearch.ts",

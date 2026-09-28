@@ -7,8 +7,18 @@ import { definitionReviewed } from "./fundamentalSource";
 import type { SourceObservation } from "./types";
 const at=Date.parse("2026-09-20T01:00:00Z"),end=Date.parse("2026-09-19")/1000;
 const ethereum={slug:"ethereum",name:"Ethereum",defillamaId:"chain#ethereum",methodology:registry.ethereum.methodology,total30d:300};
-afterEach(()=>vi.unstubAllGlobals());
+afterEach(()=>{vi.unstubAllGlobals();vi.useRealTimers();});
 describe("recovering missing overview series",()=>{
+  it("retries a transient child timeout without losing its complete period",async()=>{
+    vi.useFakeTimers();
+    const fetcher=vi.fn().mockRejectedValueOnce(new TypeError("fetch failed")).mockResolvedValue(new Response(JSON.stringify({...ethereum,totalDataChart:Array.from({length:30},(_,i)=>[end-i*86400,10])})));
+    vi.stubGlobal("fetch",fetcher);
+    const sources:SourceObservation[]=[];
+    const pending=completeHistorySource([ethereum],[],at,"dailyHoldersRevenue",()=>true,sources);
+    await vi.runAllTimersAsync();
+    expect(summarizeHolderHistory([ethereum],await pending,at).ethereum.periods[30]).toMatchObject({total:300,reportedDays:30});
+    expect(sources.map(s=>s.status)).toEqual(["ok"]);
+  });
   it("recovers explicit chain burn history without adding a buyback or synthetic zeros",async()=>{
     vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({...ethereum,totalDataChart:Array.from({length:30},(_,i)=>[end-i*86400,10])}))));
     const sources:SourceObservation[]=[];

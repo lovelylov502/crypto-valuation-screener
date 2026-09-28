@@ -1,5 +1,6 @@
 import { definitionReviewed } from "./fundamentalSource";
 import type { SourceObservation } from "./types";
+import { readHistorySummary } from "./historyRequest";
 
 type Row = Record<string, unknown>;
 const DAY = 86400;
@@ -13,24 +14,21 @@ export async function completeHistorySource(protocols: Row[], chart: unknown[], 
   const candidates = protocols.filter(p => p.doublecounted !== true && typeof p.slug === "string" && typeof p.name === "string" && counts.get(p.name) === 1 && eligible(p) &&
     Array.from({length:30},(_,i)=>rows.get(end-i*DAY)?.[p.name as string]).some(v=>typeof v !== "number"));
   let index = 0;
-  const deadline = Date.now() + 20_000;
+  const deadline = Date.now() + 60_000;
   await Promise.all(Array.from({length:Math.min(6,candidates.length)},async()=>{
     while (index < candidates.length) {
       const p = candidates[index++];
       const url = `https://api.llama.fi/summary/fees/${encodeURIComponent(String(p.slug))}?dataType=${dataType}`;
       try {
-        const remaining = deadline - Date.now();
-        if (remaining <= 0) throw new Error("supplemental history time budget exhausted");
-        const response = await fetch(url,{cache:"no-store",headers:{accept:"application/json"},signal:AbortSignal.timeout(Math.min(8000,remaining))});
-        if (!response.ok) throw new Error("history source unavailable");
-        const summary = await response.json();
+        const summary = await readHistorySummary(url, now, deadline, observations);
+        if (!summary) continue;
         if (!sameHistoryIdentity(p,summary) || !Array.isArray(summary.totalDataChart)) throw new Error("history scope mismatch");
         const points = summary.totalDataChart.filter((point: unknown): point is [number,number] => Array.isArray(point) && typeof point[0] === "number" && typeof point[1] === "number" && Number.isFinite(point[1]) && point[0] <= end && point[0] > end-730*DAY);
         // A conflicting overlap cannot be silently patched with a differently valued series.
         if (points.some(([t,v]:[number,number]) => { const old=rows.get(t)?.[String(p.name)]; return typeof old === "number" && Math.abs(old-v)>Math.max(1,Math.abs(v))*1e-8; })) throw new Error("history values conflict");
         for (const [t,v] of points) { const row=rows.get(t) ?? {}; row[String(p.name)]=v; rows.set(t,row); }
         observations.push({url,observedAt:new Date(now).toISOString(),status:"ok"});
-      } catch { observations.push({url,observedAt:new Date(now).toISOString(),status:"error"}); }
+      } catch { observations.push({url,observedAt:new Date(now).toISOString(),status:"error",httpStatus:200}); }
     }
   }));
   return [...rows].sort((a,b)=>a[0]-b[0]);

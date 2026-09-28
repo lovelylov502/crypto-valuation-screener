@@ -7,7 +7,7 @@ import type { ScreenerResponse } from "./types";
 
 // Content-addressed chunks stay below Next's 2 MB entry limit. Publish the manifest
 // only after every chunk is stored: a page must never mix two collection times.
-const VERSION = "full-universe-coverage-v10-all-quotes";
+const VERSION = "full-universe-coverage-v10-collection-day";
 // Next includes callback.toString() in its key. Bound callbacks have a stable
 // representation across independently minified HTML/API bundles; explicit keys
 // below carry every cache dependency (namespace, version, hash or UTC date).
@@ -17,6 +17,7 @@ const chunk = (hash: string, contents?: string) => unstable_cache((async () => {
 }).bind(null), ["screener-chunk", VERSION, hash], { revalidate: false })();
 
 async function buildManifest() {
+  const day = new Date().toISOString().slice(0, 10);
   const data = await buildScreener();
   const compressed = gzipSync(JSON.stringify(data)).toString("base64");
   const hashes: string[] = [];
@@ -27,14 +28,16 @@ async function buildManifest() {
     hashes.push(hash);
   }
   memory = data;
-  return { hashes, updatedAt: data.updatedAt };
+  memoryDay = day;
+  return { hashes, updatedAt: data.updatedAt, day };
 }
 const cachedManifest = () => unstable_cache(buildManifest.bind(null), ["screener-manifest", SCORE_VERSION, VERSION, new Date().toISOString().slice(0, 10)], { revalidate: 1800 })();
 let memory: ScreenerResponse | undefined;
+let memoryDay: string | undefined;
 let pending: Promise<ScreenerResponse> | undefined;
 
 export async function getScreener(): Promise<ScreenerResponse> {
-  if (memory?.scoreVersion === SCORE_VERSION && Date.now() - Date.parse(memory.updatedAt) < 1800_000 && memory.updatedAt.slice(0, 10) === new Date().toISOString().slice(0, 10)) return memory;
+  if (memory?.scoreVersion === SCORE_VERSION && Date.now() - Date.parse(memory.updatedAt) < 1800_000 && memoryDay === new Date().toISOString().slice(0, 10)) return memory;
   pending ??= (async () => {
     let manifest = await cachedManifest();
     if (memory?.updatedAt === manifest.updatedAt) return memory;
@@ -48,7 +51,7 @@ export async function getScreener(): Promise<ScreenerResponse> {
       if (data.updatedAt !== manifest.updatedAt) throw new Error("Snapshot time mismatch");
       return data;
     };
-    try { memory = await read(); }
+    try { memory = await read(); memoryDay = manifest.day; }
     // In dev no-cache requests (and evicted chunks), use the freshly built value.
     // Next persists cache writes after the request, so immediately rereading can miss.
     catch { await buildManifest(); }

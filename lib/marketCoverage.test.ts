@@ -5,6 +5,21 @@ import type { SourceObservation } from "./types";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); vi.useRealTimers(); });
 
+it("respects a CMC rate-limit cooldown before retrying discovery", async () => {
+  vi.useFakeTimers();
+  const times: number[] = [];
+  vi.stubGlobal("fetch",vi.fn(async()=>{
+    times.push(Date.now());
+    return times.length === 1 ? new Response("",{status:429,headers:{"retry-after":"8"}}) : new Response(JSON.stringify({data:[{id:1,slug:"recovered"}]}));
+  }));
+  const observations:SourceObservation[]=[];
+  const pending=fetchCmc(observations);
+  await vi.runAllTimersAsync();
+  expect((await pending).byId.has(1)).toBe(true);
+  expect(times[1]-times[0]).toBeGreaterThanOrEqual(8000);
+  expect(observations.map(s=>s.status)).toEqual(["ok"]);
+});
+
 it("continues CMC discovery past 5000 and reports a failed later page without hiding it", async () => {
   const pages = [Array.from({length:5000},(_,i)=>({id:i+1,slug:`asset-${i+1}`})),[{id:5001,slug:"low-ranked"}]];
   const observations: SourceObservation[] = [];

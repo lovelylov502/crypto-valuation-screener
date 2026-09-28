@@ -32,12 +32,18 @@ async function getJson<T>(url: string, observations: SourceObservation[], option
   for (let attempt = 0; attempt < 3; attempt++) {
     await beforeAttempt?.();
     if (Date.now() >= deadline) throw new Error("Source request budget exhausted");
-    const res = await fetch(url, {
+    let res: Response;
+    try { res = await fetch(url, {
       // The server caches the compressed joined snapshot; source responses can exceed 2 MB.
       cache: "no-store",
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(Math.min(timeout, deadline - Date.now())),
-    });
+    }); } catch (error) {
+      httpStatus = undefined;
+      if (attempt === 2 || Date.now() + 500 >= deadline) throw error;
+      await new Promise(resolve => setTimeout(resolve, 500));
+      continue;
+    }
     httpStatus = res.status;
     if (res.ok) {
       const result = (await res.json()) as T;
@@ -48,7 +54,7 @@ async function getJson<T>(url: string, observations: SourceObservation[], option
       throw new Error(`fetch ${url} -> ${res.status}`);
     }
     const retryAfter = Number(res.headers.get("retry-after"));
-    const delay = res.status === 429 && beforeAttempt ? Math.max(60_000, Number.isFinite(retryAfter) ? retryAfter * 1000 : 0) : 500 * 2 ** attempt;
+    const delay = res.status === 429 ? Math.max(beforeAttempt ? 60_000 : 5000 * 2 ** attempt, Number.isFinite(retryAfter) ? retryAfter * 1000 : 0) : 500 * 2 ** attempt;
     if (Date.now() + delay >= deadline) throw new Error("Source retry exceeds request budget");
     await new Promise((resolve) => setTimeout(resolve, delay));
   }

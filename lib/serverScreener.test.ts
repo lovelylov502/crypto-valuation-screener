@@ -27,6 +27,19 @@ it("collects a new UTC date even when the old snapshot is less than 30 minutes o
   expect(cache.build).toHaveBeenCalledTimes(2);
 });
 
+it("does not carry a collection started before midnight into the next day's memory cache", async () => {
+  vi.useFakeTimers({toFake:["Date"]});
+  vi.setSystemTime(new Date("2026-09-27T23:59:00Z"));
+  cache.build.mockImplementation(async () => {
+    vi.setSystemTime(new Date("2026-09-28T00:01:00Z"));
+    return {updatedAt:new Date().toISOString(),scoreVersion:"research-v10-source-revenue-recovery",coins:[]};
+  });
+  const module = await import("./serverScreener");
+  await module.getScreener();
+  await module.getScreener();
+  expect(cache.build).toHaveBeenCalledTimes(2);
+});
+
 it("restores a large identical snapshot after a cold start with bounded cache entries", async () => {
   const data = { updatedAt: new Date().toISOString(), scoreVersion: "research-v10-source-revenue-recovery", coins: [{ description: randomBytes(2_000_000).toString("base64") }] };
   cache.build.mockResolvedValue(data);
