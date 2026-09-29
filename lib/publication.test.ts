@@ -54,6 +54,10 @@ it("survives process-independent serialization; only a passing newer completion 
   const current=startJournal(restored,b,"data-3-start");
   expect(current.published).toEqual(good.published);
   expect(current.incident).toEqual(blocked.incident);
+  const retryHealth=collectionHealth({...data(),publication:current},Date.parse(b.startedAt));
+  expect(retryHealth.label).toBe("공개 보류");
+  expect(retryHealth.summary).toContain("검사가 끝난 뒤");
+  expect(retryHealth.summary).not.toContain("0개");
   const next=data(b.startedAt);expect(assessCandidate(next,data(),b.startedAt,b.startedAt).errors).toEqual([]);
   const recovered=finishJournal(current,{...b,outcome:"published",completedAt:b.startedAt},ref(next,"data-3-complete"),"data-3-complete");
   expect(recovered.incident).toBeNull();expect(recovered.recoveredAt).toBe(b.startedAt);

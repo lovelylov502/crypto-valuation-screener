@@ -55,8 +55,8 @@ export function CollectionStatus({ data, publication, error, refreshing, checked
           <p>최근 수집 시작: {time(p.attempt.startedAt)} · 완료: {p.attempt.completedAt ? time(p.attempt.completedAt) : "수집 중"}</p>
           {p.incident && <><p className="negative">기록 시작 이후 첫 실패 관측: {time(p.incident.firstFailureObservedAt)}</p><p>마지막 정상 자료: {time(p.incident.lastGoodDataAt)}</p><p>최근 실패 관측: {time(p.incident.lastFailureObservedAt)}</p></>}
           {p.recoveredAt && <p>최근 회복 확인: {time(p.recoveredAt)}</p>}
-          <p>직전 검증본 대비 변화: {count(p.attempt.affectedProjects)}개 종목 · {count(p.attempt.changeCount)}개 항목</p>
-          <p><a href={p.attempt.reportUrl} target="_blank" rel="noreferrer">종목별 변경값·검사 결과</a> · <a href={p.attempt.runUrl} target="_blank" rel="noreferrer">수집 작업 기록</a></p>
+          <p>{p.attempt.outcome === "running" ? "이번 수집의 영향 범위를 검사하고 있습니다." : `직전 검증본 대비 변화: ${count(p.attempt.affectedProjects)}개 종목 · ${count(p.attempt.changeCount)}개 항목`}</p>
+          <p>{p.attempt.outcome !== "running" && <><a href={p.attempt.reportUrl} target="_blank" rel="noreferrer">종목별 변경값·검사 결과</a> · </>}<a href={p.attempt.runUrl} target="_blank" rel="noreferrer">수집 작업 기록</a></p>
           <p><a href={`https://github.com/lovelylov502/crypto-valuation-screener/releases/tag/${p.id}`} target="_blank" rel="noreferrer">공개·장애 이력 보관함</a></p>
           {p.attempt.affected.length > 0 && <p>변화가 확인된 종목: {p.attempt.affected.map(c => c.name).join(", ")}{p.attempt.affectedProjects > p.attempt.affected.length ? " 외" : ""}</p>}
         </div>}
