@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import { gzipSync } from "node:zlib";
 import { assembleScreener } from "./screener";
 import { sample } from "./testFixtures";
@@ -71,9 +71,13 @@ it("detects an interrupted durable start and never labels stale snapshots curren
   expect(collectionHealth({...data(),publication:running},Date.parse(a.startedAt)+16*60_000).label).toBe("수집 중단");
   expect(collectionHealth({...data(),publication:baseline()},Date.parse("2026-09-30T00:01:00Z")).state).toBe("stale");
 });
+it("labels a recent verified publication healthy using its complete source evidence",()=>{
+  const d={...data(),publication:baseline()};
+  expect(collectionHealth(d,Date.parse(at)+60_000)).toMatchObject({state:"healthy",label:"수집 정상"});
+  expect(collectionHealth({...d,sources:[]},Date.parse(at)+60_000).state).toBe("unknown");
+});
 it("refuses corrupt bytes and snapshots containing failures despite a matching content hash",()=>{
   const d=data(), bytes=gzipSync(JSON.stringify(d));expect(decodeSnapshot(bytes,ref(d)).coins).toHaveLength(1);
   expect(()=>decodeSnapshot(Buffer.from("corrupt"),ref(d))).toThrow("hash mismatch");
   d.sources[0].status="error";expect(()=>decodeSnapshot(gzipSync(JSON.stringify(d)),ref(d))).toThrow("failed verification");
 });
-

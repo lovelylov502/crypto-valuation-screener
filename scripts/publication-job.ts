@@ -75,7 +75,7 @@ async function finish() {
   if (latest?.id !== current.id) throw new Error("A newer job owns publication; refusing to finish");
   let report;
   try { report = await load("report.json"); }
-  catch { report = { completedAt: new Date().toISOString(), errors: ["collector_did_not_complete"], sources: [], affected: [], changes: [] }; await save("report.json", json(report)); }
+  catch { report = { baseline: current.published, completedAt: new Date().toISOString(), errors: ["collector_did_not_complete"], sources: [], affected: [], changes: [] }; await save("report.json", json(report)); }
   const files: Record<string, Uint8Array> = {};
   for (const name of await readdir(output)) if (name !== "start.json") files[name] = await readFile(join(output, name));
   const errors = [...report.errors];

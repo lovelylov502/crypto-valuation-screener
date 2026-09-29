@@ -20,8 +20,8 @@ export function sourceProvider(url: string): string {
 /** Scope: recorded collection results, accounting and freshness; never website uptime alone. */
 export function collectionHealth(data: HealthData | null, now: number, requestError = "", refreshing = false, publication = data?.publication) {
   const p: PublicationJournal | undefined = publication;
-  const sources = p ? p.attempt.sourceFailures : Array.isArray(data?.sources) ? data.sources : [];
-  const failures = sources.filter(s => s.status === "error");
+  const sources = Array.isArray(data?.sources) ? data.sources : [];
+  const failures = (p ? p.attempt.sourceFailures : sources).filter(s => s.status === "error");
   const withheld = (data?.sources ?? sources).filter(s => s.status === "withheld");
   const providers = [...new Set(failures.map(s => sourceProvider(s.url)))];
   const c = data?.collection;
