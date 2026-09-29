@@ -10,6 +10,10 @@
 .scan-workspace .header-actions { margin-left:auto; gap:8px; }
 .scan-workspace .header-status { color:#adc0dc; font-size:12px; white-space:normal; text-align:right; }
 .mobile-data-status { display:none; }
+.publication-notice { display:flex; flex-wrap:wrap; gap:6px 14px; margin:0 0 14px; padding:12px 14px; border:1px solid #405774; border-radius:5px; color:#b9cce6; font-size:12px; line-height:1.7; }
+.publication-blocked { border-color:#945061; background:rgba(226,75,96,.08); }
+.publication-blocked strong { color:#ff99a6; }
+.collection-detail a { color:#69dbc8; text-decoration:underline; }
 .collection-status { display:inline-flex; flex-shrink:0; }
 .collection-badge { display:inline-flex; align-items:center; gap:7px; min-height:36px; padding:7px 11px; border:1px solid currentColor; border-radius:5px; font-size:12px; font-weight:650; white-space:nowrap; background:transparent; cursor:pointer; }
 .collection-badge:hover { filter:brightness(1.2); }

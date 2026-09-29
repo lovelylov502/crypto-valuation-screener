@@ -1,65 +1,36 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { randomBytes } from "node:crypto";
-
-const cache = vi.hoisted(() => ({ entries: new Map<string, unknown>(), bypass: false, sizes: [] as number[], build: vi.fn() }));
-vi.mock("next/cache", () => ({ unstable_cache: (fn: () => Promise<unknown>, keys: string[]) => async () => {
-  const key = keys.join(":") + ":" + fn.toString();
-  if (!cache.bypass && cache.entries.has(key)) return cache.entries.get(key);
-  const value = await fn();
-  cache.sizes.push(Buffer.byteLength(JSON.stringify(value)));
-  cache.entries.set(key, value);
-  return value;
-} }));
-vi.mock("./screener", () => ({ buildScreener: cache.build }));
-
-beforeEach(() => { vi.resetModules(); cache.entries.clear(); cache.sizes = []; cache.bypass = false; cache.build.mockReset(); });
-afterEach(() => vi.useRealTimers());
-
-it("collects a new UTC date even when the old snapshot is less than 30 minutes old", async () => {
-  vi.useFakeTimers({toFake:["Date"]});
-  vi.setSystemTime(new Date("2026-09-27T23:59:00Z"));
-  cache.build.mockImplementation(async () => ({ updatedAt:new Date().toISOString(),scoreVersion:"research-v10-source-revenue-recovery",coins:[] }));
-  const module = await import("./serverScreener");
-  const before = await module.getScreener();
-  vi.setSystemTime(new Date("2026-09-28T00:01:00Z"));
-  const after = await module.getScreener();
-  expect(after.updatedAt).not.toBe(before.updatedAt);
-  expect(cache.build).toHaveBeenCalledTimes(2);
+import { readFileSync } from "node:fs";
+const store=vi.hoisted(()=>({journal:vi.fn(),snapshot:vi.fn(),collect:vi.fn()}));
+vi.mock("./snapshotArchive",()=>({readJournal:store.journal,readSnapshot:store.snapshot}));
+vi.mock("./sources",()=>({fetchCoins:store.collect}));
+const at="2026-09-29T10:00:00Z";
+const journal=()=>({schema:1,id:"data-2-complete",createdAt:at,previousId:"data-2-start",published:{id:"data-1-complete",dataAt:"2026-09-28T00:00:00Z",url:"archive",sha256:"a"},attempt:{id:"data-2",startedAt:at,completedAt:at,outcome:"blocked",errors:["HTTP 403"]},incident:{firstFailureObservedAt:at,lastFailureObservedAt:at}});
+const data=()=>({updatedAt:"2026-09-28T00:00:00Z",coins:[{slug:"sample",mcap:123}],scoreVersion:"research-v10-source-revenue-recovery"});
+beforeEach(()=>{vi.resetModules();store.journal.mockReset().mockImplementation(async()=>structuredClone(journal()));store.snapshot.mockReset().mockImplementation(async()=>structuredClone(data()));store.collect.mockReset();vi.useFakeTimers({toFake:["Date"]});vi.setSystemTime(new Date(at));});
+afterEach(()=>vi.useRealTimers());
+it("serves a persisted verified snapshot across restarts and date changes without collecting",async()=>{
+  const first=await(await import("./serverScreener")).getScreener();
+  vi.resetModules();vi.setSystemTime(new Date("2026-09-30T00:01:00Z"));
+  const next=await(await import("./serverScreener")).getScreener();
+  expect(next).toEqual(first);expect(store.collect).not.toHaveBeenCalled();expect(store.snapshot).toHaveBeenCalledTimes(2);
 });
-
-it("does not carry a collection started before midnight into the next day's memory cache", async () => {
-  vi.useFakeTimers({toFake:["Date"]});
-  vi.setSystemTime(new Date("2026-09-27T23:59:00Z"));
-  cache.build.mockImplementation(async () => {
-    vi.setSystemTime(new Date("2026-09-28T00:01:00Z"));
-    return {updatedAt:new Date().toISOString(),scoreVersion:"research-v10-source-revenue-recovery",coins:[]};
-  });
-  const module = await import("./serverScreener");
-  await module.getScreener();
-  await module.getScreener();
-  expect(cache.build).toHaveBeenCalledTimes(2);
+it("retains snapshot and real timestamps when the journal store times out",async()=>{
+  const server=await import("./serverScreener");const first=await server.getScreener();
+  vi.setSystemTime(new Date(Date.parse(at)+61_000));store.journal.mockRejectedValueOnce(new Error("timeout"));
+  const next=await server.getScreener();expect(next.coins).toEqual(first.coins);expect(next.updatedAt).toBe(first.updatedAt);expect(next.publication?.storeError).toBeTruthy();
 });
-
-it("restores a large identical snapshot after a cold start with bounded cache entries", async () => {
-  const data = { updatedAt: new Date().toISOString(), scoreVersion: "research-v10-source-revenue-recovery", coins: [{ description: randomBytes(2_000_000).toString("base64") }] };
-  cache.build.mockResolvedValue(data);
-  expect(await (await import("./serverScreener")).getScreener()).toEqual(data);
-  vi.resetModules();
-  expect(await (await import("./serverScreener")).getScreener()).toEqual(data);
-  expect(cache.build).toHaveBeenCalledTimes(1);
-  expect(cache.sizes.every(n => n < 2_000_000)).toBe(true);
-  expect(cache.entries.size).toBeGreaterThan(3);
+it("rejects missing/corrupt archives on a cold start without falling back to a crawler",async()=>{
+  store.snapshot.mockRejectedValueOnce(new Error("hash mismatch"));await expect((await import("./serverScreener")).getScreener()).rejects.toThrow("hash mismatch");expect(store.collect).not.toHaveBeenCalled();
 });
-
-it("serves a freshly built snapshot when cache reads are bypassed or chunks are evicted", async () => {
-  const data = { updatedAt: new Date().toISOString(), scoreVersion: "research-v10-source-revenue-recovery", coins: [] };
-  cache.build.mockResolvedValue(data);
-  await (await import("./serverScreener")).getScreener();
-  for (const key of cache.entries.keys()) if (key.startsWith("screener-chunk:")) cache.entries.delete(key);
-  vi.resetModules();
-  expect(await (await import("./serverScreener")).getScreener()).toEqual(data);
-  cache.bypass = true;
-  vi.resetModules();
-  expect(await (await import("./serverScreener")).getScreener()).toEqual(data);
-  expect(cache.build).toHaveBeenCalledTimes(3);
+it("keeps the old publication ID when downloading a newer archive fails",async()=>{
+  const server=await import("./serverScreener");const first=await server.getScreener();vi.setSystemTime(new Date(Date.parse(at)+61_000));
+  store.journal.mockResolvedValueOnce({...journal(),createdAt:new Date().toISOString(),published:{...journal().published,id:"data-3-complete"}});store.snapshot.mockRejectedValueOnce(new Error("broken new archive"));
+  const next=await server.getScreener();expect(next.publication?.published?.id).toBe(first.publication?.published?.id);expect(next.publication?.storeError).toBeTruthy();expect(next.coins).toEqual(first.coins);
+});
+it("deduplicates concurrent reads and has an explicit no-verified-data state",async()=>{
+  const server=await import("./serverScreener");await Promise.all([server.getScreener(),server.getScreener()]);expect(store.journal).toHaveBeenCalledTimes(1);expect(store.snapshot).toHaveBeenCalledTimes(1);
+  vi.resetModules();store.journal.mockResolvedValueOnce({...journal(),published:null});await expect((await import("./serverScreener")).getScreener()).rejects.toThrow("공개 자료가 아직 없습니다");
+});
+it("renders the homepage without importing or awaiting any data network reader",()=>{
+  const page=readFileSync(new URL("../app/page.tsx",import.meta.url),"utf8");expect(page).not.toMatch(/getScreener|fetch\(/);expect(page).toContain("initialData={null}");
 });

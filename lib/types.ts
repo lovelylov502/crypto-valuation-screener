@@ -192,6 +192,7 @@ export interface QuoteLookup {
 }
 
 export interface ScreenerResponse {
+  publication?: import("./publicationTypes").PublicationJournal;
   coins: CoinScored[];
   categories: string[];
   updatedAt: string; // ISO

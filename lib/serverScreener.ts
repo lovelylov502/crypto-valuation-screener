@@ -1,61 +1,43 @@
-import { unstable_cache } from "next/cache";
-import { gzipSync, gunzipSync } from "node:zlib";
-import { createHash } from "node:crypto";
-import { buildScreener } from "./screener";
-import { SCORE_VERSION } from "./valuation";
 import type { ScreenerResponse } from "./types";
+import type { PublicationJournal } from "./publicationTypes";
+import { readJournal, readSnapshot } from "./snapshotArchive";
 
-// Content-addressed chunks stay below Next's 2 MB entry limit. Publish the manifest
-// only after every chunk is stored: a page must never mix two collection times.
-const VERSION = "full-universe-coverage-v10-collection-day";
-// Next includes callback.toString() in its key. Bound callbacks have a stable
-// representation across independently minified HTML/API bundles; explicit keys
-// below carry every cache dependency (namespace, version, hash or UTC date).
-const chunk = (hash: string, contents?: string) => unstable_cache((async () => {
-  if (contents === undefined) throw new Error("Snapshot chunk unavailable");
-  return contents;
-}).bind(null), ["screener-chunk", VERSION, hash], { revalidate: false })();
+// Request handlers only read persisted publications. They never import a collector.
+let journal: PublicationJournal | undefined;
+let checkedAt = 0;
+let pendingJournal: Promise<PublicationJournal> | undefined;
+let snapshot: { id: string; data: ScreenerResponse; publication: PublicationJournal } | undefined;
+let pendingSnapshot: { id: string; value: Promise<ScreenerResponse> } | undefined;
 
-async function buildManifest() {
-  const day = new Date().toISOString().slice(0, 10);
-  const data = await buildScreener();
-  const compressed = gzipSync(JSON.stringify(data)).toString("base64");
-  const hashes: string[] = [];
-  for (let i = 0; i < compressed.length; i += 1_000_000) {
-    const contents = compressed.slice(i, i + 1_000_000);
-    const hash = createHash("sha256").update(contents).digest("hex");
-    await chunk(hash, contents);
-    hashes.push(hash);
-  }
-  memory = data;
-  memoryDay = day;
-  return { hashes, updatedAt: data.updatedAt, day };
+export async function getPublication(): Promise<PublicationJournal> {
+  if (journal && Date.now() - checkedAt < 60_000) return journal;
+  pendingJournal ??= readJournal().then(next => {
+    if (journal && Date.parse(next.createdAt) < Date.parse(journal.createdAt)) throw new Error("Publication journal moved backwards");
+    journal = next; checkedAt = Date.now(); return next;
+  }).catch(error => {
+    if (!journal) throw error;
+    checkedAt = Date.now();
+    journal = { ...journal, storeError: "보관소 상태 확인 실패 · 마지막 확인 기록을 표시합니다." };
+    return journal;
+  }).finally(() => { pendingJournal = undefined; });
+  return pendingJournal;
 }
-const cachedManifest = () => unstable_cache(buildManifest.bind(null), ["screener-manifest", SCORE_VERSION, VERSION, new Date().toISOString().slice(0, 10)], { revalidate: 1800 })();
-let memory: ScreenerResponse | undefined;
-let memoryDay: string | undefined;
-let pending: Promise<ScreenerResponse> | undefined;
 
 export async function getScreener(): Promise<ScreenerResponse> {
-  if (memory?.scoreVersion === SCORE_VERSION && Date.now() - Date.parse(memory.updatedAt) < 1800_000 && memoryDay === new Date().toISOString().slice(0, 10)) return memory;
-  pending ??= (async () => {
-    let manifest = await cachedManifest();
-    if (memory?.updatedAt === manifest.updatedAt) return memory;
-    const read = async () => {
-      const parts = await Promise.all(manifest.hashes.map(async hash => {
-        const value = await chunk(hash);
-        if (createHash("sha256").update(value).digest("hex") !== hash) throw new Error("Snapshot integrity mismatch");
-        return value;
-      }));
-      const data = JSON.parse(gunzipSync(Buffer.from(parts.join(""), "base64")).toString("utf8")) as ScreenerResponse;
-      if (data.updatedAt !== manifest.updatedAt) throw new Error("Snapshot time mismatch");
-      return data;
-    };
-    try { memory = await read(); memoryDay = manifest.day; }
-    // In dev no-cache requests (and evicted chunks), use the freshly built value.
-    // Next persists cache writes after the request, so immediately rereading can miss.
-    catch { await buildManifest(); }
-    return memory!;
-  })().finally(() => { pending = undefined; });
-  return pending;
+  const publication = await getPublication(), ref = publication.published;
+  if (!ref) throw new Error("검증을 통과한 공개 자료가 아직 없습니다. 수집 상태에서 사유를 확인해 주세요.");
+  try {
+    if (snapshot?.id !== ref.id) {
+      if (pendingSnapshot?.id !== ref.id) pendingSnapshot = { id: ref.id, value: readSnapshot(ref) };
+      const data = await pendingSnapshot.value;
+      snapshot = { id: ref.id, data, publication }; pendingSnapshot = undefined;
+    }
+    snapshot!.publication = publication;
+    return { ...snapshot!.data, publication };
+  } catch (error) {
+    pendingSnapshot = undefined;
+    // Never attach a new snapshot identity to old data after a failed/corrupt read.
+    if (snapshot) return { ...snapshot.data, publication: { ...snapshot.publication, storeError: "새 검증본 읽기 실패 · 직전 검증본 유지" } };
+    throw error;
+  }
 }

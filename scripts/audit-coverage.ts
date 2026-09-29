@@ -6,6 +6,10 @@ import { fundamentalErrors } from "../lib/fundamentalContract";
 import { DEPLOY_CONTRACT } from "./deploy-contract.mjs";
 import type { CoinScored } from "../lib/types";
 import type { ScreenerPage } from "../lib/screenerQuery";
+import { gunzipSync } from "node:zlib";
+import { checkArchiveUrl, readSnapshot, sha256 } from "../lib/snapshotArchive";
+import { witnessErrors } from "../lib/sourceWitness";
+import { COLLECTION_DEADLINE_MS } from "../lib/publication";
 
 const base = process.env.SCREENER_BASE_URL ?? DEPLOY_CONTRACT.liveBaseUrl;
 const output = process.env.SCREENER_AUDIT_DIR;
@@ -57,11 +61,46 @@ async function main() {
   report.sourceFailures = first.sources.filter(s => s.status === "error");
   if (first.sources.some(s => s.status === "error")) errors.push("source requests failed; inspect sourceFailures");
   if (first.scoreVersion !== DEPLOY_CONTRACT.scoreVersion) errors.push("wrong deployed version");
-  if (Date.now() - Date.parse(first.updatedAt) > 45 * 60_000) errors.push("snapshot older than 45 minutes");
+  const stale = Date.now() - Date.parse(first.updatedAt) > 45 * 60_000;
   if (coins.length !== first.pagination.total || new Set(coins.map(c => c.slug)).size !== coins.length) errors.push("pagination omitted or duplicated projects");
   errors.push(...collectionErrors(coins));
   for (const c of coins) errors.push(...fundamentalErrors(c).map(e => `${c.slug}: ${e}`));
   if (first.collection?.gecko.failed) errors.push(`${first.collection.gecko.failed} asset quote queries failed`);
+
+  // A protected stale publication must prove the retained bytes and the blocked
+  // candidate's baseline, rather than comparing yesterday's snapshot to today's feed.
+  const p = first.publication;
+  if (!p?.published || p.storeError) throw new Error("Verified publication metadata unavailable");
+  const archived = await readSnapshot(p.published);
+  const archivedCoins = new Map(archived.coins.map(c => [c.slug, c]));
+  if (archived.updatedAt !== first.updatedAt || archived.coins.length !== coins.length) errors.push("published archive identity differs from API");
+  for (const coin of coins) if (JSON.stringify(coin) !== JSON.stringify(archivedCoins.get(coin.slug))) errors.push(`published bytes changed:${coin.slug}`);
+  checkArchiveUrl(p.published.witnessUrl);
+  const witnessResponse = await fetch(p.published.witnessUrl, { signal: AbortSignal.timeout(30_000) });
+  if (!witnessResponse.ok) throw new Error(`Archived witness HTTP ${witnessResponse.status}`);
+  const witnessBytes = new Uint8Array(await witnessResponse.arrayBuffer());
+  if (sha256(witnessBytes) !== p.published.witnessSha256) throw new Error("Archived witness hash mismatch");
+  const witness = JSON.parse(gunzipSync(witnessBytes).toString("utf8"));
+  errors.push(...witnessErrors(archived, witness));
+  report.publication = { id:p.published.id, journal:p.id, outcome:p.attempt.outcome, dataAt:p.published.dataAt, sha256:p.published.sha256, stale, verifiedArchiveRows:archived.coins.length };
+  if (p.attempt.outcome !== "published") {
+    if (p.attempt.outcome === "running") {
+      if (Date.now() - Date.parse(p.attempt.startedAt) > COLLECTION_DEADLINE_MS) errors.push("collector did not complete within budget");
+    } else {
+      checkArchiveUrl(p.attempt.reportUrl);
+      const failure = await read(p.attempt.reportUrl);
+      if (!failure.errors?.length || failure.baseline?.id !== p.published.id || failure.baseline?.sha256 !== p.published.sha256) errors.push("blocked candidate does not prove retention of this verified baseline");
+      if (!p.incident || !p.attempt.errors.length) errors.push("blocked candidate missing incident evidence");
+    }
+    report.mode = "protected-last-verified";
+    report.currentCollectionPassed = false;
+    if (output) { await mkdir(output,{recursive:true}); await writeFile(join(output,"all-coins.json"),JSON.stringify({...first,coins})); }
+    // This is a protection/integrity pass, explicitly not fresh upstream coverage.
+    return;
+  }
+  if (stale) errors.push("published snapshot older than 45 minutes without an active blocked/running collection");
+  report.mode = "current-publication-and-live-sources";
+  report.currentCollectionPassed = true;
 
   const paths = ["/protocols", "/config", "/overview/fees", "/overview/fees?dataType=dailyRevenue", "/overview/fees?dataType=dailyHoldersRevenue", "/overview/dexs"];
   const sources = await Promise.all(paths.map(path => read("https://api.llama.fi" + path + (path.includes("overview") ? `${path.includes("?") ? "&" : "?"}excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true` : ""))));

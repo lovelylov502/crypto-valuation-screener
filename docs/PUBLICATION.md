@@ -1,0 +1,39 @@
+# Verified data publication
+
+The September 29 incident exposed two independent paths: a daily checker could fail while a request-time collector still replaced the live data. The site now has no collection or publication capability. Its static shell loads immediately; the API reads one persisted, hash-checked, verified snapshot.
+
+## Single writer and persistent storage
+
+The existing public repository's GitHub Releases store data outside Git commits. No new vendor, paid plan or Vercel credential is required. Generated artifacts remain out of commits. `.github/workflows/daily-snapshot.yml` is the sole writer, including manual dispatch, with one concurrency group and cancellation disabled. It runs at minute 17 and 47 each hour; GitHub scheduling is best-effort, so elapsed-time monitoring does not assume a scheduled run actually started.
+
+Each run publishes a start journal **before** collection and a completion journal after validation. Each has a unique run/attempt tag, previous-journal link, snapshot pointer, real collection times, code commit, provider outcomes and incident state. Assets upload to a draft release, their SHA-256 digests must match, and only then is the complete release made public/latest. Old assets are never replaced or deleted. Failed uploads leave the previously visible journal intact. Before publication the writer rechecks its parent; it rejects superseded, duplicate or older attempts. Only the canonical main GitHub workflow can call the writer. Do not publish journals locally or create another writer outside that concurrency group.
+
+Completion archives contain the scored candidate, raw joined inputs when available, independent source-universe witness, exact value/coverage changes against the published baseline and checksummed artifact inventory. Blocked candidates are retained for diagnosis, but their amounts never enter the public snapshot. The journal points to the previous verified snapshot until a newer candidate passes **all** checks. Its original date and amounts remain together; no old quote/new revenue mixing is allowed.
+
+GitHub Actions artifacts are still retained for 60 days as an additional copy; the Release archives have no application expiration/deletion job. Administrative deletion or a GitHub outage remains possible: hash/read failures produce an explicit error and cannot trigger a fresh crawl. A warm instance retains its last verified snapshot. A cold instance reads the same persisted snapshot; when the archive itself is unreachable it returns a clear unavailable state rather than inventing data.
+
+## Gate
+
+`snapshotErrors` checks rule version, date, required source observations, full collection accounting, every provider lookup, empty quote responses, original Revenue visibility and every row's fundamental contract. `assessCandidate` adds original-date ordering, cross-midnight rejection and comparison against the actual published baseline: lost source membership, changed identities, quotes/positive values, original amounts, complete period coverage and definition review all block publication. Independent source witnesses additionally check the entire source universe and available-but-hidden Revenue amounts.
+
+A legitimate upstream removal or definition/coverage change may still block publication. Preserve its report and review the exact source change; do not erase the baseline or relax the gate to make a run green. No unreviewed exception list or automatic re-baselining is implemented.
+
+Initial recovery is allowed only once, through a checksum-pinned seed that contains a preserved snapshot, its independent source witness and a passing prior full audit including independent missing-quote checks. The bootstrap retains its historical collection timestamp. It cannot replace an existing journal and must be followed by a normal collection. Historical recovery is never a current-data success.
+
+## Read and monitor
+
+`/` is a static shell. `/api/screener` and `/api/status` read the same journal. The API verifies compressed snapshot hash, original timestamp and all snapshot contracts; cached objects survive ordinary reads and refresh from persistent storage after restart. A newer archive read failure retains the old **snapshot ID as well as its values**, with an explicit store error. No request handler imports `fetchCoins` or `buildScreener`.
+
+The browser polls the small status endpoint once a minute while visible and fetches rows only when the published ID changes or query controls change. The status clock checks every 30 seconds. Source/gate failure produces `공개 보류`; an unfinished durable start after 15 minutes produces `수집 중단`; a snapshot older than 45 minutes or from a previous UTC date is delayed. Errors persist during retries. The banner labels the exact historical data time, and details expose the tracking start, first/latest failure observation, last verified data date, recovery, affected project/field counts, complete change report and task record. Tracking start is disclosed; missing pre-migration history is not fabricated.
+
+## Deployment verification
+
+Canonical root/repository/Vercel/clean-main guards and financial assertions stay mandatory. The static shell has no embedded snapshot, so the old duplicated HTML/API timestamp comparison applies only to legacy SSR output. New readback requires a consistent persisted snapshot ID across all API queries and an exact archive/date match.
+
+The full-universe audit always verifies every public row against the hash-checked stored snapshot, validates every financial/collection contract and replays the archived independent source witness. For a current published collection it additionally checks live upstream sources and missing quotes. For an explicitly blocked/running collector it verifies protected operation: the blocked report must name the identical retained baseline ID/hash, have actual errors and an incident, or a running job must be within its deadline. It records `mode=protected-last-verified` and `currentCollectionPassed=false`. This pass proves containment and availability of historical verified data; it is **not** a current source-coverage/recovery pass.
+
+## Verification cases
+
+Tests cover 403, 429, timeouts, empty responses, silent loss, malformed evidence, midnight rollover, restart/cache loss, interrupted jobs, overlapping/late completions, recovery, wrong hashes, partial uploads, changed publication parents and unavailable storage. The preserved September 29 incident must fail against the preserved September 28 verified baseline without changing its published ID/hash/date. Production verification additionally retains the actual GitHub run, publication and deployment IDs, browser state and cold-shell timings.
+
+Official storage/atomic-publication reference: [GitHub Releases API](https://docs.github.com/en/rest/releases/releases), [release asset storage](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases), [scheduled workflow limits](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).

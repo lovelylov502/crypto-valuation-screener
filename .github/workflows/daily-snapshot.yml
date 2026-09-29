@@ -1,22 +1,35 @@
-name: Daily screener observations
+name: Verified screener publication
 
 on:
   schedule:
-    - cron: "17 0 * * *" # Daily at 09:17 KST.
+    - cron: "17,47 * * * *"
   workflow_dispatch:
+    inputs:
+      bootstrap_url:
+        description: "First initialization only: preserved audited seed asset URL"
+        type: string
+        required: false
+      bootstrap_sha256:
+        description: "SHA-256 of that preserved seed asset"
+        type: string
+        required: false
 
 permissions:
-  contents: read
-  actions: read
+  contents: write
 
+# The sole writer, including manual runs. No deploy/request path may publish data.
 concurrency:
-  group: screener-observations
+  group: screener-publication
   cancel-in-progress: false
 
 jobs:
   capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SCREENER_BOOTSTRAP_URL: ${{ inputs.bootstrap_url }}
+      SCREENER_BOOTSTRAP_SHA256: ${{ inputs.bootstrap_sha256 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,30 +38,20 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci --no-audit --no-fund
-      - name: Read the last successful collection baseline
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('node:fs');
-            fs.mkdirSync('snapshot-baseline', { recursive: true });
-            const runs = await github.rest.actions.listWorkflowRuns({ ...context.repo, workflow_id: 'daily-snapshot.yml', status: 'success', per_page: 1 });
-            if (!runs.data.workflow_runs.length) return;
-            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({ ...context.repo, run_id: runs.data.workflow_runs[0].id });
-            const artifact = artifacts.data.artifacts.find(a => a.name.startsWith('screener-') && !a.expired);
-            if (!artifact) return;
-            const download = await github.rest.actions.downloadArtifact({ ...context.repo, artifact_id: artifact.id, archive_format: 'zip' });
-            fs.writeFileSync('snapshot-baseline.zip', Buffer.from(download.data));
-      - name: Expand baseline
-        run: if [ -f snapshot-baseline.zip ]; then unzip -q snapshot-baseline.zip -d snapshot-baseline; fi
-      - run: npm run snapshot:capture
-        env:
-          SCREENER_BASELINE_DIR: snapshot-baseline
+      - run: npm test
+      - name: Persist collection start and retain the current verified pointer
+        id: start
+        run: npx tsx scripts/publication-job.ts start
+      - name: Collect and validate candidate against the published baseline
+        timeout-minutes: 10
+        run: npm run snapshot:capture
+      - name: Archive result and atomically publish only a passing candidate
+        if: always() && steps.start.outcome == 'success'
+        run: npx tsx scripts/publication-job.ts finish
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: screener-${{ github.run_id }}-${{ github.run_attempt }}
           path: snapshot-output/
           retention-days: 60
-          if-no-files-found: error
-      - name: Warm the existing website cache
-        run: node scripts/warm-screener.mjs
+          if-no-files-found: warn

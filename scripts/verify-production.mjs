@@ -128,10 +128,14 @@ export async function verifyProduction() {
         readPath("/api/screener?prefs=" + encodeURIComponent(JSON.stringify({ search: "fwa" })), attempt),
       ]);
       const apiInspection = inspectApi(api);
-      const homeInspection = inspectHome(home, apiInspection.data?.updatedAt);
+      // The static shell has no data payload; all rows now come from one persisted API snapshot.
+      const homeInspection = inspectHome(home, apiInspection.data?.publication ? undefined : apiInspection.data?.updatedAt);
       const namedInspection = inspectApi(named);
       const fwaInspection = inspectApi(fwa);
       lastErrors = [...homeInspection.errors, ...apiInspection.errors, ...namedInspection.errors, ...fwaInspection.errors];
+      const publication = apiInspection.data?.publication;
+      if (!publication?.published || publication.published.dataAt !== apiInspection.data?.updatedAt || publication.storeError) lastErrors.push("verified publication identity unavailable");
+      for (const result of [namedInspection, fwaInspection]) if (result.data?.publication?.published?.id !== publication?.published?.id) lastErrors.push("API queries use different publications");
       if (!namedInspection.data?.coins?.some(c => c.slug === "venice")) lastErrors.push("VVV lookup unavailable");
       const fwaCoin = fwaInspection.data?.coins?.find(c => c.slug === "parent#fake-world-assets");
       if (!fwaCoin || !(fwaCoin.mcap > 0) || !(fwaCoin.revenue30d > 0) || fwaCoin.fundamentals?.revenue.kind !== "protocol_revenue" || !(fwaCoin.multiples.pr > 0) || !(fwaCoin.multiples.phr > 0)) lastErrors.push("FWA source/quote/history regression");
@@ -156,7 +160,8 @@ export async function verifyProduction() {
           universeRows: apiInspection.data.pagination.total,
           updatedAt: apiInspection.data.updatedAt,
         }));
-        console.log("[production-readback] PASS");
+        console.log(JSON.stringify({ publication: publication.published.id, collectionOutcome: publication.attempt.outcome, protected: publication.attempt.outcome !== "published", lastVerifiedDataAt: publication.published.dataAt }));
+        console.log("[production-readback] PASS (publication integrity; see collection outcome)");
         return;
       }
     } catch (error) {

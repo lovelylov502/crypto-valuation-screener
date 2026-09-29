@@ -44,7 +44,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
   const resultsRef = useRef<HTMLDivElement>(null);
   const rowButtons = useRef(new Map<string, HTMLButtonElement>());
   const tableRef = useWindowTableHeader();
-  const { data, refreshing, refresh, error, checkedAt } = useScreenerPage(initialData, prefs, favorites, page, pageSize, ready);
+  const { data, publication, refreshing, refresh, error, checkedAt } = useScreenerPage(initialData, prefs, favorites, page, pageSize, ready);
 
   useEffect(() => {
     try {
@@ -133,9 +133,14 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
         <img className="brand-mark" src="/brand/tovenit-mark.png" alt="" width={44} height={44}/>
         <div className="brand-title"><h1>{BRAND.name}<span className="sr-only"> {BRAND.koreanName}</span></h1><p>{BRAND.tagline}</p></div>
       </a>
-      <div className="header-actions"><span className="header-status">{data ? fmtKstMinute(data.updatedAt) : "자료 준비 중"}</span><CollectionStatus data={data} error={error} refreshing={refreshing} checkedAt={checkedAt} onRefresh={refresh}/><button className="icon-button" aria-label="최신 자료 확인" title="최신 자료 확인" disabled={refreshing} onClick={refresh}><RefreshCw size={16} className={refreshing ? "spinning" : ""}/></button><button className="icon-button" aria-label="지표 안내" title="지표 안내" onClick={() => setSourceOpen(true)}><Info size={17}/></button></div>
+      <div className="header-actions"><span className="header-status">{data ? fmtKstMinute(data.updatedAt) : "자료 준비 중"}</span><CollectionStatus data={data} publication={publication} error={error} refreshing={refreshing} checkedAt={checkedAt} onRefresh={refresh}/><button className="icon-button" aria-label="최신 자료 확인" title="최신 자료 확인" disabled={refreshing} onClick={refresh}><RefreshCw size={16} className={refreshing ? "spinning" : ""}/></button><button className="icon-button" aria-label="지표 안내" title="지표 안내" onClick={() => setSourceOpen(true)}><Info size={17}/></button></div>
     </header>
     {data && <p className="mobile-data-status">표시 자료 수집 · {fmtKstMinute(data.updatedAt)}</p>}
+    {publication && <div className={`publication-notice ${publication.incident || publication.attempt.outcome === "blocked" ? "publication-blocked" : ""}`} role="status">
+      <strong>{publication.incident || publication.attempt.outcome === "blocked" ? "새 수집본 공개 보류" : "검증본 표시"}</strong>
+      <span>{data ? `${fmtKstMinute(data.updatedAt)}에 수집한 자료입니다. 금액·배수의 기준 시각도 같습니다.` : "검사를 통과한 자료를 불러오고 있습니다."}</span>
+      {publication.attempt.outcome === "blocked" && <span>직전 검증본 대비 {publication.attempt.affectedProjects.toLocaleString()}개 종목의 변화를 확인했습니다. 오른쪽 상단에서 원인과 이력을 볼 수 있습니다.</span>}
+    </div>}
     {error && <div className="workspace-status" role="alert">{error} {data && "기존 결과를 표시하고 있습니다."}<button className="text-button" onClick={refresh}>다시 시도</button></div>}
     {storageError && <p className="notice">브라우저 저장소를 사용할 수 없어 설정·관심종목이 유지되지 않을 수 있습니다.</p>}
     {migrationNotice && <div className="migration-notice" role="status"><Info size={15}/><span>{migrationNotice}</span><button className="icon-button" aria-label="설정 변경 안내 닫기" onClick={() => setMigrationNotice(null)}><X size={16}/></button></div>}

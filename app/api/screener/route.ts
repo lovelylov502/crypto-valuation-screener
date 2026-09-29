@@ -5,7 +5,7 @@ import { parseWorkspace } from "@/lib/workspacePreferences";
 
 // Only the joined snapshot is cached. A second ISR cache could extend stale data by 30 minutes.
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 30;
 
 export async function GET(request: Request) {
   try {
