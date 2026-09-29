@@ -24,6 +24,7 @@ import { growthLabel, revenueTrend } from "@/lib/revenueTrend";
 import { revenueReading } from "@/lib/revenueReading";
 import { businessRevenue } from "@/lib/fundamentals";
 import { BRAND } from "@/lib/brand";
+import { CollectionStatus } from "./CollectionStatus";
 
 const FAVORITES_KEY = "crypto-valuation-favorites-v1";
 
@@ -85,9 +86,6 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
   const total = data?.pagination.filtered ?? 0;
   const currentPage = data?.pagination.page ?? 1;
   const coverage = data?.coverage;
-  const stale = data && Date.now() - Date.parse(data.updatedAt) > 12 * 3600000;
-  const sourceFailures = data?.sources.filter(s => s.status === "error").length ?? 0;
-  const sourceWithheld = data?.sources.filter(s => s.status === "withheld").length ?? 0;
   const sortIcon = (key: SortKey) => prefs.sortKey === key ? prefs.sortDir === "asc" ? <ArrowUp size={12}/> : <ArrowDown size={12}/> : null;
 
   const cell = (c: CoinScored, key: SortKey) => {
@@ -135,9 +133,9 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
         <img className="brand-mark" src="/brand/tovenit-mark.png" alt="" width={44} height={44}/>
         <div className="brand-title"><h1>{BRAND.name}<span className="sr-only"> {BRAND.koreanName}</span></h1><p>{BRAND.tagline}</p></div>
       </a>
-      <div className="header-actions"><span className="header-status">{data ? fmtKstMinute(data.updatedAt) : "자료 준비 중"}{stale ? " · 갱신 필요" : sourceFailures ? " · 일부 자료 미수집" : sourceWithheld ? " · 일부 보완 보류" : ""}</span><button className="icon-button" aria-label="최신 자료 확인" title="최신 자료 확인" disabled={refreshing} onClick={refresh}><RefreshCw size={16} className={refreshing ? "spinning" : ""}/></button><button className="icon-button" aria-label="지표 안내" title="지표 안내" onClick={() => setSourceOpen(true)}><Info size={17}/></button></div>
+      <div className="header-actions"><span className="header-status">{data ? fmtKstMinute(data.updatedAt) : "자료 준비 중"}</span><CollectionStatus data={data} error={error} refreshing={refreshing} checkedAt={checkedAt} onRefresh={refresh}/><button className="icon-button" aria-label="최신 자료 확인" title="최신 자료 확인" disabled={refreshing} onClick={refresh}><RefreshCw size={16} className={refreshing ? "spinning" : ""}/></button><button className="icon-button" aria-label="지표 안내" title="지표 안내" onClick={() => setSourceOpen(true)}><Info size={17}/></button></div>
     </header>
-    {data && <p className="mobile-data-status" role="status">{fmtKstMinute(data.updatedAt)}{stale ? " · 갱신 필요" : sourceFailures ? " · 일부 자료 미수집" : sourceWithheld ? " · 일부 보완 보류" : " · 수집 완료"}</p>}
+    {data && <p className="mobile-data-status">표시 자료 수집 · {fmtKstMinute(data.updatedAt)}</p>}
     {error && <div className="workspace-status" role="alert">{error} {data && "기존 결과를 표시하고 있습니다."}<button className="text-button" onClick={refresh}>다시 시도</button></div>}
     {storageError && <p className="notice">브라우저 저장소를 사용할 수 없어 설정·관심종목이 유지되지 않을 수 있습니다.</p>}
     {migrationNotice && <div className="migration-notice" role="status"><Info size={15}/><span>{migrationNotice}</span><button className="icon-button" aria-label="설정 변경 안내 닫기" onClick={() => setMigrationNotice(null)}><X size={16}/></button></div>}

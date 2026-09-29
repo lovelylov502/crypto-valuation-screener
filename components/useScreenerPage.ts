@@ -19,7 +19,6 @@ export function useScreenerPage(initial: ScreenerPage | null, prefs: WorkspacePr
     if (!ready) return;
     const controller = new AbortController();
     setRefreshing(true);
-    setError("");
     const deadline = setTimeout(() => controller.abort("timeout"), 300000);
     const timer = setTimeout(async () => {
       try {
@@ -27,7 +26,7 @@ export function useScreenerPage(initial: ScreenerPage | null, prefs: WorkspacePr
         if (!response.ok) throw new Error("자료를 가져오지 못했습니다. 다시 시도해 주세요.");
         const next = await response.json() as ScreenerPage;
         if (next.scoreVersion !== RULE_VERSION || !next.pagination || !Number.isFinite(Date.parse(next.updatedAt)) || Date.parse(next.updatedAt) > Date.now() + 300000 || !Array.isArray(next.coins) || next.coins.some(c => fundamentalErrors(c).length)) throw new Error("자료 형식을 확인하지 못했습니다.");
-        if (!controller.signal.aborted) { setData(next); setCheckedAt(new Date().toISOString()); }
+        if (!controller.signal.aborted) { setData(next); setCheckedAt(new Date().toISOString()); setError(""); }
       } catch (e) {
         if (!controller.signal.aborted || controller.signal.reason === "timeout") setError(controller.signal.aborted ? "조회가 지연되고 있습니다. 다시 시도해 주세요." : e instanceof Error ? e.message : "조회 실패");
       } finally {
