@@ -43,7 +43,7 @@ jobs:
         id: start
         run: npx tsx scripts/publication-job.ts start
       - name: Collect and validate candidate against the published baseline
-        timeout-minutes: 10
+        timeout-minutes: 12
         run: npm run snapshot:capture
       - name: Archive result and atomically publish only a passing candidate
         if: always() && steps.start.outcome == 'success'

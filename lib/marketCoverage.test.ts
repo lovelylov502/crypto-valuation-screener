@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { fetchCoins, fetchGecko, fetchCmc } from "./sources";
 import { collectionErrors } from "./collectionQuality";
 import type { SourceObservation } from "./types";
+import { GECKO_BUDGET_MS } from "./geckoRequests";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); vi.useRealTimers(); });
 
@@ -56,7 +57,7 @@ it.each([0, 200])("does not let an unverified zero CMC cap hide a Gecko cap (%s)
   expect(collectionErrors([coin])).toEqual([]);
 });
 
-it("backs off on rate limits and bounds retries inside the server time budget", async () => {
+it("backs off on rate limits and bounds retries inside the collection time budget", async () => {
   vi.useFakeTimers();
   const start = Date.now(), times: number[] = [];
   vi.stubGlobal("fetch", vi.fn(async () => { times.push(Date.now()); return new Response("", {status:429,headers:{"retry-after":"60"}}); }));
@@ -67,7 +68,7 @@ it("backs off on rate limits and bounds retries inside the server time budget", 
   expect(result.lookups.size).toBe(1000);
   expect([...result.lookups.values()].every(v=>v.status==="error")).toBe(true);
   expect(times[1]-times[0]).toBeGreaterThanOrEqual(60_000);
-  expect(Date.now()-start).toBeLessThanOrEqual(260_000);
+  expect(Date.now()-start).toBeLessThanOrEqual(GECKO_BUDGET_MS);
   expect(observations[0].httpStatus).toBe(429);
 });
 
@@ -78,7 +79,7 @@ it("queries every explicit ID beyond 1000 and preserves low-ranked and zero-valu
   vi.stubGlobal("fetch", vi.fn(async (input: string) => {
     const url = new URL(input), batch = url.searchParams.get("ids")!.split(",");
     expect(url.searchParams.get("per_page")).toBe("250");
-    expect(batch.length).toBeLessThanOrEqual(250);
+    expect(batch.length).toBeLessThanOrEqual(150);
     requested.push(...batch);
     return new Response(JSON.stringify(batch.map(id => ({ id, market_cap_rank: 20000, market_cap: id === ids[1250] ? 0 : 10 }))));
   }));
@@ -126,6 +127,7 @@ it.each([false, true])("supplements canonical CMC IDs outside listings and uses 
   const [coin] = await fetchCoins([]);
   expect(requests.some(u => u.includes("/quotes/latest?id=99999"))).toBe(true);
   expect(coin).toMatchObject({ geckoId: "token", mcap: conflict ? 200 : 100, price: 2, fdv: 400, marketDataUpdatedAt: "2026-09-28T00:00:00Z" });
+  expect(coin.cmcId).toBe(99999); // Canonical metadata survives a rejected/failed quote.
   expect(coin.marketSources?.cmc?.status).toBe(conflict ? "identity_mismatch" : "received");
   expect(coin.marketSources?.price).toBe("CoinGecko");
   expect(collectionErrors([coin])).toEqual([]);

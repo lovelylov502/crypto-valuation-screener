@@ -1,7 +1,8 @@
 import { capitalExclusion, STABLECOIN_SOURCE, type StablecoinAsset } from "./capitalEligibility";
-import type { CoinRaw, IdentityStatus, QuoteLookup, SourceObservation } from "./types";
+import type { CoinRaw, IdentityStatus, QuoteLookup, SourceObservation, ScreenerResponse } from "./types";
 import { fetchRevenueHistory } from "./revenueSource";
 import { REVENUE_OVERVIEW_URL } from "./revenueReading";
+import { geckoRequests, GECKO_BUDGET_MS, GECKO_INTERVAL_MS } from "./geckoRequests";
 import { fetchHolderHistory } from "./holderHistorySource";
 import { resolveSalesEvidence } from "./salesSource";
 import { koreanDescription } from "./protocolDescriptions";
@@ -13,7 +14,6 @@ import {
 } from "./holderValue";
 
 const LLAMA = "https://api.llama.fi";
-const GECKO = "https://api.coingecko.com/api/v3";
 const CMC = "https://pro-api.coinmarketcap.com/public-api";
 
 // 자동 이름/slug 매칭으로 확정할 수 없는 canonical CMC 예외.
@@ -113,15 +113,14 @@ export async function fetchGecko(ids: string[], observations: SourceObservation[
   const byId = new Map<string, Json>();
   const lookups = new Map<string, QuoteLookup>();
   let nextAt = 0;
-  const deadline = Date.now() + 260_000;
+  const deadline = Date.now() + GECKO_BUDGET_MS;
   const pace = async () => {
     const delay = Math.max(0, nextAt - Date.now());
     if (Date.now() + delay > deadline) throw new Error("CoinGecko request budget exhausted");
     if (delay) await new Promise(resolve => setTimeout(resolve, delay));
-    nextAt = Date.now() + 12_500; // Public keyless API can be limited to five calls/minute.
+    nextAt = Date.now() + GECKO_INTERVAL_MS;
   };
-  await quoteBatches([...new Set(ids)].sort(), async batch => {
-    const url = `${GECKO}/coins/markets?vs_currency=usd&ids=${batch.map(encodeURIComponent).join(",")}&per_page=250&price_change_percentage=7d,14d,30d,1y`;
+  for (const { ids: batch, url } of geckoRequests(ids)) {
     try {
       const rows = await getJson<Json[]>(url, observations, { timeout: 10_000, beforeAttempt: pace, deadline });
       if (!Array.isArray(rows)) throw new Error("CoinGecko response is invalid");
@@ -135,7 +134,7 @@ export async function fetchGecko(ids: string[], observations: SourceObservation[
       if (observation) observation.status = "error";
       for (const id of batch) lookups.set(id, quoteLookup(id, undefined, "gecko", true));
     }
-  }, 1);
+  }
   return { byId, lookups };
 }
 
@@ -346,8 +345,9 @@ export function aggregateRevenueSource(list: Json[], groupKey: (slug: string) =>
  * DefiLlama 4종 + CMC + CoinGecko를 조인하되, **parent protocol 단위로 묶어** 집계한다.
  * holder revenue는 child 경제유형을 보존해 적격 최근 30일과 raw TTM을 따로 합산한다.
  */
-export async function fetchCoins(observations: SourceObservation[] = []): Promise<CoinRaw[]> {
-  const histories = Promise.all([fetchRevenueHistory(observations), fetchHolderHistory(observations)]);
+export async function fetchCoins(observations: SourceObservation[] = [], baseline?: ScreenerResponse): Promise<CoinRaw[]> {
+  const preservedParents = new Map(baseline?.coins.filter(c => c.isParent && c.revenueHistory).map(c => [c.slug, Object.values(c.revenueHistory!.periods).filter(p => p.reportedDays === p.days).map(p => p.days)]));
+  const histories = Promise.all([fetchRevenueHistory(observations, preservedParents), fetchHolderHistory(observations)]);
   const [protocols, feesL, revL, hrL, dexsL, cmc, stablecoins, config] = await Promise.all([
     getJson<Json[]>(`${LLAMA}/protocols`, observations),
     fetchOverviewList("/overview/fees", observations),
@@ -512,7 +512,7 @@ export async function fetchCoins(observations: SourceObservation[] = []): Promis
       category: str(rep.category),
       chains: [...new Set(members.flatMap(m => Array.isArray(m.chains) ? m.chains.filter((v): v is string => typeof v === "string") : []))],
       geckoId,
-      cmcId: cmcRow ? num(cmcRow.id) : null,
+      cmcId,
       cmcSlug: cmcRow ? str(cmcRow.slug) : identityStatus === "verified" ? CMC_SLUG_OVERRIDES[k] ?? null : null,
       logo: str(parent?.logo) ?? str(rep.logo),
       listedAt,

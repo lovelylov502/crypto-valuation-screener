@@ -10,6 +10,7 @@ import { gunzipSync } from "node:zlib";
 import { checkArchiveUrl, readSnapshot, sha256 } from "../lib/snapshotArchive";
 import { witnessErrors } from "../lib/sourceWitness";
 import { COLLECTION_DEADLINE_MS } from "../lib/publication";
+import { geckoRequests, GECKO_INTERVAL_MS } from "../lib/geckoRequests";
 
 const base = process.env.SCREENER_BASE_URL ?? DEPLOY_CONTRACT.liveBaseUrl;
 const output = process.env.SCREENER_AUDIT_DIR;
@@ -24,7 +25,7 @@ async function read(url: string): Promise<any> {
     if (gecko) {
       const delay = Math.max(0, nextGeckoAt - Date.now());
       if (delay) await new Promise(r => setTimeout(r, delay));
-      nextGeckoAt = Date.now() + 12_500;
+      nextGeckoAt = Date.now() + GECKO_INTERVAL_MS;
     }
     const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(300_000) });
     if ((response.status === 429 || response.status >= 500) && attempt < 2) {
@@ -134,9 +135,11 @@ async function main() {
       candidates.set(id, [...(candidates.get(id) ?? []), c]);
     }
     const ids = [...candidates.keys()].sort();
-    for (let i = 0; i < ids.length; i += 250) {
-      const batch = ids.slice(i, i + 250);
-      const url = vendor === "gecko" ? `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&per_page=250&ids=${batch.map(encodeURIComponent).join(",")}` : `https://pro-api.coinmarketcap.com/public-api/v3/cryptocurrency/quotes/latest?convert=USD&skip_invalid=true&id=${batch.join(",")}`;
+    const requests = vendor === "gecko" ? geckoRequests(ids) : Array.from({ length: Math.ceil(ids.length / 250) }, (_, i) => {
+      const batch = ids.slice(i * 250, (i + 1) * 250);
+      return { ids: batch, url: `https://pro-api.coinmarketcap.com/public-api/v3/cryptocurrency/quotes/latest?convert=USD&skip_invalid=true&id=${batch.join(",")}` };
+    });
+    for (const { ids: batch, url } of requests) {
       const data = await read(url);
       const rows = Array.isArray(data) ? data : data.data;
       if (!Array.isArray(rows)) throw new Error(`${vendor}: unexpected quote response`);

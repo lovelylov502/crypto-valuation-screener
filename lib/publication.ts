@@ -32,7 +32,7 @@ export function snapshotErrors(data: ScreenerResponse): string[] {
 }
 
 /** Publication rejects unexplained losses even when every HTTP response is 200. */
-export function assessCandidate(data: ScreenerResponse, baseline: ScreenerResponse | null, startedAt: string, completedAt: string) {
+export function assessCandidate(data: ScreenerResponse, baseline: ScreenerResponse | null, startedAt: string, completedAt: string, reviewedLosses: ReadonlySet<string> = new Set()) {
   const errors = snapshotErrors(data);
   const age = Date.parse(completedAt) - Date.parse(data.updatedAt);
   if (age < -300_000 || age > 45 * 60_000) errors.push("candidate_not_current");
@@ -40,12 +40,14 @@ export function assessCandidate(data: ScreenerResponse, baseline: ScreenerRespon
   if (baseline && Date.parse(data.updatedAt) <= Date.parse(baseline.updatedAt)) errors.push("candidate_not_newer");
   const previous = baseline && collectionState(baseline), next = collectionState(data);
   const changes = previous ? collectionRegressions(previous, next) : [];
-  if (changes.length) errors.push(`unreviewed_losses:${changes.length}`);
+  const reviewedChanges = changes.filter(c => reviewedLosses.has(`${c.slug}:${c.issue}`));
+  const unreviewedChanges = changes.filter(c => !reviewedLosses.has(`${c.slug}:${c.issue}`));
+  if (unreviewedChanges.length) errors.push(`unreviewed_losses:${unreviewedChanges.length}`);
   const affected = [...new Set(changes.map(c => c.slug))].map(slug => ({
     slug, name: data.coins.find(c => c.slug === slug)?.name ?? baseline?.coins.find(c => c.slug === slug)?.name ?? slug,
     issues: changes.filter(c => c.slug === slug).map(c => c.issue), before: previous?.coins[slug] ?? null, after: next.coins[slug] ?? null,
   }));
-  return { errors, changes, affected };
+  return { errors, changes, reviewedChanges, unreviewedChanges, affected };
 }
 
 export function startJournal(previous: PublicationJournal | null, attempt: CollectionAttempt, id: string): PublicationJournal {

@@ -8,7 +8,7 @@ const URL = "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTot
 let cached: { at: number; value: Record<string, RevenueHistory>; sources: SourceObservation[] } | undefined;
 let pending: Promise<Record<string, RevenueHistory>> | undefined;
 
-export async function fetchRevenueHistory(observations: SourceObservation[]): Promise<Record<string, RevenueHistory>> {
+export async function fetchRevenueHistory(observations: SourceObservation[], preservedParents: ReadonlyMap<string, readonly number[]> = new Map()): Promise<Record<string, RevenueHistory>> {
   try {
     if (!cached || Date.now() - cached.at > 1800_000 || Math.floor(Date.now() / 86400_000) !== Math.floor(cached.at / 86400_000)) {
       pending ??= (async () => {
@@ -20,11 +20,15 @@ export async function fetchRevenueHistory(observations: SourceObservation[]): Pr
         const at = Date.now();
         const parents = new Map<string, string>(data.protocols.map((p: { slug: string; parentProtocol?: string }) => [p.slug, p.parentProtocol ?? p.slug]));
         const definitions = aggregateDefinitions(data.protocols, slug => parents.get(slug) ?? slug, "Revenue");
+        const primary = summarizeRevenueHistory(data.protocols, data.totalDataChartBreakdown, at, URL, definitions);
+        const missingParents = new Set([...preservedParents].filter(([key, days]) => days.some(day => (primary[key]?.periods[day as 1 | 7 | 30 | 90 | 365]?.reportedDays ?? 0) < day)).map(([key]) => key));
         const sources: SourceObservation[] = [];
         const eligible = (p: Record<string, unknown>) => ["protocol_revenue", "service_sales"].includes(definitions.get(parents.get(String(p.slug)) ?? String(p.slug))?.kind ?? "");
         const [chart, parentSources] = await Promise.all([
           completeHistorySource(data.protocols,data.totalDataChartBreakdown,at,"dailyRevenue",p=>eligible(p) && typeof p.total30d === "number",sources),
-          fetchParentHistorySources(data.protocols,data.totalDataChartBreakdown,at,"dailyRevenue",eligible,sources),
+          // Previously complete source amounts deserve an exact-scope recheck even
+          // when economic review withholds ratios. The baseline supplies IDs only.
+          fetchParentHistorySources(data.protocols,data.totalDataChartBreakdown,at,"dailyRevenue",p=>eligible(p) || missingParents.has(parents.get(String(p.slug)) ?? String(p.slug)),sources),
         ]);
         const value = summarizeRevenueHistory(data.protocols, chart, at, URL, definitions);
         for (const [key,h] of Object.entries(value)) h.supplementalSources = sources.filter(s=>s.status === "ok" && (parents.get(decodeURIComponent(new globalThis.URL(s.url).pathname.split("/").at(-1)!)) ?? "") === key).map(s=>s.url);

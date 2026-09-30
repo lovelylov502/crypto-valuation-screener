@@ -8,6 +8,8 @@ import type { CollectionAttempt, PublicationJournal, PublishedSnapshot } from ".
 import { assessCandidate, startJournal, finishJournal, JOURNAL_DOWNLOAD, snapshotErrors } from "../lib/publication";
 import { checkArchiveUrl, readSnapshot, sha256 } from "../lib/snapshotArchive";
 import { collectWitness, witnessErrors } from "../lib/sourceWitness";
+import { reviewedSourceChanges } from "../lib/reviewedSourceChanges";
+import { reviewPendingHistory } from "../lib/pendingHistoryReview";
 import { latestJournal, publishJournal } from "./github-journal";
 
 const output = resolve("snapshot-output/publication");
@@ -50,12 +52,16 @@ async function collect() {
     } else {
       if (!current.published) throw new Error("Missing verified baseline; bootstrap must be reviewed");
       const baseline = await readSnapshot(current.published);
-      const raw = await fetchCoins(sources);
+      const raw = await fetchCoins(sources, baseline);
       await save("inputs.json.gz", gzipSync(json(raw)));
       data = assembleScreener(raw, new Date().toISOString(), sources);
-      assessment = assessCandidate(data, baseline, current.attempt.startedAt, new Date().toISOString());
-      errors.push(...assessment.errors);
       witness = await collectWitness();
+      const pendingReview = await reviewPendingHistory(data, baseline, witness);
+      if (pendingReview.proofs.length) await save("pending-history-review.json.gz", gzipSync(json(pendingReview.proofs)));
+      const reviews = reviewedSourceChanges(data, baseline);
+      if (reviews.length) await save("source-change-review.json", json(reviews));
+      assessment = assessCandidate(data, baseline, current.attempt.startedAt, new Date().toISOString(), new Set([...pendingReview.keys, ...reviews.map(r => `${r.slug}:${r.issue}`)]));
+      errors.push(...assessment.errors);
     }
     errors.push(...witnessErrors(data!, witness));
   } catch (error) { errors.push(error instanceof Error ? error.message : "Collector failed"); }
@@ -63,7 +69,7 @@ async function collect() {
   if (witness.length) await save("witness.json.gz", gzipSync(json(witness)));
   const report = { schema: 1, codeCommit: process.env.GITHUB_SHA, startedAt: current.attempt.startedAt, completedAt: new Date().toISOString(),
     baseline: current.published, dataAt: data?.updatedAt ?? null, sources: data?.sources ?? sources, collection: data?.collection,
-    errors: [...new Set(errors)], changes: assessment?.changes ?? [], affected: assessment?.affected ?? [], bootstrapReceipt,
+    errors: [...new Set(errors)], changes: assessment?.changes ?? [], reviewedChanges: assessment?.reviewedChanges ?? [], unreviewedChanges: assessment?.unreviewedChanges ?? [], affected: assessment?.affected ?? [], bootstrapReceipt,
     artifacts: await Promise.all((await readdir(output)).filter(n => n.endsWith(".gz")).map(async name => { const bytes = await readFile(join(output, name)); return { name, bytes: bytes.length, sha256: sha256(bytes) }; })) };
   await save("report.json", json(report));
   if (errors.length) throw new Error(`Candidate blocked: ${errors.length} validation errors; diagnostic report retained`);

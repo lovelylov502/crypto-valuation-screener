@@ -1,0 +1,141 @@
+{
+  "baselineHash": "8d5d93e7a63a98036dd7707bdbf71cab2d395edc9868fbb01ce9441c6b0692df",
+  "collectionDate": "2026-09-30",
+  "reviewedAt": "2026-09-30T10:37:00.089Z",
+  "evidenceHash": "29c9e4f34ae35baa39b3cc01fe6d3d8da5cf7ef2db7d5571bfd627cec0d58207",
+  "entries": [
+    {
+      "slug": "parent#balancer",
+      "issue": "definition_review_lost",
+      "signature": "20f5b24ecea0217146378f1bc11e4b30fe03a20bfe418d2a305b68c14722ddb1",
+      "reason": "Balancer V1 Fees wording changed in the original methodology. Changed definitions and dependent ratios remain withheld; no economic review is automatically renewed.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true"
+    },
+    {
+      "slug": "hydration-dex",
+      "issue": "revenue_7d_lost",
+      "signature": "39c4f9b78b580b36ecbc25bab2a8ce1e7a346b7980e6896befba5e105462a38c",
+      "reason": "Independent overview and per-protocol summary confirm 0/7 explicit dates. Missing dates remain missing; no zero or older window is substituted.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "bv-7x",
+      "issue": "identity_changed",
+      "signature": "6da90a211a8feba8e465e09b1981998eb110ae04d5d8bea7a4abe98e13b2e5a5",
+      "reason": "Explicit Gecko identity is unchanged. CMC renamed its asset slug to bv-7x; the old optional slug match is no longer selected. No new CMC identity is inferred.",
+      "source": "https://pro-api.coinmarketcap.com/public-api/v3/cryptocurrency/quotes/latest?id=40240&convert=USD"
+    },
+    {
+      "slug": "bbbfi",
+      "issue": "project_removed",
+      "signature": "e371fa2b7b70c5cfc04e852688bbab1d739bf36452bac7662eae957a5c8ff65d",
+      "reason": "Absent from all independently fetched directory, parent and overview sources; no prior amounts are carried forward.",
+      "source": "https://api.llama.fi/protocols"
+    },
+    {
+      "slug": "archery",
+      "issue": "project_removed",
+      "signature": "87576e90a247b371ee03141743b4abb46a49aed31c5ff141ae3a0fe333e8edc5",
+      "reason": "Absent from all independently fetched directory, parent and overview sources; no prior amounts are carried forward.",
+      "source": "https://api.llama.fi/protocols"
+    },
+    {
+      "slug": "fomotail",
+      "issue": "revenue_30d_history_lost",
+      "signature": "7184b63ac3a1ee4261c4031ef452b445758bcf110ad03637baad2c61e83a3242",
+      "reason": "Independent overview and per-protocol summary confirm 28/30 explicit dates. Missing dates remain missing; no zero or older window is substituted.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "lodestar-protocol",
+      "issue": "revenue_7d_history_lost",
+      "signature": "10d6eb5634a62d0dc1685a4c59cde48c155891886c58635f00a92cfbfe6ab79a",
+      "reason": "Independent overview and per-protocol summary confirm 1/7 explicit dates. Missing dates remain missing; no zero or older window is substituted.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "ophis",
+      "issue": "revenue_7d_lost",
+      "signature": "adec508743dfaf599aeaba357985d1bb72b81156d74d4b9cd31b41389ef520c8",
+      "reason": "Independent overview and per-protocol summary confirm 0/7 explicit dates. Missing dates remain missing; no zero or older window is substituted.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "parent#fomo",
+      "issue": "revenue_1d_history_lost",
+      "signature": "20b725ab03b8091954b1b61b59bc27e4f249a83808e198f531294e8e9c5038df",
+      "reason": "Independent overview confirms missing selected-component dates. Broader parent summaries include an additional component and fail exact-scope comparison. Original amounts stay visible; incomplete ratios remain withheld.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "parent#fomo",
+      "issue": "revenue_7d_history_lost",
+      "signature": "bb136d183a532c497aff2be5f88f28cb16c6c62c48e98f046348cd77f39c8862",
+      "reason": "Independent overview confirms missing selected-component dates. Broader parent summaries include an additional component and fail exact-scope comparison. Original amounts stay visible; incomplete ratios remain withheld.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "parent#fomo",
+      "issue": "revenue_30d_history_lost",
+      "signature": "51fb2713815c9e9257bcb5a6d41f49d57a2c280bbd82650be6bab0d848fc082c",
+      "reason": "Independent overview confirms missing selected-component dates. Broader parent summaries include an additional component and fail exact-scope comparison. Original amounts stay visible; incomplete ratios remain withheld.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "parent#fomo",
+      "issue": "revenue_90d_lost",
+      "signature": "560fb1f50a7c00d4db8da52cfb73fb61931d8e3fa7be10141adc5ff041625c50",
+      "reason": "Independent overview confirms missing selected-component dates. Broader parent summaries include an additional component and fail exact-scope comparison. Original amounts stay visible; incomplete ratios remain withheld.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "parent#fomo",
+      "issue": "revenue_90d_history_lost",
+      "signature": "268b3c40b757060c4df002649f5a2c4d8638f91ddf019bab4cbfba8895452342",
+      "reason": "Independent overview confirms missing selected-component dates. Broader parent summaries include an additional component and fail exact-scope comparison. Original amounts stay visible; incomplete ratios remain withheld.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "parent#fomo",
+      "issue": "revenue_365d_history_lost",
+      "signature": "aac85ab3cee5b31f8e8bb563efeed8a61df091bdb93a8cb391e7bddcd998f168",
+      "reason": "Independent overview confirms missing selected-component dates. Broader parent summaries include an additional component and fail exact-scope comparison. Original amounts stay visible; incomplete ratios remain withheld.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "parent#polymarket",
+      "issue": "revenue_7d_history_lost",
+      "signature": "9e0a66dafaf5576cedb020af26e8eb2ea5238998c0a1b81d7f1a986ec45e9957",
+      "reason": "Independent overview confirms missing selected-component dates. Broader parent summaries include an additional component and fail exact-scope comparison. Original amounts stay visible; incomplete ratios remain withheld.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "parent#polymarket",
+      "issue": "revenue_30d_history_lost",
+      "signature": "1afd3affd50200cd1b67081223ed3a5cca0c47535561e3d40977ab72d29dda96",
+      "reason": "Independent overview confirms missing selected-component dates. Broader parent summaries include an additional component and fail exact-scope comparison. Original amounts stay visible; incomplete ratios remain withheld.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "parent#polymarket",
+      "issue": "revenue_90d_lost",
+      "signature": "4b6f83e3c5cb3501b6ded63857d92b0aef77fe78a6d42abe43cd58eba0531364",
+      "reason": "Independent overview confirms missing selected-component dates. Broader parent summaries include an additional component and fail exact-scope comparison. Original amounts stay visible; incomplete ratios remain withheld.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "parent#polymarket",
+      "issue": "revenue_90d_history_lost",
+      "signature": "aad87288b0468fcc533f4302738cb1b4228ab8afa9429db039fbd7cdf360948b",
+      "reason": "Independent overview confirms missing selected-component dates. Broader parent summaries include an additional component and fail exact-scope comparison. Original amounts stay visible; incomplete ratios remain withheld.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "parent#polymarket",
+      "issue": "revenue_365d_history_lost",
+      "signature": "70aaed542f8f4242ef3a2df61743e0a0a6d8453c1ccf4c5567009b01ce69fdf3",
+      "reason": "Independent overview confirms missing selected-component dates. Broader parent summaries include an additional component and fail exact-scope comparison. Original amounts stay visible; incomplete ratios remain withheld.",
+      "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    }
+  ]
+}
