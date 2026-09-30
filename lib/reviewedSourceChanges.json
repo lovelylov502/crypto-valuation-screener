@@ -1,8 +1,8 @@
 {
   "baselineHash": "8d5d93e7a63a98036dd7707bdbf71cab2d395edc9868fbb01ce9441c6b0692df",
   "collectionDate": "2026-09-30",
-  "reviewedAt": "2026-09-30T10:37:00.089Z",
-  "evidenceHash": "29c9e4f34ae35baa39b3cc01fe6d3d8da5cf7ef2db7d5571bfd627cec0d58207",
+  "reviewedAt": "2026-09-30T11:07:25.179Z",
+  "evidenceHash": "ff7a0999ddd86f6303b2bb0d8eafab79b590c5c1913c4d6283ea815323d499fc",
   "entries": [
     {
       "slug": "parent#balancer",
@@ -136,6 +136,34 @@
       "signature": "70aaed542f8f4242ef3a2df61743e0a0a6d8453c1ccf4c5567009b01ce69fdf3",
       "reason": "Independent overview confirms missing selected-component dates. Broader parent summaries include an additional component and fail exact-scope comparison. Original amounts stay visible; incomplete ratios remain withheld.",
       "source": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false"
+    },
+    {
+      "slug": "flynet",
+      "issue": "revenue_1d_lost",
+      "signature": "6d13d786086860207ad5186c3328b34f1f73f8c0e72567702fb1bf6af90a759b",
+      "reason": "The live overview and independent individual summary now omit this previously supplied zero total. Identity and definition are unchanged. No zero or historical amount is substituted for missing current data.",
+      "source": "https://api.llama.fi/summary/fees/flynet?dataType=dailyRevenue"
+    },
+    {
+      "slug": "flynet",
+      "issue": "revenue_7d_lost",
+      "signature": "f583597407a0efff66655eed80a7eb943c8cc362a8e895d58f07192f3d6e7f38",
+      "reason": "The live overview and independent individual summary now omit this previously supplied zero total. Identity and definition are unchanged. No zero or historical amount is substituted for missing current data.",
+      "source": "https://api.llama.fi/summary/fees/flynet?dataType=dailyRevenue"
+    },
+    {
+      "slug": "flynet",
+      "issue": "revenue_30d_lost",
+      "signature": "ddd38655e8d00ce33f97b736372379b4656d4c9d8d3f63207d80f6d218ff45e7",
+      "reason": "The live overview and independent individual summary now omit this previously supplied zero total. Identity and definition are unchanged. No zero or historical amount is substituted for missing current data.",
+      "source": "https://api.llama.fi/summary/fees/flynet?dataType=dailyRevenue"
+    },
+    {
+      "slug": "flynet",
+      "issue": "revenue_365d_lost",
+      "signature": "3359be1c4d51b0afa3f541139f309ea966e8805af91fb9c40969a3a7436bc017",
+      "reason": "The live overview and independent individual summary now omit this previously supplied zero total. Identity and definition are unchanged. No zero or historical amount is substituted for missing current data.",
+      "source": "https://api.llama.fi/summary/fees/flynet?dataType=dailyRevenue"
     }
   ]
 }

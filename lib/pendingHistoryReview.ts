@@ -8,28 +8,30 @@ import { readHistorySummary } from "./historyRequest";
 /** UTC rollover can precede a provider's daily report. Independently confirm the
  * exact missing latest date; never invent zero or approve older/multiple gaps. */
 export async function reviewPendingHistory(data: ScreenerResponse, baseline: ScreenerResponse, witness: unknown[]) {
-  const rows = (witness[3] as { protocols?: Record<string, any>[] })?.protocols ?? [];
   const end = Math.floor(Date.parse(data.updatedAt) / 86400000) * 86400 - 86400;
   const endDate = new Date(end * 1000).toISOString().slice(0, 10);
-  const candidates = new Map<string, { issue: string; days: number }[]>();
+  const candidates = new Map<string, { slug: string; metric: string; changes: { issue: string; days: number }[] }>();
   for (const change of collectionRegressions(collectionState(baseline), collectionState(data))) {
-    const match = change.issue.match(/^revenue_(1|7|30|90|365)d_(?:history_lost|lost)$/);
+    const match = change.issue.match(/^(revenue|holder)_(1|7|30|90|365)d_(?:history_lost|lost)$/);
     if (!match) continue;
-    const days = Number(match[1]);
-    const p = data.coins.find(c => c.slug === change.slug)?.revenueHistory?.periods[days as 1 | 7 | 30 | 90 | 365];
-    if (p?.end === endDate && p.total === null && p.reportedDays === days - 1)
-      candidates.set(change.slug, [...(candidates.get(change.slug) ?? []), { issue: change.issue, days }]);
+    const metric = match[1], days = Number(match[2]), coin = data.coins.find(c => c.slug === change.slug);
+    const p = (metric === "holder" ? coin?.holderHistory : coin?.revenueHistory)?.periods[days as 1 | 7 | 30 | 90 | 365];
+    if (p?.end === endDate && p.total === null && p.reportedDays === days - 1) {
+      const key = `${metric}:${change.slug}`;
+      candidates.set(key, { slug: change.slug, metric, changes: [...(candidates.get(key)?.changes ?? []), { issue: change.issue, days }] });
+    }
   }
   const keys = new Set<string>(), proofs: Record<string, unknown>[] = [];
-  const tasks = [...candidates], deadline = Date.now() + 60_000;
+  const tasks = [...candidates.values()], deadline = Date.now() + 60_000;
   let index = 0;
   await Promise.all(Array.from({ length: Math.min(4, tasks.length) }, async () => {
     while (index < tasks.length) {
-      const [slug, changes] = tasks[index++], coin = data.coins.find(c => c.slug === slug)!;
+      const { slug, metric, changes } = tasks[index++], coin = data.coins.find(c => c.slug === slug)!;
+      const rows = (witness[metric === "holder" ? 4 : 3] as { protocols?: Record<string, any>[] })?.protocols ?? [];
       const members = rows.filter(p => coin.sourceSlugs?.includes(p.slug) && p.doublecounted !== true);
       if (!members.length) continue;
       const sourceSlug = coin.isParent ? members.find(p => p.linkedProtocols?.length)?.linkedProtocols[0]?.toLowerCase().replace(/\s+/g, "-") ?? slug.replace(/^parent#/, "") : slug;
-      const url = `https://api.llama.fi/summary/fees/${encodeURIComponent(sourceSlug)}?dataType=dailyRevenue`;
+      const url = `https://api.llama.fi/summary/fees/${encodeURIComponent(sourceSlug)}?dataType=${metric === "holder" ? "dailyHoldersRevenue" : "dailyRevenue"}`;
       try {
         const summary = await readHistorySummary(url, Date.now(), deadline, data.sources);
         if (!summary) continue;

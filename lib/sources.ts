@@ -3,6 +3,7 @@ import type { CoinRaw, IdentityStatus, QuoteLookup, SourceObservation, ScreenerR
 import { fetchRevenueHistory } from "./revenueSource";
 import { REVENUE_OVERVIEW_URL } from "./revenueReading";
 import { geckoRequests, GECKO_BUDGET_MS, GECKO_INTERVAL_MS } from "./geckoRequests";
+import { recoverOverviewRows } from "./overviewRecovery";
 import { fetchHolderHistory } from "./holderHistorySource";
 import { resolveSalesEvidence } from "./salesSource";
 import { koreanDescription } from "./protocolDescriptions";
@@ -361,6 +362,11 @@ export async function fetchCoins(observations: SourceObservation[] = [], baselin
 
   if (!Array.isArray(stablecoins.peggedAssets) || stablecoins.peggedAssets.length === 0) throw new Error("Stablecoin identity registry unavailable");
   if (!Array.isArray(protocols) || !protocols.length || !Array.isArray(config.parentProtocols)) throw new Error("DefiLlama directory unavailable");
+  const [, recoveredRevenue] = await Promise.all([
+    recoverOverviewRows(protocols, feesL, baseline, "dailyFees", observations),
+    recoverOverviewRows(protocols, revL, baseline, "dailyRevenue", observations),
+    recoverOverviewRows(protocols, hrL, baseline, "dailyHoldersRevenue", observations),
+  ]);
   const parents = new Map(config.parentProtocols.flatMap(p => typeof p.id === "string" ? [[p.id, p] as const] : []));
   const identityRows = [...protocols, ...feesL, ...revL, ...hrL, ...dexsL, ...config.parentProtocols];
   const [gecko, cmcLookups, [revenueHistories, holderHistories]] = await Promise.all([
@@ -525,7 +531,7 @@ export async function fetchCoins(observations: SourceObservation[] = [], baselin
       descriptionSource: `https://defillama.com/protocol/${encodeURIComponent(String(rep.slug))}`,
       website: str(parent?.url) ?? str(rep.url),
       revenueHistory: history,
-      revenueSource: { url: REVENUE_OVERVIEW_URL, observedAt: observations.find(s => s.url === REVENUE_OVERVIEW_URL && s.status === "ok")!.observedAt, periods: sourceRevAgg.get(k) },
+      revenueSource: { url: recoveredRevenue.get(k) ?? REVENUE_OVERVIEW_URL, observedAt: observations.find(s => s.url === (recoveredRevenue.get(k) ?? REVENUE_OVERVIEW_URL) && s.status === "ok")!.observedAt, periods: sourceRevAgg.get(k) },
       holderHistory: holderHistories[k] ?? null,
       sales: resolveSalesEvidence({ slug: k, geckoId, symbol, identityStatus }, new Date().toISOString()),
 

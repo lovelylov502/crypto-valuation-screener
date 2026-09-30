@@ -10,14 +10,14 @@ afterEach(() => vi.unstubAllGlobals());
 const at = "2026-09-30T10:00:00Z", day = Date.parse("2026-09-29") / 1000;
 const member = { slug: "sample", name: "Sample", defillamaId: "123", methodology: { Revenue: "Protocol receipts" } };
 const witness = [null,null,null,{protocols:[member]}];
-function data(time: string, missing = false) {
+function data(time: string, missing = false, holder = false) {
   const end = Math.floor(Date.parse(time) / 86400000) * 86400 - 86400;
   const period = (days:number) => ({days,start:new Date((end-(days-1)*86400)*1000).toISOString().slice(0,10),end:new Date(end*1000).toISOString().slice(0,10),reportedDays:days-(missing?1:0),total:missing?null:days});
   const history: RevenueHistory = { definitionFingerprint:fixtureFundamentals.revenue.fingerprint,source:"source",observedAt:time,
     periods:Object.fromEntries([1,7,30,90,365].map(d=>[d,period(d)])) as Record<RevenueWindowDays, ReturnType<typeof period>>,
     previous30:period(30),weeks:[] };
   const paths=["/protocols","/config","/overview/fees","/overview/fees?dataType=dailyRevenue","/overview/fees?dataType=dailyHoldersRevenue","/overview/dexs"];
-  return assembleScreener([sample({name:"Sample",sourceSlugs:["sample"],revenueHistory:history})],time,paths.map(p=>({url:"https://api.llama.fi"+p,status:"ok",observedAt:time})));
+  return assembleScreener([sample({name:"Sample",sourceSlugs:["sample"],revenueHistory:history,...(holder?{holderHistory:history}:{})})],time,paths.map(p=>({url:"https://api.llama.fi"+p,status:"ok",observedAt:time})));
 }
 it.each(["latest", "older", "multiple", "wrong-scope", "empty", "failure"])("independently distinguishes the latest pending day from invalid loss evidence (%s)", async scenario => {
   const before=data("2026-09-29T10:00:00Z"), after=data(at,true);
@@ -48,6 +48,22 @@ it("reviews the latest completed UTC day again after a month rollover",async()=>
   expect(review.keys.has("sample:revenue_30d_history_lost")).toBe(true);
   expect(review.proofs[0].missingDate).toBe("2026-09-30");
   expect(after.coins[0].revenueHistory!.periods[30].total).toBeNull();
+});
+it.each(["latest","older","wrong-scope","failure"])("requires separate holder-return source evidence (%s)",async scenario=>{
+  const before=data("2026-09-29T10:00:00Z",false,true),after=data(at,true,true);
+  const fetchMock=vi.fn(async(input:string)=>{
+    const holder=input.includes("dailyHoldersRevenue");
+    if(holder && scenario==="failure") return new Response("",{status:503});
+    const points=Array.from({length:365},(_,i)=>[day-(i+1)*86400,1]);
+    if(holder && scenario==="older") {points.splice(1,1);points.push([day,1]);}
+    return new Response(JSON.stringify({...member,defillamaId:holder && scenario==="wrong-scope"?"other":member.defillamaId,totalDataChart:points}));
+  });
+  vi.stubGlobal("fetch",fetchMock);
+  const review=await reviewPendingHistory(after,before,[...witness,{protocols:[member]}]);
+  expect(fetchMock.mock.calls.some(([url])=>url.endsWith("dataType=dailyHoldersRevenue"))).toBe(true);
+  expect(review.keys.has("sample:holder_30d_history_lost")).toBe(scenario==="latest");
+  expect(after.coins[0].multiples.phr).toBeNull();
+  if(scenario==="failure") expect(assessCandidate(after,before,at,at,review.keys).errors).toContain("source_request_failed:503");
 });
 it("binds an explicit reviewed change to its baseline, UTC date, scope and missing-day count",()=>{
   const before=data("2026-09-29T10:00:00Z"), after=data(at,true), change={slug:"sample",issue:"revenue_30d_history_lost"};
