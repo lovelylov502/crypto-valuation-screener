@@ -44,6 +44,6 @@ Flynet은 전체 목록과 개별 summary에서 기존의 1·7·30·365일 0 집
 - 최신 전체 감사의 모드는 `current-publication-and-live-sources`, `currentCollectionPassed=true`다. 공개된 7,152개 행을 해시가 확인된 원본과 대조했고, 현재 원천 구성원 9,465개가 모두 포함됐음을 확인했다. 빈 값 또는 0인 시세 항목에 해당하는 제공처별 자산 ID 2,445건을 독립 조회했다. 감사의 원천 요청 실패·오류는 모두 0건이다.
 - 운영 화면에서 20:18 KST의 검증본 표시, FWA의 가격·시총·FDV·P/R·P/HR, AERO 검색과 배수, 브라우저 오류 0건을 확인했다. Canton의 원천 30일 금액 `$48,857,312`와 실제 summary 링크도 공개 API에서 확인했으며 수수료 소각의 경제적 분류와 배수 보류는 유지한다. ‘검토 필요’는 집계 범위·금액이 맞지 않는 이력 보완 17건을 가리키며 전체 공개를 차단하는 ‘공개 보류’와 구분한다.
 
-외부 원천의 실제 실패나 새 미검토 손실은 계속 공개를 차단하고 마지막 검증본과 정확한 날짜를 유지한다. 모든 외부 장애가 없어졌다고 주장하지 않는다. 이번에 확인한 긴 시세 요청, 날짜 전환의 미보고, 목록에서 빠졌지만 개별 원천에 남은 자료는 각각 검증을 거쳐 처리한다.
+외부 원천의 실제 실패나 새 미검토 손실이 발생하면 공개를 차단하고 마지막 검증본과 정확한 날짜를 유지한다. 이번에 확인한 긴 시세 요청, 날짜 전환의 미보고, 목록에서 빠졌지만 개별 원천에 남은 자료는 각각 검증을 거쳐 처리한다.
 
-원본 증거, 전체 운영 감사, 배포·공개 영수증과 화면은 Git 밖의 `C:/Users/TAE/Documents/Codex/2026-09-30/tovenit-current-diagnosis/`에 보관한다. [현재 서비스](https://crypto-valuation-screener.vercel.app/)와 [최신 공개 검증 보고서](https://github.com/lovelylov502/crypto-valuation-screener/releases/download/data-36707249786-1-complete/report.json)에서도 결과를 확인할 수 있다.
+원본 증거, 전체 운영 감사, 배포·공개 확인 기록과 화면은 Git 밖의 `C:/Users/TAE/Documents/Codex/2026-09-30/tovenit-current-diagnosis/`에 보관한다. [현재 서비스](https://crypto-valuation-screener.vercel.app/)와 [최신 공개 검증 보고서](https://github.com/lovelylov502/crypto-valuation-screener/releases/download/data-36707249786-1-complete/report.json)에서도 결과를 확인할 수 있다.
