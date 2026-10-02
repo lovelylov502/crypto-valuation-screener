@@ -30,7 +30,7 @@ async function read(url: string): Promise<any> {
     }
     const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(300_000) });
     if ((response.status === 429 || response.status >= 500) && attempt < 2) {
-      await new Promise(r => setTimeout(r, response.status === 429 && gecko ? 60_000 : 1500 * 2 ** attempt));
+      await new Promise(r => setTimeout(r, response.status === 429 ? 60_000 : 1500 * 2 ** attempt));
       continue;
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);

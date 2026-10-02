@@ -1,6 +1,6 @@
 # 2026-10-02 공개 보류 재발 분석과 수정
 
-상태: 로컬 재현·수정 검증 완료. 실제 GitHub 수집과 운영 배포를 검증 중이다.
+상태: 정식 배포, 연속 두 번의 실제 수집·공개, 전체 운영 감사와 브라우저 검증 완료.
 
 ## 이전 수정이 재발을 막지 못한 이유
 
@@ -25,6 +25,7 @@
 - 검증 근거와 원본 응답을 매번 보관한다. 날짜가 제한된 예외를 추가하거나 기준본을 초기화하지 않는다. 원천 요청 실패, 원천에 있는 값의 누락, 검증되지 않은 변화는 전체 공개를 계속 차단한다.
 - 수집 프로세스가 비동기 작업을 기다리는 동안 유지되는 10분 제한과 단계 기록을 추가했다. 비교 완료가 확인되지 않으면 공개할 수 없고, 화면에는 변화 수를 미확인으로 표시한다.
 - FWA 배수를 항상 양수로 요구하던 운영 검사를 수정했다. 실제 보고 일수가 부족하면 배수가 비어 있어야 하고, 기간이 완전하면 계산식을 검증한다. 원천 금액과 시세의 누락 검사는 유지한다.
+- 독립 운영 감사에서 CMC가 일시적으로 HTTP 429를 반환했다. 같은 단일·대량 요청의 200 회복을 확인했고, 감사 도구가 CMC에도 60초를 기다린 뒤 최대 두 번 재시도하도록 수정했다. 검사 기준은 유지한다.
 
 ## 로컬 검증
 
@@ -36,4 +37,14 @@
 
 ## 운영 확인
 
-진행 중. 실제 공개·배포·후속 수집·전체 감사 결과를 확인한 뒤 기록한다.
+- 앱·수집기 배포 커밋: `879f70bb483278e80bf758a301e453e20451d8c9`.
+- `npm run deploy:production` 통과. 정식 경로·저장소·Vercel 연결·동기화된 clean `main` 확인, 테스트 328개, 배포 계약 검사 6개, 타입 검사와 빌드가 통과했다.
+- Vercel: `dpl_6n49Xaq2dWa7cU7Q9UYSF7uge4U2`, 상태 `READY`. [고유 배포 주소](https://crypto-valuation-screener-raxoml62p-bodycation.vercel.app), [운영 주소](https://crypto-valuation-screener.vercel.app).
+- [첫 수집 36956117004](https://github.com/lovelylov502/crypto-valuation-screener/actions/runs/36956117004): 11:37 KST 공개. 9월 30일 검증본을 기준으로 42개 프로젝트의 변화 119건을 검증했으며, 미검토 변화·공개 오류·원천 조회 실패는 0건이었다. [영구 검사 보고서](https://github.com/lovelylov502/crypto-valuation-screener/releases/download/data-36956117004-1-complete/report.json).
+- [후속 수집 36956512075](https://github.com/lovelylov502/crypto-valuation-screener/actions/runs/36956512075): 첫 수집본을 기준으로 11:42 KST 공개. 자료 수집 시각은 `2026-10-02T02:41:58.497Z`이다. 비교 완료, 새 보류 대상 변화 0건, 공개 오류·원천 조회 실패 0건을 확인했다. [영구 검사 보고서](https://github.com/lovelylov502/crypto-valuation-screener/releases/download/data-36956512075-1-complete/report.json).
+- 두 공개본 모두 7,178개 프로젝트·원천 구성원 9,511개, CoinGecko 2,772개와 CMC 2,154개 조회, 30일 원천 수익 1,603개 전부 표시를 확인했다.
+- 브라우저에서 공개 보류 배너 해제, 10월 2일 11:41 KST 자료, AERO 검색·CMC 링크·24시간 배수, FWA의 완전한 30일 배수와 불완전한 90일 계산 보류를 확인했다. 임시로 표시한 두 열과 검색은 원래대로 복원했다. 브라우저 오류·경고와 문서 가로 넘침은 없었다.
+- 화면의 `검토 필요 18건`은 원천의 집계 범위·금액 불일치 때문에 개별 이력 보완을 보류한 기록이다. 해당 자료의 보류는 유지하며 전체 신규 수집본은 정상 공개한다.
+- 최종 `npm run verify:production`은 11:51 KST에 통과했다. `current-publication-and-live-sources`, `currentCollectionPassed=true` 상태에서 7,178개 행의 보관본 일치, 원천 구성원 9,511개 전부 포함, 독립 시세 재조회 2,449건을 확인했고 오류는 0건이었다. 결과는 위 보관 폴더의 `final-live-audit-retry/coverage-audit.json`에 있다. 첫 감사의 429 실패 기록도 보존했다.
+- 배포 직후의 `protected-last-verified` 검사는 이전 검증본 보존만 확인한 결과이며, 위의 신규 자료·현재 원천 대조 통과와 구분한다.
+- 기존 미커밋 연구 문서 두 개는 정식 배포 중 임시 보관했다가 복원했고, 원본 SHA-256 일치를 확인했다. 해당 문서는 이번 커밋에 포함하지 않았다.
