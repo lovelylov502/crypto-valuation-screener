@@ -1,11 +1,28 @@
 import type { ScreenerResponse } from "./types";
 import { RULE_VERSION } from "./fundamentals";
-import type { PublicationJournal } from "./publicationTypes";
+import type { CollectionAttempt, PublicationJournal } from "./publicationTypes";
 import { COLLECTION_DEADLINE_MS } from "./publication";
 
 export const COLLECTION_STALE_MS = 45 * 60_000;
 type HealthData = Pick<ScreenerResponse, "updatedAt" | "scoreVersion" | "sources" | "collection" | "publication">;
 export type CollectionHealthState = "healthy" | "error" | "warning" | "stale" | "checking" | "unknown";
+
+export function comparisonCompleted(attempt: CollectionAttempt): boolean {
+  return attempt.comparisonCompleted ?? (attempt.outcome === "published" || attempt.errors.some(e => e.startsWith("unreviewed_losses:")));
+}
+
+export function comparisonSummary(attempt: CollectionAttempt): string {
+  if (attempt.outcome === "running") return "이번 수집의 영향 범위를 검사하고 있습니다.";
+  if (!comparisonCompleted(attempt)) return "수집·검사가 완료되지 않아 변화한 종목과 항목 수를 확인하지 못했습니다.";
+  return `직전 검증본 대비 변화: ${attempt.affectedProjects.toLocaleString()}개 종목 · ${attempt.changeCount.toLocaleString()}개 항목`;
+}
+
+export function publicationFailure(attempt: CollectionAttempt): string {
+  if (!comparisonCompleted(attempt)) return "수집·검사 미완료";
+  if (attempt.sourceFailures.length) return "원천 조회 실패";
+  if (attempt.errors.some(e => e.startsWith("unreviewed_losses:"))) return "원천 변경 검증 미통과";
+  return "공개 검사 미통과";
+}
 
 export function sourceProvider(url: string): string {
   try {
@@ -38,7 +55,7 @@ export function collectionHealth(data: HealthData | null, now: number, requestEr
   if (p?.attempt.outcome === "running" && now - Date.parse(p.attempt.startedAt) > COLLECTION_DEADLINE_MS) return result("error", "수집 중단", "수집 작업이 15분 안에 완료되지 않았습니다. 마지막 검증본을 유지합니다.");
   if (p?.attempt.outcome === "running" && p.incident) return result("error", "공개 보류", "이전 수집 실패로 마지막 검증본을 유지하며 새 수집 결과를 확인하고 있습니다. 이번 영향 범위는 검사가 끝난 뒤 표시합니다.");
   if (p?.attempt.outcome === "blocked" || p?.incident) return result("error", "공개 보류", p?.published
-    ? `새 수집본이 검사를 통과하지 못해 공개를 차단했습니다. ${p.attempt.affectedProjects.toLocaleString()}개 종목의 값·이력 변화를 확인했으며 마지막 검증본을 유지합니다.`
+    ? `${publicationFailure(p.attempt)}로 마지막 검증본을 유지합니다. ${comparisonSummary(p.attempt)}`
     : "수집본이 검사를 통과하지 못했습니다. 공개할 검증본이 아직 없습니다.");
   if (p && !p.published) return result("checking", "자료 준비 중", "첫 검증본을 준비하고 있습니다. 검사를 통과하기 전에는 금액을 공개하지 않습니다.");
   if (failures.length || quoteFailures) return result("error", "수집 오류",

@@ -10,6 +10,8 @@ import { checkArchiveUrl, readSnapshot, sha256 } from "../lib/snapshotArchive";
 import { collectWitness, witnessErrors } from "../lib/sourceWitness";
 import { reviewedSourceChanges } from "../lib/reviewedSourceChanges";
 import { reviewPendingHistory } from "../lib/pendingHistoryReview";
+import { reviewUpstreamChanges } from "../lib/upstreamChangeReview";
+import { withDeadline } from "../lib/withDeadline";
 import { latestJournal, publishJournal } from "./github-journal";
 
 const output = resolve("snapshot-output/publication");
@@ -25,7 +27,7 @@ async function start() {
   if (previous && process.env.SCREENER_BOOTSTRAP_URL) throw new Error("Bootstrap cannot replace an existing publication");
   const attempt: CollectionAttempt = { id: runId, startedAt: new Date().toISOString(), completedAt: null, outcome: "running",
     runUrl: `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
-    reportUrl: `${JOURNAL_DOWNLOAD}${runId}-complete/report.json`, errors: [], sourceFailures: [], affectedProjects: 0, changeCount: 0, affected: [] };
+    reportUrl: `${JOURNAL_DOWNLOAD}${runId}-complete/report.json`, errors: [], sourceFailures: [], comparisonCompleted: false, affectedProjects: 0, changeCount: 0, affected: [] };
   const journal = startJournal(previous, attempt, `${runId}-start`);
   await publishJournal(journal, {});
   await save("start.json", json(journal));
@@ -37,7 +39,10 @@ async function collect() {
   let data: ScreenerResponse | undefined, witness: unknown[] = [], assessment: ReturnType<typeof assessCandidate> | undefined;
   const errors: string[] = [];
   let bootstrapReceipt: unknown;
+  let stage = "baseline";
+  const progress = (next: string) => { stage = next; console.log(JSON.stringify({ stage, at: new Date().toISOString(), sourceRequests: sources.length })); };
   try {
+    await withDeadline(async () => {
     if (process.env.SCREENER_BOOTSTRAP_URL) {
       checkArchiveUrl(process.env.SCREENER_BOOTSTRAP_URL);
       const response = await fetch(process.env.SCREENER_BOOTSTRAP_URL, { signal: AbortSignal.timeout(60_000) });
@@ -52,22 +57,32 @@ async function collect() {
     } else {
       if (!current.published) throw new Error("Missing verified baseline; bootstrap must be reviewed");
       const baseline = await readSnapshot(current.published);
+      progress("sources");
       const raw = await fetchCoins(sources, baseline);
+      progress("snapshot");
       await save("inputs.json.gz", gzipSync(json(raw)));
       data = assembleScreener(raw, new Date().toISOString(), sources);
+      progress("witness");
       witness = await collectWitness();
+      progress("source-change-review");
       const pendingReview = await reviewPendingHistory(data, baseline, witness);
       if (pendingReview.proofs.length) await save("pending-history-review.json.gz", gzipSync(json(pendingReview.proofs)));
       const reviews = reviewedSourceChanges(data, baseline);
       if (reviews.length) await save("source-change-review.json", json(reviews));
-      assessment = assessCandidate(data, baseline, current.attempt.startedAt, new Date().toISOString(), new Set([...pendingReview.keys, ...reviews.map(r => `${r.slug}:${r.issue}`)]));
+      const reviewed = new Set([...pendingReview.keys, ...reviews.map(r => `${r.slug}:${r.issue}`)]);
+      const upstream = await reviewUpstreamChanges(data, baseline, witness, reviewed);
+      if (upstream.proofs.length || Object.keys(upstream.evidence).length) await save("upstream-change-review.json.gz", gzipSync(json({ proofs: upstream.proofs, evidence: upstream.evidence })));
+      progress("assessment");
+      assessment = assessCandidate(data, baseline, current.attempt.startedAt, new Date().toISOString(), new Set([...reviewed, ...upstream.keys]));
       errors.push(...assessment.errors);
     }
     errors.push(...witnessErrors(data!, witness));
+    }, 10 * 60_000);
   } catch (error) { errors.push(error instanceof Error ? error.message : "Collector failed"); }
   if (data) await save("data.json.gz", gzipSync(json(data)));
   if (witness.length) await save("witness.json.gz", gzipSync(json(witness)));
-  const report = { schema: 1, codeCommit: process.env.GITHUB_SHA, startedAt: current.attempt.startedAt, completedAt: new Date().toISOString(),
+  const report = { schema: 1, codeCommit: process.env.GITHUB_SHA, startedAt: current.attempt.startedAt, completedAt: new Date().toISOString(), stage,
+    comparisonCompleted: !!assessment || !!bootstrapReceipt,
     baseline: current.published, dataAt: data?.updatedAt ?? null, sources: data?.sources ?? sources, collection: data?.collection,
     errors: [...new Set(errors)], changes: assessment?.changes ?? [], reviewedChanges: assessment?.reviewedChanges ?? [], unreviewedChanges: assessment?.unreviewedChanges ?? [], affected: assessment?.affected ?? [], bootstrapReceipt,
     artifacts: await Promise.all((await readdir(output)).filter(n => n.endsWith(".gz")).map(async name => { const bytes = await readFile(join(output, name)); return { name, bytes: bytes.length, sha256: sha256(bytes) }; })) };
@@ -81,14 +96,15 @@ async function finish() {
   if (latest?.id !== current.id) throw new Error("A newer job owns publication; refusing to finish");
   let report;
   try { report = await load("report.json"); }
-  catch { report = { baseline: current.published, completedAt: new Date().toISOString(), errors: ["collector_did_not_complete"], sources: [], affected: [], changes: [] }; await save("report.json", json(report)); }
+  catch { report = { baseline: current.published, completedAt: new Date().toISOString(), comparisonCompleted: false, errors: ["collector_did_not_complete"], sources: [], affected: [], changes: [] }; await save("report.json", json(report)); }
   const files: Record<string, Uint8Array> = {};
   for (const name of await readdir(output)) if (name !== "start.json") files[name] = await readFile(join(output, name));
   const errors = [...report.errors];
   if (!files["data.json.gz"] || !files["witness.json.gz"]) errors.push("candidate_artifacts_missing");
+  if (!report.comparisonCompleted) errors.push("comparison_not_completed");
   const accepted = errors.length === 0;
   const attempt: CollectionAttempt = { ...current.attempt, completedAt: report.completedAt, outcome: accepted ? "published" : "blocked",
-    errors, sourceFailures: report.sources.filter((s: SourceObservation) => s.status === "error"), collection: report.collection,
+    errors, sourceFailures: report.sources.filter((s: SourceObservation) => s.status === "error"), collection: report.collection, comparisonCompleted: report.comparisonCompleted === true,
     affectedProjects: report.affected.length, changeCount: report.changes.length,
     affected: report.affected.slice(0, 20).map(({slug,name,issues}: {slug:string;name:string;issues:string[]}) => ({slug,name,issues})) };
   const id = `${runId}-complete`;

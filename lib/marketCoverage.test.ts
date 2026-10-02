@@ -3,8 +3,30 @@ import { fetchCoins, fetchGecko, fetchCmc } from "./sources";
 import { collectionErrors } from "./collectionQuality";
 import type { SourceObservation } from "./types";
 import { GECKO_BUDGET_MS } from "./geckoRequests";
+import { sample } from "./testFixtures";
+import { assembleScreener } from "./screener";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); vi.useRealTimers(); });
+
+it.each(["absent", "partial"])("rechecks a previously identified CMC asset with a %s listings record using current direct quotes", async scenario => {
+  const asset = { id: 99999, slug: "token", name: "Token", symbol: "T", quote: [{ symbol: "USD", fully_diluted_market_cap: 400 }] };
+  const calls: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+    const url = String(input); calls.push(url);
+    const body = url.endsWith("/protocols") ? [{ slug: "token", name: "Token", symbol: "T" }]
+      : url.endsWith("/config") ? { parentProtocols: [] }
+      : url.includes("/quotes/latest") ? { data: [{ ...asset, quote: [{ symbol: "USD", market_cap: 250, price: 2.5, fully_diluted_market_cap: 500 }] }] }
+      : url.includes("coinmarketcap") ? { data: scenario === "partial" ? [asset] : [{ id: 1, slug: "other" }] }
+      : url.includes("stablecoins") ? { peggedAssets: [{ gecko_id: "usdd", symbol: "USDD" }] }
+      : { protocols: [{ slug: "token", name: "Token", total30d: 30 }], totalDataChartBreakdown: [] };
+    return new Response(JSON.stringify(body));
+  }));
+  const baseline = assembleScreener([sample({ slug: "token", name: "Token", symbol: "T", geckoId: null, cmcId: 99999, cmcSlug: "token", sourceSlugs: ["token"], price: 1, mcap: 100 })], "2026-09-30T10:00:00Z", []);
+  const [coin] = await fetchCoins([], baseline);
+  expect(calls.some(url => url.includes("/quotes/latest?id=99999"))).toBe(true);
+  expect(coin).toMatchObject({ cmcId: 99999, price: 2.5, mcap: 250, fdv: 500 });
+  expect(collectionErrors([coin])).toEqual([]);
+});
 
 it("respects a CMC rate-limit cooldown before retrying discovery", async () => {
   vi.useFakeTimers();

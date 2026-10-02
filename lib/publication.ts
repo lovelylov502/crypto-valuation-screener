@@ -63,7 +63,7 @@ export function finishJournal(current: PublicationJournal, attempt: CollectionAt
   if (current.attempt.id !== attempt.id || current.attempt.outcome !== "running") throw new Error("Superseded or already completed collection");
   if (!attempt.completedAt || Date.parse(attempt.completedAt) < Date.parse(attempt.startedAt)) throw new Error("Invalid completion time");
   const accepted = attempt.outcome === "published";
-  if (accepted && (!published || attempt.errors.length || (current.published && Date.parse(published.dataAt) <= Date.parse(current.published.dataAt)))) throw new Error("Unverified or older publication");
+  if (accepted && (!published || attempt.comparisonCompleted === false || attempt.errors.length || (current.published && Date.parse(published.dataAt) <= Date.parse(current.published.dataAt)))) throw new Error("Unverified or older publication");
   if (!accepted && published) throw new Error("Blocked attempt cannot replace snapshot");
   const failureAt = attempt.sourceFailures.map(s => s.observedAt).sort()[0] ?? attempt.completedAt;
   return { schema: 1, id, createdAt: attempt.completedAt, trackingStartedAt: current.trackingStartedAt, previousId: current.id, previousStateUrl: stateUrl(current.id),

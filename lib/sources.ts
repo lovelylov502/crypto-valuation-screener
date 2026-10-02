@@ -26,7 +26,7 @@ const CMC_SLUG_OVERRIDES: Record<string, string> = {
 
 type Json = Record<string, unknown>;
 
-async function getJson<T>(url: string, observations: SourceObservation[], options: { timeout?: number; beforeAttempt?: () => Promise<void>; deadline?: number } = {}): Promise<T> {
+export async function getJson<T>(url: string, observations: SourceObservation[], options: { timeout?: number; beforeAttempt?: () => Promise<void>; deadline?: number } = {}): Promise<T> {
   const { timeout = 30_000, beforeAttempt, deadline = Infinity } = options;
   let httpStatus: number | undefined;
   try {
@@ -199,16 +199,19 @@ export async function fetchCmc(observations: SourceObservation[]): Promise<CmcIn
   return index;
 }
 
-async function completeCmc(ids: number[], index: CmcIndex, observations: SourceObservation[]) {
+async function completeCmc(ids: number[], index: CmcIndex, observations: SourceObservation[], refreshIds: number[] = []) {
   const lookups = new Map<number, QuoteLookup>();
   for (const [id, row] of index.byId) lookups.set(id, quoteLookup(String(id), row, "cmc"));
-  await quoteBatches([...new Set(ids)].filter(id => !index.byId.has(id)).sort((a,b) => a-b), async batch => {
+  await quoteBatches([...new Set([...ids, ...refreshIds])].filter(id => !index.byId.has(id) || refreshIds.includes(id)).sort((a,b) => a-b), async batch => {
     const url = `${CMC}/v3/cryptocurrency/quotes/latest?id=${batch.join(",")}&convert=USD&skip_invalid=true`;
     try {
       const response = await getJson<{ data?: Json[] } | Json[]>(url, observations, { timeout: 10_000 });
       const rows = Array.isArray(response) ? response : response.data;
       if (!Array.isArray(rows)) throw new Error("CMC quote response is invalid");
-      indexCmcRows(index, rows.filter(row => batch.includes(Number(row.id))));
+      // A listings response may omit fields or an asset altogether. Direct ID
+      // responses replace that record; no amount is copied from the baseline.
+      for (const id of batch) index.byId.delete(id);
+      for (const row of rows) if (batch.includes(Number(row.id))) index.byId.set(Number(row.id), row);
       for (const id of batch) lookups.set(id, quoteLookup(String(id), index.byId.get(id), "cmc"));
     } catch {
       const observation = observations.find(s => s.url === url);
@@ -216,6 +219,9 @@ async function completeCmc(ids: number[], index: CmcIndex, observations: SourceO
       for (const id of batch) lookups.set(id, quoteLookup(String(id), undefined, "cmc", true));
     }
   });
+  const rows = [...index.byId.values()];
+  for (const map of Object.values(index)) map.clear();
+  indexCmcRows(index, rows);
   return lookups;
 }
 
@@ -369,9 +375,11 @@ export async function fetchCoins(observations: SourceObservation[] = [], baselin
   ]);
   const parents = new Map(config.parentProtocols.flatMap(p => typeof p.id === "string" ? [[p.id, p] as const] : []));
   const identityRows = [...protocols, ...feesL, ...revL, ...hrL, ...dexsL, ...config.parentProtocols];
+  const priorCmcIds = (baseline?.coins ?? []).flatMap(c => c.cmcId !== null && (!cmc.byId.has(c.cmcId) ||
+    ([['mcap', 'market_cap'], ['price', 'price'], ['fdv', 'fully_diluted_market_cap']] as const).some(([field, source]) => c[field] !== null && num(cmcQuote(cmc.byId.get(c.cmcId!))?.[source]) === null)) ? [c.cmcId] : []);
   const [gecko, cmcLookups, [revenueHistories, holderHistories]] = await Promise.all([
     fetchGecko(identityRows.flatMap(p => str(p.gecko_id) ? [String(p.gecko_id)] : []), observations),
-    completeCmc(identityRows.map(p => Number(p.cmcId)).filter(id => Number.isSafeInteger(id) && id > 0), cmc, observations),
+    completeCmc(identityRows.map(p => Number(p.cmcId)).filter(id => Number.isSafeInteger(id) && id > 0), cmc, observations, priorCmcIds),
     histories,
   ]);
 

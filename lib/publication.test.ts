@@ -5,7 +5,7 @@ import { sample } from "./testFixtures";
 import { sha256, decodeSnapshot } from "./snapshotArchive";
 import { assessCandidate, finishJournal, startJournal, snapshotErrors } from "./publication";
 import { collectionCoverage } from "./collectionQuality";
-import { collectionHealth } from "./collectionHealth";
+import { collectionHealth, comparisonSummary } from "./collectionHealth";
 import type { CollectionAttempt, PublishedSnapshot } from "./publicationTypes";
 const at="2026-09-29T10:00:00Z";
 const paths=["/protocols","/config","/overview/fees","/overview/fees?dataType=dailyRevenue","/overview/fees?dataType=dailyHoldersRevenue","/overview/dexs"];
@@ -68,7 +68,19 @@ it("rejects late writers, failed candidates supplied as published, and rollback"
   const a={...attempt("data-2"),startedAt:"2026-09-29T10:30:00Z"};const current=startJournal(good,a,"data-2-start");
   expect(()=>finishJournal(current,{...a,id:"data-other",completedAt:a.startedAt,outcome:"published"},ref(),"data-x")).toThrow();
   expect(()=>finishJournal(current,{...a,completedAt:a.startedAt,outcome:"published",errors:["403"]},ref(),"data-x")).toThrow();
+  expect(()=>finishJournal(current,{...a,completedAt:a.startedAt,outcome:"published",comparisonCompleted:false},ref(data(a.startedAt)),"data-x")).toThrow();
   expect(()=>finishJournal(current,{...a,completedAt:a.startedAt,outcome:"published"},ref(),"data-x")).toThrow();
+});
+it("does not report zero changes when collection or comparison never completed", () => {
+  const a = { ...attempt("data-2"), startedAt: "2026-10-02T01:05:29Z" };
+  const running = startJournal(baseline(), a, "data-2-start");
+  const blocked = finishJournal(running, { ...a, outcome: "blocked", completedAt: "2026-10-02T01:09:46Z", errors: ["collector_did_not_complete", "candidate_artifacts_missing"] }, null, "data-2-complete");
+  const health = collectionHealth({ ...data(), publication: blocked }, Date.parse(blocked.createdAt));
+  expect(health.summary).toContain("수집·검사 미완료");
+  expect(health.summary).not.toContain("0개");
+  expect(comparisonSummary(blocked.attempt)).toContain("확인하지 못했습니다");
+  expect(comparisonSummary({ ...blocked.attempt, comparisonCompleted: true })).toContain("0개 종목");
+  expect(comparisonSummary({ ...blocked.attempt, comparisonCompleted: false, collection: data().collection })).not.toContain("0개");
 });
 it("detects an interrupted durable start and never labels stale snapshots current",()=>{
   const a={...attempt("data-2"),startedAt:"2026-09-29T10:30:00Z"};const running=startJournal(baseline(),a,"data-2-start");

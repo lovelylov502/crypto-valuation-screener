@@ -10,6 +10,8 @@
 
 ## Current UI · v10 source revenue recovery
 
+- Publication now independently rechecks upstream identity withdrawals, source removals, missing quote fields and incomplete component histories on each run. Verified source absences remain unavailable; collector omissions still block publication. Incomplete runs display an unknown comparison count. See [the October 2 incident and repair](./docs/INCIDENT_2026-10-02_PUBLICATION.md).
+
 - The top-right collection status distinguishes healthy collection, source/check errors, stale data, review holds and unknown evidence. It uses the whole-snapshot source and quote accounting, not the current search result or HTTP 200 alone. Details show providers, counts of failed asset lookups, collection/server-check times and the first failure observed within that collection. The clock rechecks freshness every 30 seconds; data older than 45 minutes or crossing a UTC date is delayed. A failed browser check remains visible through retries until a validated response arrives. The single scheduled publisher now persists every start/completion and retains the last verified snapshot when a candidate fails. See [the publication contract](./docs/PUBLICATION.md).
 
 - P/S uses separately sourced business sales, with scope, estimate status, date and expiry. P/R uses reviewed protocol revenue or service receipts. P/HR includes reviewed buybacks, distributions, native fee burns and conditional staking/lock/voter distributions, with mechanisms and recipient conditions shown separately. Missing evidence stays unavailable.

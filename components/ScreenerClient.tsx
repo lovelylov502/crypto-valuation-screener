@@ -25,6 +25,7 @@ import { revenueReading } from "@/lib/revenueReading";
 import { businessRevenue } from "@/lib/fundamentals";
 import { BRAND } from "@/lib/brand";
 import { CollectionStatus } from "./CollectionStatus";
+import { comparisonSummary } from "@/lib/collectionHealth";
 
 const FAVORITES_KEY = "crypto-valuation-favorites-v1";
 
@@ -139,7 +140,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
     {publication && <div className={`publication-notice ${publication.incident || publication.attempt.outcome === "blocked" ? "publication-blocked" : ""}`} role="status">
       <strong>{publication.incident || publication.attempt.outcome === "blocked" ? "새 수집본 공개 보류" : "검증본 표시"}</strong>
       <span>{data ? `${fmtKstMinute(data.updatedAt)}에 수집한 자료입니다. 금액·배수의 기준 시각도 같습니다.` : "검사를 통과한 자료를 불러오고 있습니다."}</span>
-      {publication.attempt.outcome === "blocked" && <span>직전 검증본 대비 {publication.attempt.affectedProjects.toLocaleString()}개 종목의 변화를 확인했습니다. 오른쪽 상단에서 원인과 이력을 볼 수 있습니다.</span>}
+      {publication.attempt.outcome === "blocked" && <span>{comparisonSummary(publication.attempt)} 오른쪽 상단에서 원인과 이력을 볼 수 있습니다.</span>}
     </div>}
     {error && <div className="workspace-status" role="alert">{error} {data && "기존 결과를 표시하고 있습니다."}<button className="text-button" onClick={refresh}>다시 시도</button></div>}
     {storageError && <p className="notice">브라우저 저장소를 사용할 수 없어 설정·관심종목이 유지되지 않을 수 있습니다.</p>}

@@ -48,7 +48,7 @@ export function inspectHome(readback, expectedSnapshot) {
   return { errors, missingMarkers, legacyMarkers };
 }
 
-export function inspectApi(readback) {
+export function inspectApi(readback, requireUsableHistory = true) {
   const errors = [];
   let data;
   if (readback.status !== 200) errors.push(`API HTTP ${readback.status}`);
@@ -77,7 +77,7 @@ export function inspectApi(readback) {
     for (const field of ["status", "scoreAxes", "holderValue", "opportunities", "peerCounts", "descriptionKo"]) {
       if (!(field in sample)) errors.push(`API advanced field missing: ${field}`);
     }
-    if (!data.coins.some((coin) => coin.revenueHistory?.periods?.[30]?.total > 0 && coin.revenueHistory?.weeks?.length === 13)) {
+    if (requireUsableHistory && !data.coins.some((coin) => coin.revenueHistory?.periods?.[30]?.total > 0 && coin.revenueHistory?.weeks?.length === 13)) {
       errors.push("API has no usable completed-day revenue history");
     }
     if (!data.coins.some((coin) => typeof coin.descriptionKo === "string" && /[가-힣]/u.test(coin.descriptionKo))) {
@@ -117,6 +117,19 @@ export function inspectApi(readback) {
   return { errors, data };
 }
 
+export function inspectFwa(coin) {
+  const errors = [];
+  if (!coin || !(coin.mcap > 0) || !(coin.revenue30d > 0) || coin.fundamentals?.revenue.kind !== "protocol_revenue") return ["FWA source/quote regression"];
+  for (const [key, history] of [["pr", coin.revenueHistory], ["phr", coin.holderHistory]]) {
+    const period = history?.periods?.[30], value = coin.multiples[key];
+    if (!period || !Number.isInteger(period.reportedDays) || period.reportedDays < 0 || period.reportedDays > 30) errors.push(`FWA ${key} coverage missing`);
+    else if (period.reportedDays < 30 || !(period.total > 0)) {
+      if (value !== null || (period.reportedDays < 30 && period.total !== null)) errors.push(`FWA ${key} uses incomplete history`);
+    } else if (!(value > 0) || Math.abs(value - coin.mcap / (period.total * 365 / 30)) > Math.max(1,value)*1e-9) errors.push(`FWA ${key} arithmetic regression`);
+  }
+  return errors;
+}
+
 export async function verifyProduction() {
   let lastErrors = [];
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
@@ -130,15 +143,15 @@ export async function verifyProduction() {
       const apiInspection = inspectApi(api);
       // The static shell has no data payload; all rows now come from one persisted API snapshot.
       const homeInspection = inspectHome(home, apiInspection.data?.publication ? undefined : apiInspection.data?.updatedAt);
-      const namedInspection = inspectApi(named);
-      const fwaInspection = inspectApi(fwa);
+      const namedInspection = inspectApi(named, false);
+      const fwaInspection = inspectApi(fwa, false);
       lastErrors = [...homeInspection.errors, ...apiInspection.errors, ...namedInspection.errors, ...fwaInspection.errors];
       const publication = apiInspection.data?.publication;
       if (!publication?.published || publication.published.dataAt !== apiInspection.data?.updatedAt || publication.storeError) lastErrors.push("verified publication identity unavailable");
       for (const result of [namedInspection, fwaInspection]) if (result.data?.publication?.published?.id !== publication?.published?.id) lastErrors.push("API queries use different publications");
       if (!namedInspection.data?.coins?.some(c => c.slug === "venice")) lastErrors.push("VVV lookup unavailable");
       const fwaCoin = fwaInspection.data?.coins?.find(c => c.slug === "parent#fake-world-assets");
-      if (!fwaCoin || !(fwaCoin.mcap > 0) || !(fwaCoin.revenue30d > 0) || fwaCoin.fundamentals?.revenue.kind !== "protocol_revenue" || !(fwaCoin.multiples.pr > 0) || !(fwaCoin.multiples.phr > 0)) lastErrors.push("FWA source/quote/history regression");
+      lastErrors.push(...inspectFwa(fwaCoin));
       if (lastErrors.length === 0) {
         console.log(JSON.stringify({
           path: "/",

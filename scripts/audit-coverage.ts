@@ -11,6 +11,7 @@ import { checkArchiveUrl, readSnapshot, sha256 } from "../lib/snapshotArchive";
 import { witnessErrors } from "../lib/sourceWitness";
 import { COLLECTION_DEADLINE_MS } from "../lib/publication";
 import { geckoRequests, GECKO_INTERVAL_MS } from "../lib/geckoRequests";
+import { inspectFwa } from "./verify-production.mjs";
 
 const base = process.env.SCREENER_BASE_URL ?? DEPLOY_CONTRACT.liveBaseUrl;
 const output = process.env.SCREENER_AUDIT_DIR;
@@ -159,7 +160,7 @@ async function main() {
   report.independentQuoteChecks = quoteChecks;
   const fwa = coins.find(c => c.slug === "parent#fake-world-assets");
   report.fwa = fwa && { mcap: fwa.mcap, revenue30d: revenueReading(fwa,30), revenueDays: fwa.revenueHistory?.periods[30], holderDays: fwa.holderHistory?.periods[30], pr: fwa.multiples.pr, phr: fwa.multiples.phr };
-  if (!fwa || !(fwa.mcap! > 0) || !(fwa.multiples.pr! > 0) || !(fwa.multiples.phr! > 0)) errors.push("FWA recovery incomplete");
+  errors.push(...inspectFwa(fwa));
   if (output) {
     await mkdir(output, { recursive: true });
     await writeFile(join(output, "all-coins.json"), JSON.stringify({ ...first, coins }));

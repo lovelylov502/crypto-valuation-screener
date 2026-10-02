@@ -21,6 +21,7 @@ export function parseJournal(value: unknown): PublicationJournal {
   if (!j || j.schema !== 1 || !/^data-[a-zA-Z0-9-]+$/.test(j.id) || !j.attempt || !["running", "published", "blocked"].includes(j.attempt.outcome)
     || !Number.isFinite(Date.parse(j.createdAt)) || !Number.isFinite(Date.parse(j.attempt.startedAt))
     || !Array.isArray(j.attempt.errors) || !Array.isArray(j.attempt.sourceFailures) || !Array.isArray(j.attempt.affected)
+    || (j.attempt.comparisonCompleted !== undefined && typeof j.attempt.comparisonCompleted !== "boolean")
     || !Number.isInteger(j.attempt.affectedProjects) || j.attempt.affectedProjects < 0) throw new Error("Invalid publication journal");
   if (j.published) {
     for (const url of [j.published.url,j.published.reportUrl,j.published.witnessUrl]) checkArchiveUrl(url);

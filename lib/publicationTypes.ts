@@ -10,6 +10,7 @@ export interface CollectionAttempt {
   runUrl: string; reportUrl: string;
   errors: string[]; sourceFailures: SourceObservation[];
   collection?: ScreenerResponse["collection"];
+  comparisonCompleted?: boolean;
   affectedProjects: number; changeCount: number;
   affected: { slug: string; name: string; issues: string[] }[];
 }
