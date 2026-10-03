@@ -2,8 +2,8 @@ import type { ScreenerResponse } from "./types";
 import { RULE_VERSION } from "./fundamentals";
 import type { CollectionAttempt, PublicationJournal } from "./publicationTypes";
 import { COLLECTION_DEADLINE_MS } from "./publication";
+import { collectionSchedule } from "./collectionSchedule";
 
-export const COLLECTION_STALE_MS = 45 * 60_000;
 type HealthData = Pick<ScreenerResponse, "updatedAt" | "scoreVersion" | "sources" | "collection" | "publication">;
 export type CollectionHealthState = "healthy" | "error" | "warning" | "stale" | "checking" | "unknown";
 
@@ -47,9 +47,11 @@ export function collectionHealth(data: HealthData | null, now: number, requestEr
   const observed = failures.map(s => Date.parse(s.observedAt)).filter(Number.isFinite);
   const firstFailureAt = observed.length ? new Date(Math.min(...observed)).toISOString() : null;
   const age = data ? now - Date.parse(data.updatedAt) : NaN;
-  const stale = !!data && (age > COLLECTION_STALE_MS || data.updatedAt.slice(0, 10) !== new Date(now).toISOString().slice(0, 10));
+  const schedule = collectionSchedule(now);
+  const stale = !!data && Date.parse(data.updatedAt) < schedule.requiredAt;
+  const scheduledRunMissing = !!p && Date.parse(p.attempt.startedAt) < schedule.requiredAt;
   const result = (state: CollectionHealthState, label: string, summary: string) => ({
-    state, label, summary, failures, withheld, providers, quoteFailures, firstFailureAt, stale,
+    state, label, summary, failures, withheld, providers, quoteFailures, firstFailureAt, stale, schedule, scheduledRunMissing,
   });
   if (p?.storeError) return result("error", "보관소 오류", p.storeError);
   if (p?.attempt.outcome === "running" && now - Date.parse(p.attempt.startedAt) > COLLECTION_DEADLINE_MS) return result("error", "수집 중단", "수집 작업이 15분 안에 완료되지 않았습니다. 마지막 검증본을 유지합니다.");
@@ -64,7 +66,8 @@ export function collectionHealth(data: HealthData | null, now: number, requestEr
   if (!data) return result("checking", "확인 중", "수집 결과를 기다리고 있습니다.");
   if (data.scoreVersion !== RULE_VERSION || !Number.isFinite(age) || age < -300_000 || (c?.errors ?? 0) > 0
     || (c && c.displayedRevenue30d < c.sourceRevenue30d)) return result("error", "검증 오류", "자료의 버전·시각·원천 금액 검사에서 문제가 발견됐습니다.");
-  if (stale) return result("stale", "갱신 지연", "표시 자료가 45분 이상 지났거나 UTC 기준일이 바뀌었습니다. 최신 자료 확인이 필요합니다.");
+  if (scheduledRunMissing) return result("stale", "예약 실행 미확인", "예정 시각에서 90분이 지났지만 새 수집 시작 기록이 없습니다. 마지막 검증본을 표시합니다.");
+  if (stale) return result("stale", "갱신 지연", "예정 시각에서 90분이 지났지만 새 검증본을 확인하지 못했습니다. 마지막 검증본을 표시합니다.");
   if (p?.attempt.outcome === "running") return result("checking", "수집 중", "새 자료를 수집·검사하는 동안 직전 검증본을 표시합니다.");
   if (p && data.publication?.published?.id !== p.published?.id) return result("checking", "자료 적용 중", "새 검증본을 불러오고 있습니다.");
   const counts = c && [c.projects, c.sourceSlugs, c.errors, c.sourceRevenue30d, c.displayedRevenue30d,

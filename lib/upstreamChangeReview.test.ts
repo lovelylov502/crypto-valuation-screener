@@ -6,6 +6,11 @@ import { reviewUpstreamChanges } from "./upstreamChangeReview";
 import { assessCandidate } from "./publication";
 import { aggregateDefinitions, combineFundamentals } from "./fundamentalSource";
 import type { CoinRaw } from "./types";
+import registry from "./fundamentalDefinitions.json";
+import { aggregateHolderValueByGroup } from "./holderValue";
+import { definitionReviewed } from "./fundamentalSource";
+import { summarizeHolderHistory } from "./holderHistorySource";
+import { WITNESS_PATHS } from "./sourceWitness";
 
 afterEach(() => vi.unstubAllGlobals());
 const at = "2026-10-02T10:00:00Z", end = Date.parse("2026-10-01") / 1000;
@@ -78,4 +83,46 @@ it.each([true,false])("requires explicit upstream withdrawal before dropping an 
   const review=await reviewUpstreamChanges(after,before,w);
   expect(review.keys.has("sample:identity_changed")).toBe(withdrawn);
   expect(review.keys.has("sample:price_lost")).toBe(withdrawn);
+});
+
+// The production incident: a reviewed holder stream becomes definition-held.
+// Its raw amount is present; filtering it out of calculations is not input loss.
+function definitionHold(changed = true) {
+  const previous = { slug: "overtime", name: "Overtime", defillamaId: "534", methodology: registry.overtime.methodology, total30d: 30, total1y: 365 };
+  const current = { ...previous, methodology: changed ? { ...previous.methodology, HoldersRevenue: "Newly reported buyback accounting; requires review" } : previous.methodology };
+  const points = Array.from({ length: 365 }, (_, i) => [end - i * 86400, { Overtime: 1 }]);
+  const build = (row: typeof previous, time: string) => {
+    const fundamental = combineFundamentals(aggregateDefinitions([row], () => row.slug, "Revenue").get(row.slug) as any, undefined, [row]);
+    return assembleScreener([sample({ slug: row.slug, name: row.name, symbol: null, geckoId: null, cmcId: null, sourceSlugs: [row.slug],
+      fundamentals: fundamental, revenue24h: null, revenue7d: null, revenue30d: row.total30d, revenue1y: row.total1y,
+      holderValue: aggregateHolderValueByGroup([row], () => row.slug, definitionReviewed).get(row.slug),
+      holderHistory: summarizeHolderHistory([row], points, Date.parse(at))[row.slug] ?? null })], time,
+      WITNESS_PATHS.map(path => ({url:`https://api.llama.fi${path}`,observedAt:time,status:"ok" as const})));
+  };
+  return { before: build(previous, "2026-10-02T09:00:00Z"), after: build(current, at),
+    witness: [[current], { parentProtocols: [] }, { protocols: [current] }, { protocols: [current] }, { protocols: [current] }, { protocols: [current] }] };
+}
+
+it("publishes an independently evidenced definition hold while keeping raw holder amounts and withholding ratios", async () => {
+  const { before, after, witness } = definitionHold();
+  const review = await reviewUpstreamChanges(after, before, witness);
+  expect(before.coins[0].holderHistory!.periods[30].reportedDays).toBe(30);
+  expect(after.coins[0].holderHistory).toBeNull();
+  expect(after.coins[0].holderValue.rawCurrent30d).toBe(30);
+  expect(after.coins[0].multiples.phr).toBeNull();
+  expect(assessCandidate(after, before, at, at, review.keys).errors).toEqual([]);
+  expect(review.proofs.some(p => p.reason === "holder_definition_changed_with_calculation_withheld")).toBe(true);
+});
+
+it.each(["unchanged-definition", "wrong-witness", "dropped-raw-amount", "dropped-component", "unsafe-ratio", "source-failure"])("does not waive a holder loss for %s", async scenario => {
+  const { before, after, witness } = definitionHold(scenario !== "unchanged-definition");
+  after.coins[0].holderHistory = null;
+  if (scenario === "wrong-witness") (witness[4] as any).protocols[0] = { ...(witness[4] as any).protocols[0], methodology: registry.overtime.methodology };
+  if (scenario === "dropped-raw-amount") after.coins[0].holderValue.rawCurrent30d = null;
+  if (scenario === "dropped-component") after.coins[0].holderValue.components = [];
+  if (scenario === "unsafe-ratio") after.coins[0].multiples.phr = 10;
+  if (scenario === "source-failure") after.sources.push({url:"https://api.llama.fi/overview/fees",observedAt:at,status:"error",httpStatus:403});
+  vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 403 })));
+  const review = await reviewUpstreamChanges(after, before, witness);
+  expect(review.keys.has("overtime:holder_30d_history_lost")).toBe(false);
 });

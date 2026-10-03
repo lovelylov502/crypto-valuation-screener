@@ -43,11 +43,16 @@ export function CollectionStatus({ data, publication, error, refreshing, checked
         <p>{health.summary}</p>
         {error && health.failures.length > 0 && <p className="negative">서버 확인도 실패했습니다: {error}</p>}
         {health.stale && health.state !== "stale" && <p className="caution-text">표시 자료의 갱신도 지연되고 있습니다.</p>}
+        {health.scheduledRunMissing && health.label !== "예약 실행 미확인" && <p className="caution-text">예정 시각에서 90분이 지났지만 새 수집 시작 기록이 없습니다.</p>}
+        <p>하루 2회 · 11:17 / 23:17 KST 수집 예정</p>
         <dl className="collection-times">
           <div><dt>표시 자료 수집</dt><dd>{data ? time(data.updatedAt) : "자료 없음"}</dd></div>
+          <div><dt>다음 수집 예정</dt><dd>{time(new Date(health.schedule.nextAt).toISOString())}</dd></div>
+          <div><dt>수익 일별 집계 기준</dt><dd>{data ? `${new Date(Date.parse(data.updatedAt) - 86400_000).toISOString().slice(0,10)} UTC까지` : "자료 없음"}</dd></div>
           <div><dt>이 브라우저의 서버 확인</dt><dd>{checkedAt ? time(checkedAt) : "아직 확인되지 않음"}</dd></div>
           {health.firstFailureAt && <div><dt>이번 자료의 첫 실패 관측</dt><dd>{fmtKstMinute(health.firstFailureAt)}</dd></div>}
         </dl>
+        <p className="collection-note">가격·시총·배수는 저장된 수집본의 값입니다. 수익은 위 UTC 날짜까지의 완전한 일별 자료로 계산하며, 원천 금액의 별도 집계 범위와 누락일은 종목 상세에 표시합니다. 예약 실행은 지연될 수 있습니다.</p>
         {p && <div className="collection-counts">
           <h3>공개·장애 기록</h3>
           <p>이력 기록 시작: {time(p.trackingStartedAt)}</p>

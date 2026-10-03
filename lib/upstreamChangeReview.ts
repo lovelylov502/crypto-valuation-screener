@@ -1,6 +1,7 @@
 import type { CoinScored, ScreenerResponse } from "./types";
 import { collectionRegressions, collectionState } from "./collectionQuality";
-import { aggregateDefinitions, sameMethodology } from "./fundamentalSource";
+import { aggregateDefinitions, combineFundamentals, definitionReviewed, sameMethodology } from "./fundamentalSource";
+import { aggregateHolderValueByGroup } from "./holderValue";
 import { revenueReading } from "./revenueReading";
 import type { RevenueWindowDays } from "./revenueHistory";
 import { readHistorySummary } from "./historyRequest";
@@ -105,6 +106,25 @@ export async function reviewUpstreamChanges(data: ScreenerResponse, baseline: Sc
       const definition = aggregateDefinitions(members, () => c.slug, "Revenue").get(c.slug);
       if (definition?.fingerprint === c.fundamentals.revenue.fingerprint && definition.fingerprint !== old.fundamentals.revenue.fingerprint && definition.components.some(p => p.status !== "matched")) {
         accept(change, "current_definition_changed_and_ratios_withheld", ["witness.json.gz"]);
+      }
+    }
+    if (/^holder_(1|7|30|90|365)d_history_lost$/.test(change.issue) && !c.holderHistory && c.multiples.phr === null) {
+      const members = holders.protocols.filter((r: Row) => r.doublecounted !== true && c.sourceSlugs?.includes(r.slug));
+      const expected = aggregateHolderValueByGroup(members, () => c.slug, definitionReviewed).get(c.slug);
+      const definitions = combineFundamentals(undefined, undefined, members).holders;
+      const previouslyEligible = old.holderValue.components.filter(p => p.eligible);
+      const changed = previouslyEligible.length > 0 && previouslyEligible.every(p =>
+        old.fundamentals.holders.some(d => d.slug === p.slug && d.status === "matched") &&
+        definitions.some(d => d.slug === p.slug && d.status === "changed"));
+      // Reconstruct the entire excluded holder state from the independent witness.
+      // No missing component, raw amount, or still-eligible stream can use this proof.
+      const preserved = expected && (Object.keys(expected) as (keyof typeof expected)[]).every(key => key === "components"
+        ? expected.components.length === c.holderValue.components.length && expected.components.every(p =>
+          c.holderValue.components.some(actual => Object.entries(p).every(([field, value]) => actual[field as keyof typeof actual] === value)))
+        : expected[key] === c.holderValue[key]);
+      if (changed && preserved && expected.components.length > 0 && expected.components.every(p => !p.eligible) &&
+        JSON.stringify(definitions) === JSON.stringify(c.fundamentals.holders)) {
+        accept(change, "holder_definition_changed_with_calculation_withheld", ["witness.json.gz"]);
       }
     }
   }

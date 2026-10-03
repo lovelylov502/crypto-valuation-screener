@@ -5,6 +5,7 @@ import type { WorkspacePreferences } from "@/lib/workspacePreferences";
 import { fundamentalErrors } from "@/lib/fundamentalContract";
 import { RULE_VERSION } from "@/lib/fundamentals";
 import type { PublicationJournal } from "@/lib/publicationTypes";
+import { STATUS_POLL_MS } from "@/lib/collectionSchedule";
 
 export function pageUrl(prefs: WorkspacePreferences, favorites: Set<string>, page: number, size: number) {
   return "/api/screener?" + new URLSearchParams({ prefs: JSON.stringify(prefs), favorites: [...favorites].join(","), page: String(page), size: String(size) });
@@ -42,7 +43,7 @@ export function useScreenerPage(initial: ScreenerPage | null, prefs: WorkspacePr
     if (!ready) return;
     let active = true, busy = false, last = 0;
     const check = async () => {
-      if (busy || document.visibilityState !== "visible" || Date.now() - last < 60_000) return;
+      if (busy || document.visibilityState !== "visible" || Date.now() - last < STATUS_POLL_MS) return;
       busy = true; last = Date.now();
       try {
         const response = await fetch("/api/status", { cache: "no-store", signal: AbortSignal.timeout(10_000) });
@@ -54,7 +55,7 @@ export function useScreenerPage(initial: ScreenerPage | null, prefs: WorkspacePr
       finally { busy = false; }
     };
     void check();
-    const timer = setInterval(check, 60000);
+    const timer = setInterval(check, STATUS_POLL_MS);
     window.addEventListener("focus", check);
     return () => { active = false; clearInterval(timer); window.removeEventListener("focus", check); };
   }, [ready, data?.publication?.published?.id]);

@@ -2,7 +2,8 @@ name: Verified screener publication
 
 on:
   schedule:
-    - cron: "17,47 * * * *"
+    # 11:17 and 23:17 KST; one writer and the same gate for manual runs.
+    - cron: "17 2,14 * * *"
   workflow_dispatch:
     inputs:
       bootstrap_url:

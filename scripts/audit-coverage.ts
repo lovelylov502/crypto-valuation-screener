@@ -10,6 +10,7 @@ import { gunzipSync } from "node:zlib";
 import { checkArchiveUrl, readSnapshot, sha256 } from "../lib/snapshotArchive";
 import { witnessErrors } from "../lib/sourceWitness";
 import { COLLECTION_DEADLINE_MS } from "../lib/publication";
+import { collectionSchedule } from "../lib/collectionSchedule";
 import { geckoRequests, GECKO_INTERVAL_MS } from "../lib/geckoRequests";
 import { inspectFwa } from "./verify-production.mjs";
 
@@ -63,7 +64,8 @@ async function main() {
   report.sourceFailures = first.sources.filter(s => s.status === "error");
   if (first.sources.some(s => s.status === "error")) errors.push("source requests failed; inspect sourceFailures");
   if (first.scoreVersion !== DEPLOY_CONTRACT.scoreVersion) errors.push("wrong deployed version");
-  const stale = Date.now() - Date.parse(first.updatedAt) > 45 * 60_000;
+  const checkedAt = Date.now();
+  const stale = Date.parse(first.updatedAt) < collectionSchedule(checkedAt).requiredAt;
   if (coins.length !== first.pagination.total || new Set(coins.map(c => c.slug)).size !== coins.length) errors.push("pagination omitted or duplicated projects");
   errors.push(...collectionErrors(coins));
   for (const c of coins) errors.push(...fundamentalErrors(c).map(e => `${c.slug}: ${e}`));
@@ -100,9 +102,19 @@ async function main() {
     // This is a protection/integrity pass, explicitly not fresh upstream coverage.
     return;
   }
-  if (stale) errors.push("published snapshot older than 45 minutes without an active blocked/running collection");
+  if (stale) errors.push("published snapshot missed the scheduled collection deadline");
+  // Between scheduled collections, audit against the archived source witness.
+  // Today's changing feed cannot prove that a deliberately retained snapshot lost data.
+  if (checkedAt - Date.parse(first.updatedAt) > 45 * 60_000) {
+    report.mode = "verified-scheduled-snapshot";
+    report.currentCollectionPassed = !stale;
+    report.liveSourcesChecked = false;
+    if (output) { await mkdir(output,{recursive:true}); await writeFile(join(output,"all-coins.json"),JSON.stringify({...first,coins})); }
+    return;
+  }
   report.mode = "current-publication-and-live-sources";
   report.currentCollectionPassed = true;
+  report.liveSourcesChecked = true;
 
   const paths = ["/protocols", "/config", "/overview/fees", "/overview/fees?dataType=dailyRevenue", "/overview/fees?dataType=dailyHoldersRevenue", "/overview/dexs"];
   const sources = await Promise.all(paths.map(path => read("https://api.llama.fi" + path + (path.includes("overview") ? `${path.includes("?") ? "&" : "?"}excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true` : ""))));

@@ -92,6 +92,17 @@ it("labels a recent verified publication healthy using its complete source evide
   expect(collectionHealth(d,Date.parse(at)+60_000)).toMatchObject({state:"healthy",label:"수집 정상"});
   expect(collectionHealth({...d,sources:[]},Date.parse(at)+60_000).state).toBe("unknown");
 });
+it("distinguishes a missing scheduled start from a started collection failure and preserves dates",()=>{
+  const p=baseline(), d={...data(),publication:p};
+  const beforeDeadline=Date.parse("2026-09-29T15:46:59Z"), afterDeadline=beforeDeadline+1000;
+  expect(collectionHealth(d,beforeDeadline).state).toBe("healthy");
+  expect(collectionHealth(d,afterDeadline)).toMatchObject({label:"예약 실행 미확인",scheduledRunMissing:true,stale:true});
+  const a={...attempt("data-late"),startedAt:"2026-09-29T15:48:00Z"};
+  const start=startJournal(p,a,"data-late-start");
+  const blocked=finishJournal(start,{...a,outcome:"blocked",completedAt:"2026-09-29T15:50:00Z",errors:["timeout"]},null,"data-late-complete");
+  expect(collectionHealth({...d,publication:blocked},Date.parse(blocked.createdAt))).toMatchObject({label:"공개 보류",scheduledRunMissing:false});
+  expect(blocked.published?.dataAt).toBe(d.updatedAt);
+});
 it("refuses corrupt bytes and snapshots containing failures despite a matching content hash",()=>{
   const d=data(), bytes=gzipSync(JSON.stringify(d));expect(decodeSnapshot(bytes,ref(d)).coins).toHaveLength(1);
   expect(()=>decodeSnapshot(Buffer.from("corrupt"),ref(d))).toThrow("hash mismatch");
