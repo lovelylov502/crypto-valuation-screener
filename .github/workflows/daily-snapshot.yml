@@ -2,8 +2,10 @@ name: Verified screener publication
 
 on:
   schedule:
-    # 11:17 and 23:17 KST; one writer and the same gate for manual runs.
+    # Two collection slots. Backup wakes at +30/+60m only collect if no start was recorded.
     - cron: "17 2,14 * * *"
+    - cron: "47 2,14 * * *"
+    - cron: "17 3,15 * * *"
   workflow_dispatch:
     inputs:
       bootstrap_url:
@@ -39,18 +41,26 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci --no-audit --no-fund
+      - name: Check whether this collection slot already started
+        id: due
+        run: npx tsx scripts/publication-job.ts due
       - run: npm test
+        if: steps.due.outputs.collect == 'true'
       - name: Persist collection start and retain the current verified pointer
         id: start
+        if: steps.due.outputs.collect == 'true'
         run: npx tsx scripts/publication-job.ts start
       - name: Collect and validate candidate against the published baseline
+        if: steps.due.outputs.collect == 'true'
         timeout-minutes: 12
+        env:
+          SCREENER_SCHEDULED_FOR: ${{ steps.due.outputs.slot_at }}
         run: npm run snapshot:capture
       - name: Archive result and atomically publish only a passing candidate
         if: always() && steps.start.outcome == 'success'
         run: npx tsx scripts/publication-job.ts finish
       - uses: actions/upload-artifact@v7
-        if: always()
+        if: always() && steps.start.outcome == 'success'
         with:
           name: screener-${{ github.run_id }}-${{ github.run_attempt }}
           path: snapshot-output/

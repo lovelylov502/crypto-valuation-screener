@@ -10,7 +10,7 @@
 
 ## Current UI · v10 source revenue recovery
 
-- Collection runs twice daily at 11:17 and 23:17 KST (02:17 and 14:17 UTC). Independently confirmed holder definition changes retain original amounts and withhold affected calculations without blocking a verified publication. See [the acceptance rubric and observation status](./docs/RELIABILITY_ACCEPTANCE_2026-10-03.md).
+- Collection has two daily slots at 11:17 and 23:17 KST (02:17 and 14:17 UTC). Backup workflow wakes at +30/+60 minutes check the authoritative start journal under the same writer lock and skip a slot that already started, including failed attempts. They add no duplicate source collection and do not extend the 90-minute deadline. Independently confirmed holder definition changes retain original amounts and withhold affected calculations without blocking a verified publication. See [the acceptance rubric and observation status](./docs/RELIABILITY_ACCEPTANCE_2026-10-03.md).
 
 - Publication now independently rechecks upstream identity withdrawals, source removals, missing quote fields and incomplete component histories on each run. Verified source absences remain unavailable; collector omissions still block publication. Incomplete runs display an unknown comparison count. See [the October 2 incident and repair](./docs/INCIDENT_2026-10-02_PUBLICATION.md).
 

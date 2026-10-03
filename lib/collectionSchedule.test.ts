@@ -17,6 +17,10 @@ it.each([
 it("keeps the production cron and browser deadline on the same twice-daily schedule", () => {
   const workflow = readFileSync(new URL("../.github/workflows/daily-snapshot.yml", import.meta.url), "utf8");
   const crons = [...workflow.matchAll(/cron:\s*"([^"]+)"/g)].map(match => match[1]);
-  expect(crons).toEqual([`${COLLECTION_MINUTE} ${COLLECTION_UTC_HOURS.join(",")} * * *`]);
+  expect(crons).toEqual([
+    `${COLLECTION_MINUTE} ${COLLECTION_UTC_HOURS.join(",")} * * *`,
+    `${COLLECTION_MINUTE + 30} ${COLLECTION_UTC_HOURS.join(",")} * * *`,
+    `${COLLECTION_MINUTE} ${COLLECTION_UTC_HOURS.map(hour => hour + 1).join(",")} * * *`,
+  ]);
   expect(COLLECTION_UTC_HOURS[1] - COLLECTION_UTC_HOURS[0]).toBe(12);
 });

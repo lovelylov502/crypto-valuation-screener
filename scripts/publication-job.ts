@@ -13,12 +13,26 @@ import { reviewPendingHistory } from "../lib/pendingHistoryReview";
 import { reviewUpstreamChanges } from "../lib/upstreamChangeReview";
 import { withDeadline } from "../lib/withDeadline";
 import { latestJournal, publishJournal } from "./github-journal";
+import { scheduledCollectionDecision } from "../lib/scheduledCollection";
 
 const output = resolve("snapshot-output/publication");
 const json = (value: unknown) => Buffer.from(JSON.stringify(value));
 const save = async (name: string, value: Uint8Array) => writeFile(join(output, name), value, { flag: "wx" });
 const load = async (name: string) => JSON.parse(await readFile(join(output, name), "utf8"));
 const runId = `data-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`;
+
+async function due() {
+  const event = process.env.GITHUB_EVENT_NAME;
+  if (event !== "schedule" && event !== "workflow_dispatch") throw new Error("Unexpected collection trigger");
+  if (!process.env.GITHUB_OUTPUT) throw new Error("Missing workflow decision output");
+  const decision = event === "workflow_dispatch"
+    ? { collect: true, slotAt: "", previousStartedAt: null }
+    : scheduledCollectionDecision((await latestJournal())?.attempt.startedAt ?? null, Date.now());
+  await writeFile(process.env.GITHUB_OUTPUT, `collect=${decision.collect}\nslot_at=${decision.slotAt}\n`, { flag: "a" });
+  if (process.env.GITHUB_STEP_SUMMARY) await writeFile(process.env.GITHUB_STEP_SUMMARY,
+    `Trigger: ${event}. Slot: ${decision.slotAt || "manual"}. Collect: ${decision.collect}. Previous start: ${decision.previousStartedAt || "not applicable"}.\n`, { flag: "a" });
+  console.log(JSON.stringify({ event, ...decision }));
+}
 
 async function start() {
   await mkdir(output, { recursive: true });
@@ -81,7 +95,8 @@ async function collect() {
   } catch (error) { errors.push(error instanceof Error ? error.message : "Collector failed"); }
   if (data) await save("data.json.gz", gzipSync(json(data)));
   if (witness.length) await save("witness.json.gz", gzipSync(json(witness)));
-  const report = { schema: 1, codeCommit: process.env.GITHUB_SHA, startedAt: current.attempt.startedAt, completedAt: new Date().toISOString(), stage,
+  const report = { schema: 1, codeCommit: process.env.GITHUB_SHA, scheduledFor: process.env.SCREENER_SCHEDULED_FOR || null,
+    startedAt: current.attempt.startedAt, completedAt: new Date().toISOString(), stage,
     comparisonCompleted: !!assessment || !!bootstrapReceipt,
     baseline: current.published, dataAt: data?.updatedAt ?? null, sources: data?.sources ?? sources, collection: data?.collection,
     errors: [...new Set(errors)], changes: assessment?.changes ?? [], reviewedChanges: assessment?.reviewedChanges ?? [], unreviewedChanges: assessment?.unreviewedChanges ?? [], affected: assessment?.affected ?? [], bootstrapReceipt,
@@ -121,5 +136,5 @@ async function finish() {
 }
 
 const phase = process.argv[2];
-(phase === "start" ? start() : phase === "collect" ? collect() : phase === "finish" ? finish() : Promise.reject(new Error("Expected start, collect or finish")))
+(phase === "due" ? due() : phase === "start" ? start() : phase === "collect" ? collect() : phase === "finish" ? finish() : Promise.reject(new Error("Expected due, start, collect or finish")))
   .catch(error => { console.error(error instanceof Error ? error.message : "Publication failed"); process.exitCode = 1; });
