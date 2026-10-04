@@ -13,7 +13,7 @@ import { reviewPendingHistory } from "../lib/pendingHistoryReview";
 import { reviewUpstreamChanges } from "../lib/upstreamChangeReview";
 import { withDeadline } from "../lib/withDeadline";
 import { latestJournal, publishJournal } from "./github-journal";
-import { scheduledCollectionDecision } from "../lib/scheduledCollection";
+import { collectionTriggerDecision } from "../lib/scheduledCollection";
 
 const output = resolve("snapshot-output/publication");
 const json = (value: unknown) => Buffer.from(JSON.stringify(value));
@@ -23,11 +23,15 @@ const runId = `data-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMP
 
 async function due() {
   const event = process.env.GITHUB_EVENT_NAME;
-  if (event !== "schedule" && event !== "workflow_dispatch") throw new Error("Unexpected collection trigger");
   if (!process.env.GITHUB_OUTPUT) throw new Error("Missing workflow decision output");
-  const decision = event === "workflow_dispatch"
-    ? { collect: true, slotAt: "", previousStartedAt: null }
-    : scheduledCollectionDecision((await latestJournal())?.attempt.startedAt ?? null, Date.now());
+  const previous = await latestJournal();
+  const decision = collectionTriggerDecision({ event, receipt: process.env.SCREENER_SCHEDULER_RECEIPT ?? "",
+    signature: process.env.SCREENER_SCHEDULER_SIGNATURE ?? "", secret: process.env.SCREENER_SCHEDULER_SECRET ?? "",
+    bootstrap: !!process.env.SCREENER_BOOTSTRAP_URL }, previous?.attempt.startedAt ?? null, Date.now());
+  if (decision.collect) {
+    await mkdir(output, { recursive: true });
+    await save("trigger.json", json(decision.trigger));
+  }
   await writeFile(process.env.GITHUB_OUTPUT, `collect=${decision.collect}\nslot_at=${decision.slotAt}\n`, { flag: "a" });
   if (process.env.GITHUB_STEP_SUMMARY) await writeFile(process.env.GITHUB_STEP_SUMMARY,
     `Trigger: ${event}. Slot: ${decision.slotAt || "manual"}. Collect: ${decision.collect}. Previous start: ${decision.previousStartedAt || "not applicable"}.\n`, { flag: "a" });
@@ -95,7 +99,8 @@ async function collect() {
   } catch (error) { errors.push(error instanceof Error ? error.message : "Collector failed"); }
   if (data) await save("data.json.gz", gzipSync(json(data)));
   if (witness.length) await save("witness.json.gz", gzipSync(json(witness)));
-  const report = { schema: 1, codeCommit: process.env.GITHUB_SHA, scheduledFor: process.env.SCREENER_SCHEDULED_FOR || null,
+  const trigger = await load("trigger.json");
+  const report = { schema: 1, codeCommit: process.env.GITHUB_SHA, scheduledFor: trigger.scheduledFor, trigger,
     startedAt: current.attempt.startedAt, completedAt: new Date().toISOString(), stage,
     comparisonCompleted: !!assessment || !!bootstrapReceipt,
     baseline: current.published, dataAt: data?.updatedAt ?? null, sources: data?.sources ?? sources, collection: data?.collection,
@@ -111,7 +116,9 @@ async function finish() {
   if (latest?.id !== current.id) throw new Error("A newer job owns publication; refusing to finish");
   let report;
   try { report = await load("report.json"); }
-  catch { report = { baseline: current.published, completedAt: new Date().toISOString(), comparisonCompleted: false, errors: ["collector_did_not_complete"], sources: [], affected: [], changes: [] }; await save("report.json", json(report)); }
+  catch { const trigger = await load("trigger.json"); report = { codeCommit: process.env.GITHUB_SHA, scheduledFor: trigger.scheduledFor, trigger,
+    startedAt: current.attempt.startedAt, baseline: current.published, completedAt: new Date().toISOString(), comparisonCompleted: false,
+    errors: ["collector_did_not_complete"], sources: [], affected: [], changes: [] }; await save("report.json", json(report)); }
   const files: Record<string, Uint8Array> = {};
   for (const name of await readdir(output)) if (name !== "start.json") files[name] = await readFile(join(output, name));
   const errors = [...report.errors];

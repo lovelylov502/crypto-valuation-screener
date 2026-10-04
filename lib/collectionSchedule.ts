@@ -1,6 +1,6 @@
-// Keep the two UTC slots in sync with daily-snapshot.yml (checked by tests).
+// Keep both schedulers and the browser deadline in sync (checked by tests).
 export const COLLECTION_UTC_HOURS = [2, 14] as const;
-export const COLLECTION_MINUTE = 17;
+export const COLLECTION_MINUTE = 0;
 export const SCHEDULE_GRACE_MS = 90 * 60_000;
 export const STATUS_POLL_MS = 10 * 60_000;
 const DAY_MS = 86400_000;
@@ -8,6 +8,11 @@ const DAY_MS = 86400_000;
 function slots(now: number) {
   const day = Math.floor(now / DAY_MS) * DAY_MS;
   return [-1, 0, 1].flatMap(offset => COLLECTION_UTC_HOURS.map(hour => day + offset * DAY_MS + (hour * 60 + COLLECTION_MINUTE) * 60_000));
+}
+
+export function currentCollectionSlot(now: number) {
+  if (!Number.isFinite(now)) throw new Error("Invalid collection time");
+  return slots(now).filter(at => at <= now).at(-1)!;
 }
 
 export function collectionSchedule(now: number) {

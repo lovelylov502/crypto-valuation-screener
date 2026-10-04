@@ -21,7 +21,7 @@ describe("collection health, independent of HTTP 200 and current filtered rows",
     data.sources = Array.from({ length: 12 }, (_, n) => ({ url: `https://api.coingecko.com/api/v3/coins/markets?batch=${n}`, observedAt: at, status: "error", httpStatus: 403 }));
     expect(collectionHealth(data, now)).toMatchObject({ state: "error", providers: ["CoinGecko"], quoteFailures: 2768, firstFailureAt: at });
     expect(collectionHealth(data, now, "", true).state).toBe("error");
-    expect(collectionHealth(data, Date.parse("2026-09-29T15:47:00Z"))).toMatchObject({ state: "error", stale: true });
+    expect(collectionHealth(data, Date.parse("2026-09-29T15:30:00Z"))).toMatchObject({ state: "error", stale: true });
   });
   it("detects failed lookup accounting even if source error observations are missing", () => {
     const data = healthy(); data.collection!.gecko.failed = 1;
@@ -33,8 +33,8 @@ describe("collection health, independent of HTTP 200 and current filtered rows",
     expect(collectionHealth(healthy(), now, "", false).state).toBe("healthy");
   });
   it("waits until the scheduled deadline and does not mark UTC rollover alone stale", () => {
-    expect(collectionHealth(healthy(), Date.parse("2026-09-29T15:46:59Z")).state).toBe("healthy");
-    expect(collectionHealth(healthy(), Date.parse("2026-09-29T15:47:00Z")).state).toBe("stale");
+    expect(collectionHealth(healthy(), Date.parse("2026-09-29T15:29:59Z")).state).toBe("healthy");
+    expect(collectionHealth(healthy(), Date.parse("2026-09-29T15:30:00Z")).state).toBe("stale");
     const data = healthy(); data.updatedAt = "2026-09-29T23:59:00Z";
     expect(collectionHealth(data, Date.parse("2026-09-30T00:00:01Z")).state).toBe("healthy");
   });

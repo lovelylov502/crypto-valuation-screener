@@ -3,11 +3,19 @@ name: Verified screener publication
 on:
   schedule:
     # Two collection slots. Backup wakes at +30/+60m only collect if no start was recorded.
-    - cron: "17 2,14 * * *"
-    - cron: "47 2,14 * * *"
-    - cron: "17 3,15 * * *"
+    - cron: "0 2,14 * * *"
+    - cron: "30 2,14 * * *"
+    - cron: "0 3,15 * * *"
   workflow_dispatch:
     inputs:
+      scheduler_receipt:
+        description: "Signed Vercel scheduler receipt; leave empty for manual runs"
+        type: string
+        required: false
+      scheduler_signature:
+        description: "HMAC signature for the scheduler receipt"
+        type: string
+        required: false
       bootstrap_url:
         description: "First initialization only: preserved audited seed asset URL"
         type: string
@@ -43,6 +51,10 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Check whether this collection slot already started
         id: due
+        env:
+          SCREENER_SCHEDULER_RECEIPT: ${{ inputs.scheduler_receipt }}
+          SCREENER_SCHEDULER_SIGNATURE: ${{ inputs.scheduler_signature }}
+          SCREENER_SCHEDULER_SECRET: ${{ secrets.SCREENER_SCHEDULER_SECRET }}
         run: npx tsx scripts/publication-job.ts due
       - run: npm test
         if: steps.due.outputs.collect == 'true'
@@ -53,8 +65,6 @@ jobs:
       - name: Collect and validate candidate against the published baseline
         if: steps.due.outputs.collect == 'true'
         timeout-minutes: 12
-        env:
-          SCREENER_SCHEDULED_FOR: ${{ steps.due.outputs.slot_at }}
         run: npm run snapshot:capture
       - name: Archive result and atomically publish only a passing candidate
         if: always() && steps.start.outcome == 'success'

@@ -94,7 +94,7 @@ it("labels a recent verified publication healthy using its complete source evide
 });
 it("distinguishes a missing scheduled start from a started collection failure and preserves dates",()=>{
   const p=baseline(), d={...data(),publication:p};
-  const beforeDeadline=Date.parse("2026-09-29T15:46:59Z"), afterDeadline=beforeDeadline+1000;
+  const beforeDeadline=Date.parse("2026-09-29T15:29:59Z"), afterDeadline=beforeDeadline+1000;
   expect(collectionHealth(d,beforeDeadline).state).toBe("healthy");
   expect(collectionHealth(d,afterDeadline)).toMatchObject({label:"예약 실행 미확인",scheduledRunMissing:true,stale:true});
   const a={...attempt("data-late"),startedAt:"2026-09-29T15:48:00Z"};

@@ -44,7 +44,7 @@ export function CollectionStatus({ data, publication, error, refreshing, checked
         {error && health.failures.length > 0 && <p className="negative">서버 확인도 실패했습니다: {error}</p>}
         {health.stale && health.state !== "stale" && <p className="caution-text">표시 자료의 갱신도 지연되고 있습니다.</p>}
         {health.scheduledRunMissing && health.label !== "예약 실행 미확인" && <p className="caution-text">예정 시각에서 90분이 지났지만 새 수집 시작 기록이 없습니다.</p>}
-        <p>하루 2회 · 11:17 / 23:17 KST 수집 예정</p>
+        <p>하루 2회 · 11:00 / 23:00 KST부터 수집 예정 · 예약 호출은 해당 시간대 안에서 시작</p>
         <dl className="collection-times">
           <div><dt>표시 자료 수집</dt><dd>{data ? time(data.updatedAt) : "자료 없음"}</dd></div>
           <div><dt>다음 수집 예정</dt><dd>{time(new Date(health.schedule.nextAt).toISOString())}</dd></div>
