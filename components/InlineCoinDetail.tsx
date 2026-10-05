@@ -6,7 +6,7 @@ import { growthLabel, revenueTrend } from "@/lib/revenueTrend";
 import { holderAmount, holderMultiple, holderReason, protocolMultiple, protocolReason, type CapitalBasis } from "@/lib/valuationMetrics";
 import { holderConditionSummary, holderTypeSummary } from "./ScreenerCells";
 import { defiLlamaUrl, marketLink } from "@/lib/coinLinks";
-import { koreanDescription } from "@/lib/protocolDescriptions";
+import { koreanDetailDescription } from "@/lib/protocolDescriptions";
 import { metricStatus } from "@/lib/metricStatus";
 import { protocolResearch } from "@/lib/protocolResearch";
 import { holderEconomicTypeLabel } from "@/lib/holderValue";
@@ -29,7 +29,7 @@ export function InlineCoinDetail({ coin: c, capital, onClose }: { coin: CoinScor
   const reading30 = revenueReading(c, 30), returned30 = holderAmount(c, 30);
   const end = c.revenueHistory?.periods[1]?.end;
   const market = marketLink(c), llama = defiLlamaUrl(c);
-  const introduction = koreanDescription(c.description) ?? c.descriptionKo;
+  const introduction = koreanDetailDescription(c.description) ?? c.descriptionKo;
   const providerPeriods = REVENUE_WINDOWS.filter(days => ["provider_total", "provider_partial"].includes(revenueReading(c, days).basis));
   const unavailable = (reason: string) => <span className="detail-unavailable" title={reason}>{metricStatus(reason)}<small>{reason}</small></span>;
   return <section className="inline-detail" aria-label={c.name + " 상세"} onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}>

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { koreanDescription } from "./protocolDescriptions";
+import { koreanDescription, koreanDetailDescription } from "./protocolDescriptions";
 
 describe("Korean protocol descriptions", () => {
   it("restores the Sat Rush introduction only for its reviewed source text", () => {
-    expect(koreanDescription("Gamified Bitcoin Mining on Solana")).toBe("Solana에서 게임 요소를 접목한 비트코인 채굴 프로젝트입니다.");
-    expect(koreanDescription("Gamified Bitcoin Mining on Ethereum")).toBeNull();
+    expect(koreanDetailDescription("Gamified Bitcoin Mining on Solana")).toBe("Solana에서 게임 요소를 접목한 비트코인 채굴 프로젝트입니다.");
+    expect(koreanDetailDescription("Gamified Bitcoin Mining on Ethereum")).toBeNull();
+    expect(koreanDescription("Gamified Bitcoin Mining on Solana")).toBeNull();
   });
   it("preserves Safe as a project name", () => {
     const source = "Safe is the most trusted decentralized custody protocol and collective asset management platform on Ethereum and the EVM";

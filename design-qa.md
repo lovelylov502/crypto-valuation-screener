@@ -40,6 +40,8 @@ The mockups show five example rows and a compact three-period context strip. Pro
 
 Unknown or changed English descriptions show an explicit translation-pending state and their original text. CoinMarketCap has priority when its verified slug exists; CoinGecko is the fallback. If neither market identity exists, the interface states that the market page is unlinked rather than fabricating a URL.
 
+Sat Rush's newly reviewed translation is applied by `koreanDetailDescription` at display time. The first production audit caught a change to the archived snapshot's replay hash when that entry was placed in the collector catalog. The catalog was restored; the new display helper still requires exact English source text. Regression coverage verifies both the Korean UI result and the unchanged collector result. No audit guard or hash comparison was weakened.
+
 ## Interaction and technical verification
 
 - Light/dark toggle, saved theme after reload, and selected button state.
