@@ -33,6 +33,8 @@
 
 Current rule version: `research-v10-source-revenue-recovery`. See [SCREENER_V10.md](./docs/SCREENER_V10.md) for this repair, [SCREENER_V9.md](./docs/SCREENER_V9.md) for the full directory, [SCREENER_V8.md](./docs/SCREENER_V8.md) for the underlying definition review rules, [HANDOFF.md](./docs/HANDOFF.md) for deployment receipts and [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for production guards. Earlier version documents are historical where superseded.
 
+The October 5 data-engine redesign keeps those financial rules and adds `pipeline.schema=1`. Its [acceptance record](./docs/RELIABILITY_ACCEPTANCE_2026-10-05.md) links the deployed commit, successful recovery, complete source replay, independent review and still-pending natural scheduled acceptance.
+
 ## 개발
 
 ```bash
