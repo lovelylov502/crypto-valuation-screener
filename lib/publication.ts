@@ -3,6 +3,9 @@ import type { CollectionAttempt, PublicationJournal, PublishedSnapshot } from ".
 import { RULE_VERSION } from "./fundamentals";
 import { fundamentalErrors } from "./fundamentalContract";
 import { collectionCoverage, collectionErrors, collectionRegressions, collectionState } from "./collectionQuality";
+import { dataQualitySummary, scopedSourceErrors } from "./dataQuality";
+import { currentCollectionSlot } from "./collectionSchedule";
+import { classifyAttemptFailure, RETRY_DELAY_MS } from "./scheduledCollection";
 
 export const COLLECTION_DEADLINE_MS = 15 * 60_000;
 export const JOURNAL_REPOSITORY = "lovelylov502/crypto-valuation-screener";
@@ -15,12 +18,16 @@ export function snapshotErrors(data: ScreenerResponse): string[] {
   if (data.scoreVersion !== RULE_VERSION || !Number.isFinite(Date.parse(data.updatedAt))) errors.push("snapshot_version_or_time");
   if (!Array.isArray(data.coins) || !data.coins.length) return [...errors, "empty_universe"];
   if (!Array.isArray(data.sources) || !data.sources.length) return [...errors, "missing_source_observations"];
-  errors.push(...data.sources.filter(s => s.status === "error").map(s => `source_request_failed:${s.httpStatus ?? "network"}`));
+  if (data.pipeline) {
+    if (data.pipeline.schema !== 1 || data.pipeline.replayVerified !== true || data.pipeline.asOf !== data.updatedAt ||
+      JSON.stringify(data.pipeline.quality) !== JSON.stringify(dataQualitySummary(data.coins))) errors.push("pipeline_accounting_invalid");
+    errors.push(...scopedSourceErrors(data.sources, data.coins));
+  } else errors.push(...data.sources.filter(s => s.status === "error").map(s => `source_request_failed:${s.httpStatus ?? "network"}`));
   const coverage = collectionCoverage(data.coins);
   if (JSON.stringify(coverage) !== JSON.stringify(data.collection)) errors.push("collection_accounting_mismatch");
   for (const [vendor, q] of [["gecko", coverage.gecko], ["cmc", coverage.cmc]] as const) {
-    if (q.failed) errors.push(`${vendor}_failed:${q.failed}`);
-    if (q.requested && !q.received) errors.push(`${vendor}_empty_response`);
+    if (!data.pipeline && q.failed) errors.push(`${vendor}_failed:${q.failed}`);
+    if (!data.pipeline && q.requested && !q.received) errors.push(`${vendor}_empty_response`);
     if (q.requested !== q.received + q.failed + q.notReturned) errors.push(`${vendor}_unaccounted`);
   }
   const urls = data.sources.filter(s => s.status === "ok").map(s => new URL(s.url));
@@ -52,9 +59,17 @@ export function assessCandidate(data: ScreenerResponse, baseline: ScreenerRespon
 
 export function startJournal(previous: PublicationJournal | null, attempt: CollectionAttempt, id: string): PublicationJournal {
   if (previous && Date.parse(attempt.startedAt) <= Date.parse(previous.attempt.startedAt)) throw new Error("Older collector cannot replace journal");
+  const scheduledFor = new Date(currentCollectionSlot(Date.parse(attempt.startedAt))).toISOString();
+  if (attempt.scheduledFor && attempt.scheduledFor !== scheduledFor) throw new Error("Collection crossed its planned slot before starting");
+  const sameSlot = previous && currentCollectionSlot(Date.parse(previous.attempt.startedAt)) === Date.parse(scheduledFor);
+  const schedule = sameSlot ? previous.schedule : undefined;
+  const attemptCount = sameSlot ? schedule?.attemptCount ?? 1 : 0;
+  const manualRepairCount = sameSlot ? schedule?.manualRepairCount ?? (previous.attempt.manualRepair ? 1 : 0) : 0;
   const interrupted = previous?.attempt.outcome === "running";
   return { schema: 1, id, createdAt: attempt.startedAt, trackingStartedAt: previous?.trackingStartedAt ?? attempt.startedAt, previousId: previous?.id ?? null,
-    previousStateUrl: previous ? stateUrl(previous.id) : null, published: previous?.published ?? null, attempt,
+    previousStateUrl: previous ? stateUrl(previous.id) : null, published: previous?.published ?? null, attempt: { ...attempt, scheduledFor },
+    schedule: { scheduledFor, attemptCount: attemptCount + 1, manualRepairCount: manualRepairCount + (attempt.manualRepair ? 1 : 0),
+      lastAttemptId: attempt.id, successfulPublicationId: schedule?.successfulPublicationId ?? null, settled: false, nextRetryAt: null },
     incident: previous?.incident ?? (interrupted ? { firstFailureObservedAt: previous!.attempt.startedAt, lastFailureObservedAt: attempt.startedAt, lastGoodDataAt: previous?.published?.dataAt ?? null } : null),
     recoveredAt: previous?.recoveredAt ?? null };
 }
@@ -65,9 +80,14 @@ export function finishJournal(current: PublicationJournal, attempt: CollectionAt
   const accepted = attempt.outcome === "published";
   if (accepted && (!published || attempt.comparisonCompleted === false || attempt.errors.length || (current.published && Date.parse(published.dataAt) <= Date.parse(current.published.dataAt)))) throw new Error("Unverified or older publication");
   if (!accepted && published) throw new Error("Blocked attempt cannot replace snapshot");
+  const failureClass = !accepted || attempt.partial ? classifyAttemptFailure(attempt) : undefined;
+  const schedule = current.schedule && { ...current.schedule,
+    successfulPublicationId: accepted ? published!.id : current.schedule.successfulPublicationId,
+    settled: accepted && (!attempt.partial || failureClass !== "transient"),
+    nextRetryAt: failureClass === "transient" ? new Date(Date.parse(attempt.completedAt) + RETRY_DELAY_MS).toISOString() : null };
   const failureAt = attempt.sourceFailures.map(s => s.observedAt).sort()[0] ?? attempt.completedAt;
   return { schema: 1, id, createdAt: attempt.completedAt, trackingStartedAt: current.trackingStartedAt, previousId: current.id, previousStateUrl: stateUrl(current.id),
-    published: accepted ? published : current.published, attempt,
+    published: accepted ? published : current.published, attempt: { ...attempt, scheduledFor: current.attempt.scheduledFor, failureClass }, schedule,
     incident: accepted ? null : { firstFailureObservedAt: current.incident?.firstFailureObservedAt ?? failureAt,
       lastFailureObservedAt: attempt.completedAt, lastGoodDataAt: current.published?.dataAt ?? null },
     recoveredAt: accepted && current.incident ? attempt.completedAt : current.recoveredAt };

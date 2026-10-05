@@ -9,6 +9,9 @@ import { resolveSalesEvidence } from "./salesSource";
 import { koreanDescription } from "./protocolDescriptions";
 import { aggregateDefinitions, combineFundamentals, definitionReviewed } from "./fundamentalSource";
 import type { MetricDefinition, RevenueKind, FeeKind } from "./fundamentals";
+import type { RevenueHistory } from "./revenueHistory";
+import { sourceDelay, sourceFetch, sourceNow, sourceObservedAt, sourceReplayActive } from "./sourceBundle";
+import { validateDirectoryRows, validateProtocolFinancialRows } from "./sourceValidation";
 import {
   aggregateHolderValueByGroup,
   emptyHolderValueSummary,
@@ -32,23 +35,23 @@ export async function getJson<T>(url: string, observations: SourceObservation[],
   try {
   for (let attempt = 0; attempt < 3; attempt++) {
     await beforeAttempt?.();
-    if (Date.now() >= deadline) throw new Error("Source request budget exhausted");
+    const remaining = sourceReplayActive() ? timeout : deadline - Date.now();
     let res: Response;
-    try { res = await fetch(url, {
+    try { res = await sourceFetch(url, {
       // The server caches the compressed joined snapshot; source responses can exceed 2 MB.
       cache: "no-store",
       headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(Math.min(timeout, deadline - Date.now())),
+      signal: remaining <= 0 ? AbortSignal.abort(new Error("Source request budget exhausted")) : AbortSignal.timeout(Math.min(timeout, remaining)),
     }); } catch (error) {
       httpStatus = undefined;
-      if (attempt === 2 || Date.now() + 500 >= deadline) throw error;
-      await new Promise(resolve => setTimeout(resolve, 500));
+      if (attempt === 2) throw error;
+      if (sourceReplayActive() || Date.now() + 500 < deadline) await sourceDelay(500);
       continue;
     }
     httpStatus = res.status;
     if (res.ok) {
       const result = (await res.json()) as T;
-      observations.push({ url, observedAt: new Date().toISOString(), status: "ok" });
+      observations.push({ url, observedAt: sourceObservedAt(url), status: "ok" });
       return result;
     }
     if ((res.status !== 429 && res.status < 500) || attempt === 2) {
@@ -56,12 +59,11 @@ export async function getJson<T>(url: string, observations: SourceObservation[],
     }
     const retryAfter = Number(res.headers.get("retry-after"));
     const delay = res.status === 429 ? Math.max(beforeAttempt ? 60_000 : 5000 * 2 ** attempt, Number.isFinite(retryAfter) ? retryAfter * 1000 : 0) : 500 * 2 ** attempt;
-    if (Date.now() + delay >= deadline) throw new Error("Source retry exceeds request budget");
-    await new Promise((resolve) => setTimeout(resolve, delay));
+    if (sourceReplayActive() || Date.now() + delay < deadline) await sourceDelay(delay);
   }
   throw new Error(`fetch ${url} failed`);
   } catch (error) {
-    observations.push({ url, observedAt: new Date().toISOString(), status: "error", httpStatus });
+    observations.push({ url, observedAt: sourceObservedAt(url), status: "error", httpStatus });
     throw error;
   }
 }
@@ -73,12 +75,43 @@ const str = (v: unknown): string | null =>
 const normalize = (v: string): string =>
   v.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-function quoteLookup(id: string, row: Json | undefined, vendor: "gecko" | "cmc", failed = false): QuoteLookup {
+function quoteLookup(id: string, row: Json | undefined, vendor: "gecko" | "cmc", failed = false, observedAt = new Date(sourceNow()).toISOString()): QuoteLookup {
   const quote = vendor === "cmc" ? cmcQuote(row) : row;
   const fields = vendor === "cmc" ? { mcap: "market_cap", price: "price", fdv: "fully_diluted_market_cap" } : { mcap: "market_cap", price: "current_price", fdv: "fully_diluted_valuation" };
-  return { id, status: failed ? "error" : row ? "received" : "not_returned", observedAt: new Date().toISOString(),
+  return { id, status: failed ? "error" : row ? "received" : "not_returned", observedAt,
     available: (Object.keys(fields) as (keyof typeof fields)[]).filter(key => num(quote?.[fields[key]]) !== null),
-    positive: (Object.keys(fields) as (keyof typeof fields)[]).filter(key => (num(quote?.[fields[key]]) ?? 0) > 0) };
+    positive: (Object.keys(fields) as (keyof typeof fields)[]).filter(key => (num(quote?.[fields[key]]) ?? 0) > 0),
+    ...(Array.isArray(row?.quoteInvalidFields) && row.quoteInvalidFields.length ? {invalidFields:row.quoteInvalidFields as string[]} : {}) };
+}
+
+/** Present malformed financial fields are scoped schema defects, not provider absence. */
+function validateQuoteRow(row:Json,vendor:"gecko"|"cmc",url:string,observations:SourceObservation[],report=true):Json {
+  const result={...row},invalid:string[]=[];
+  const clean=(target:Json,fields:string[],prefix="")=>{
+    for(const field of fields) if(target[field] !== undefined && target[field] !== null && num(target[field]) === null) {
+      invalid.push(prefix+field);target[field]=null;
+    }
+  };
+  if(vendor === "gecko") clean(result,["current_price","market_cap","fully_diluted_valuation","market_cap_rank","total_volume","circulating_supply","total_supply","max_supply",
+    "price_change_percentage_24h","price_change_percentage_7d_in_currency","price_change_percentage_14d_in_currency","price_change_percentage_30d_in_currency","price_change_percentage_1y_in_currency","ath_change_percentage","atl_change_percentage"]);
+  else {
+    clean(result,["cmc_rank","num_market_pairs","circulating_supply","total_supply","max_supply"]);
+    if(row.quote !== undefined && row.quote !== null) {
+      if(!Array.isArray(row.quote)) {invalid.push("quote");result.quote=[];}
+      else result.quote=row.quote.flatMap(value=>{
+        if(!value || typeof value !== "object" || Array.isArray(value)) {invalid.push("quote");return [];}
+        const quote={...value} as Json;
+        if(quote.symbol === "USD") clean(quote,["price","market_cap","fully_diluted_market_cap","volume_24h","percent_change_24h","percent_change_7d","percent_change_30d","percent_change_60d","percent_change_90d"],"quote.");
+        return [quote];
+      });
+    }
+  }
+  result.quoteInvalidFields=[...new Set(invalid)].sort();
+  if(invalid.length) {
+    result.quoteSchemaUrl=url;
+    if(report) observations.push({url,observedAt:sourceObservedAt(url),status:"withheld",reason:"schema_mismatch",quoteIds:[String(row.id)]});
+  }
+  return result;
 }
 
 // A provider can report zero when supply is unverified. Prefer a positive quote
@@ -103,10 +136,10 @@ async function fetchOverviewList(path: string, observations: SourceObservation[]
   const data = await getJson<{ protocols?: Json[] }>(url, observations);
   if (!Array.isArray(data.protocols) || data.protocols.length === 0) {
     const observation = observations.find(s => s.url === url);
-    if (observation) observation.status = "error";
+    if (observation) { if (observation.status === "ok") observation.httpStatus ??= 200; observation.status = "error"; }
     throw new Error("DefiLlama overview is empty");
   }
-  return data.protocols;
+  return validateProtocolFinancialRows(data.protocols,url,observations);
 }
 
 // Every explicit ID is queried. Rank changes cannot move a token outside the collector.
@@ -117,8 +150,7 @@ export async function fetchGecko(ids: string[], observations: SourceObservation[
   const deadline = Date.now() + GECKO_BUDGET_MS;
   const pace = async () => {
     const delay = Math.max(0, nextAt - Date.now());
-    if (Date.now() + delay > deadline) throw new Error("CoinGecko request budget exhausted");
-    if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+    if (delay && (sourceReplayActive() || Date.now() + delay < deadline)) await sourceDelay(delay);
     nextAt = Date.now() + GECKO_INTERVAL_MS;
   };
   for (const { ids: batch, url } of geckoRequests(ids)) {
@@ -127,13 +159,13 @@ export async function fetchGecko(ids: string[], observations: SourceObservation[
       if (!Array.isArray(rows)) throw new Error("CoinGecko response is invalid");
       for (const r of rows) {
         const id = str(r.id);
-        if (id && batch.includes(id)) byId.set(id, r);
+        if (id && batch.includes(id)) byId.set(id, validateQuoteRow(r,"gecko",url,observations));
       }
-      for (const id of batch) lookups.set(id, quoteLookup(id, byId.get(id), "gecko"));
+      for (const id of batch) lookups.set(id, quoteLookup(id, byId.get(id), "gecko", false, sourceObservedAt(url)));
     } catch {
       const observation = observations.find(s => s.url === url);
-      if (observation) observation.status = "error";
-      for (const id of batch) lookups.set(id, quoteLookup(id, undefined, "gecko", true));
+      if (observation) { if (observation.status === "ok") observation.httpStatus ??= 200; observation.status = "error"; }
+      for (const id of batch) lookups.set(id, quoteLookup(id, undefined, "gecko", true, sourceObservedAt(url)));
     }
   }
   return { byId, lookups };
@@ -156,6 +188,8 @@ interface CmcIndex {
   bySlug: Map<string, Json>;
   byNameSymbol: Map<string, Json[]>;
   bySymbol: Map<string, Json[]>;
+  observedAt?: Map<number, string>;
+  discoveryComplete?: boolean;
 }
 
 function indexCmcRows(index: CmcIndex, rows: Json[]) {
@@ -179,6 +213,8 @@ export async function fetchCmc(observations: SourceObservation[]): Promise<CmcIn
     bySlug: new Map(),
     byNameSymbol: new Map(),
     bySymbol: new Map(),
+    observedAt: new Map(),
+    discoveryComplete: true,
   });
   const index = empty(), deadline = Date.now() + 60_000;
   for (let start = 1; ; start += 5000) {
@@ -187,12 +223,14 @@ export async function fetchCmc(observations: SourceObservation[]): Promise<CmcIn
       const response = await getJson<{ data?: Json[] }>(url, observations, { timeout: 10_000, deadline });
       if (!Array.isArray(response.data) || (start === 1 && !response.data.length)) throw new Error("CMC response is empty");
       const before = index.byId.size;
-      indexCmcRows(index, response.data);
+      indexCmcRows(index, response.data.map(row=>validateQuoteRow(row,"cmc",url,observations,false)));
+      for (const row of response.data) if (typeof row.id === "number") index.observedAt!.set(row.id,sourceObservedAt(url));
       if (response.data.length && index.byId.size === before) throw new Error("CMC pagination did not advance");
       if (response.data.length < 5000) break;
     } catch {
+      index.discoveryComplete = false;
       const observation = observations.find(s => s.url === url);
-      if (observation) observation.status = "error";
+      if (observation) { if (observation.status === "ok") observation.httpStatus ??= 200; observation.status = "error"; }
       break;
     }
   }
@@ -201,7 +239,7 @@ export async function fetchCmc(observations: SourceObservation[]): Promise<CmcIn
 
 async function completeCmc(ids: number[], index: CmcIndex, observations: SourceObservation[], refreshIds: number[] = []) {
   const lookups = new Map<number, QuoteLookup>();
-  for (const [id, row] of index.byId) lookups.set(id, quoteLookup(String(id), row, "cmc"));
+  for (const [id, row] of index.byId) lookups.set(id, quoteLookup(String(id), row, "cmc",false,index.observedAt?.get(id)));
   await quoteBatches([...new Set([...ids, ...refreshIds])].filter(id => !index.byId.has(id) || refreshIds.includes(id)).sort((a,b) => a-b), async batch => {
     const url = `${CMC}/v3/cryptocurrency/quotes/latest?id=${batch.join(",")}&convert=USD&skip_invalid=true`;
     try {
@@ -210,17 +248,23 @@ async function completeCmc(ids: number[], index: CmcIndex, observations: SourceO
       if (!Array.isArray(rows)) throw new Error("CMC quote response is invalid");
       // A listings response may omit fields or an asset altogether. Direct ID
       // responses replace that record; no amount is copied from the baseline.
+      if (batch.some(id=>index.byId.has(id) && !rows.some(row=>Number(row.id) === id))) index.discoveryComplete = false;
       for (const id of batch) index.byId.delete(id);
-      for (const row of rows) if (batch.includes(Number(row.id))) index.byId.set(Number(row.id), row);
-      for (const id of batch) lookups.set(id, quoteLookup(String(id), index.byId.get(id), "cmc"));
+      for (const row of rows) if (batch.includes(Number(row.id))) index.byId.set(Number(row.id), validateQuoteRow(row,"cmc",url,observations));
+      for (const id of batch) lookups.set(id, quoteLookup(String(id), index.byId.get(id), "cmc",false,sourceObservedAt(url)));
     } catch {
       const observation = observations.find(s => s.url === url);
-      if (observation) observation.status = "error";
-      for (const id of batch) lookups.set(id, quoteLookup(String(id), undefined, "cmc", true));
+      if (observation) { if (observation.status === "ok") observation.httpStatus ??= 200; observation.status = "error"; }
+      for (const id of batch) {
+        const row = index.byId.get(id);
+        // Preserve identity membership without reusing failed-refresh amounts.
+        if (row) index.byId.set(id,{id:row.id,name:row.name,symbol:row.symbol,slug:row.slug,date_added:row.date_added});
+        lookups.set(id, quoteLookup(String(id), undefined, "cmc", true,sourceObservedAt(url)));
+      }
     }
   });
   const rows = [...index.byId.values()];
-  for (const map of Object.values(index)) map.clear();
+  for (const map of [index.byId,index.bySlug,index.byNameSymbol,index.bySymbol,index.observedAt]) map?.clear();
   indexCmcRows(index, rows);
   return lookups;
 }
@@ -271,6 +315,9 @@ export function findCmc({
   const projectSlug = groupKey.replace(/^parent#/, "").toLowerCase();
   const exactProject = cmc.bySlug.get(projectSlug);
   if (symbolMatches(exactProject)) return exactProject;
+
+  // A partial discovery list cannot establish uniqueness of a name/symbol.
+  if (cmc.discoveryComplete === false) return undefined;
 
   if (normalizedSymbol) {
     const exactName = cmc.byNameSymbol.get(`${normalize(name)}#${normalizedSymbol}`) ?? [];
@@ -348,14 +395,27 @@ export function aggregateRevenueSource(list: Json[], groupKey: (slug: string) =>
   })) as NonNullable<CoinRaw["revenueSource"]>["periods"]]));
 }
 
-/**
- * DefiLlama 4종 + CMC + CoinGecko를 조인하되, **parent protocol 단위로 묶어** 집계한다.
- * holder revenue는 child 경제유형을 보존해 적격 최근 30일과 raw TTM을 따로 합산한다.
- */
-export async function fetchCoins(observations: SourceObservation[] = [], baseline?: ScreenerResponse): Promise<CoinRaw[]> {
-  const preservedParents = new Map(baseline?.coins.filter(c => c.isParent && c.revenueHistory).map(c => [c.slug, Object.values(c.revenueHistory!.periods).filter(p => p.reportedDays === p.days).map(p => p.days)]));
-  const histories = Promise.all([fetchRevenueHistory(observations, preservedParents), fetchHolderHistory(observations)]);
-  const [protocols, feesL, revL, hrL, dexsL, cmc, stablecoins, config] = await Promise.all([
+/** Serializable acquisition result. Normalization consumes only these inputs;
+ * original HTTP response bytes are retained by the enclosing source session. */
+export interface CoinInputs {
+  asOf: string;
+  protocols: Json[]; fees: Json[]; revenue: Json[]; holders: Json[]; dexs: Json[];
+  parents: Json[]; stablecoins: StablecoinAsset[];
+  cmc: Json[]; cmcLookups: [number, QuoteLookup][]; cmcDiscoveryComplete: boolean;
+  gecko: Json[]; geckoLookups: [string, QuoteLookup][];
+  revenueHistories: Record<string, RevenueHistory>; holderHistories: Record<string, RevenueHistory>;
+  recoveredRevenue: [string,string][]; observations: SourceObservation[];
+  priorCmcTargets: [number,string[]][];
+}
+
+export async function collectCoinInputs(observations: SourceObservation[] = [], baseline?: ScreenerResponse): Promise<CoinInputs> {
+  const asOf = new Date(sourceNow()).toISOString();
+  const preserved = (metric: "revenueHistory" | "holderHistory") => new Map((baseline?.coins ?? []).flatMap(c => {
+    const days = Object.values(c[metric]?.periods ?? {}).filter(p => p.reportedDays === p.days).map(p => p.days);
+    return days.length ? [[c.slug,days] as const] : [];
+  }));
+  const histories = Promise.all([fetchRevenueHistory(observations, preserved("revenueHistory")), fetchHolderHistory(observations,preserved("holderHistory"))]);
+  const initial = await Promise.allSettled([
     getJson<Json[]>(`${LLAMA}/protocols`, observations),
     fetchOverviewList("/overview/fees", observations),
     fetchOverviewList("/overview/fees?dataType=dailyRevenue", observations),
@@ -365,23 +425,68 @@ export async function fetchCoins(observations: SourceObservation[] = [], baselin
     getJson<{ peggedAssets: StablecoinAsset[] }>(STABLECOIN_SOURCE, observations),
     getJson<{ parentProtocols: Json[] }>(`${LLAMA}/config`, observations),
   ]);
-
-  if (!Array.isArray(stablecoins.peggedAssets) || stablecoins.peggedAssets.length === 0) throw new Error("Stablecoin identity registry unavailable");
-  if (!Array.isArray(protocols) || !protocols.length || !Array.isArray(config.parentProtocols)) throw new Error("DefiLlama directory unavailable");
+  if (initial.some(result=>result.status === "rejected")) await histories;
+  const unwrap = <T>(result: PromiseSettledResult<T>): T => {
+    if (result.status === "rejected") throw result.reason;
+    return result.value;
+  };
+  const [protocolsRaw,feesL,revL,hrL,dexsL,cmc,stablecoins,configRaw] = [unwrap(initial[0]),unwrap(initial[1]),unwrap(initial[2]),unwrap(initial[3]),unwrap(initial[4]),unwrap(initial[5]),unwrap(initial[6]),unwrap(initial[7])] as const;
+  if (!Array.isArray(stablecoins.peggedAssets) || stablecoins.peggedAssets.length === 0) { await histories; throw new Error("Stablecoin identity registry unavailable"); }
+  let protocols:Json[],config:{parentProtocols:Json[]};
+  try {
+    protocols=validateDirectoryRows(protocolsRaw,"slug",`${LLAMA}/protocols`,observations);
+    config={parentProtocols:validateDirectoryRows(configRaw?.parentProtocols,"id",`${LLAMA}/config`,observations)};
+  } catch(error) { await histories;throw error; }
   const [, recoveredRevenue] = await Promise.all([
     recoverOverviewRows(protocols, feesL, baseline, "dailyFees", observations),
     recoverOverviewRows(protocols, revL, baseline, "dailyRevenue", observations),
     recoverOverviewRows(protocols, hrL, baseline, "dailyHoldersRevenue", observations),
   ]);
-  const parents = new Map(config.parentProtocols.flatMap(p => typeof p.id === "string" ? [[p.id, p] as const] : []));
   const identityRows = [...protocols, ...feesL, ...revL, ...hrL, ...dexsL, ...config.parentProtocols];
-  const priorCmcIds = (baseline?.coins ?? []).flatMap(c => c.cmcId !== null && (!cmc.byId.has(c.cmcId) ||
-    ([['mcap', 'market_cap'], ['price', 'price'], ['fdv', 'fully_diluted_market_cap']] as const).some(([field, source]) => c[field] !== null && num(cmcQuote(cmc.byId.get(c.cmcId!))?.[source]) === null)) ? [c.cmcId] : []);
+  const currentSlugs = new Set(identityRows.flatMap(p=>typeof p.slug === "string" ? [p.slug] : typeof p.id === "string" && p.id.startsWith("parent#") ? [p.id] : []));
+  const priorTargets = new Map<number,Set<string>>();
+  for (const c of baseline?.coins ?? []) {
+    const represented = (c.sourceSlugs ?? [c.slug]).filter(slug=>currentSlugs.has(slug));
+    if (!represented.length || c.cmcId === null || (cmc.byId.has(c.cmcId) &&
+      !([['mcap', 'market_cap'], ['price', 'price'], ['fdv', 'fully_diluted_market_cap']] as const).some(([field, source]) => c[field] !== null && num(cmcQuote(cmc.byId.get(c.cmcId!))?.[source]) === null))) continue;
+    priorTargets.set(c.cmcId,new Set([...(priorTargets.get(c.cmcId) ?? []),...represented]));
+  }
+  const priorCmcTargets:[number,string[]][] = [...priorTargets].map(([id,slugs])=>[id,[...slugs].sort()]);
+  priorCmcTargets.sort(([a],[b])=>a-b);
+  const priorCmcIds = priorCmcTargets.map(([id])=>id);
   const [gecko, cmcLookups, [revenueHistories, holderHistories]] = await Promise.all([
     fetchGecko(identityRows.flatMap(p => str(p.gecko_id) ? [String(p.gecko_id)] : []), observations),
     completeCmc(identityRows.map(p => Number(p.cmcId)).filter(id => Number.isSafeInteger(id) && id > 0), cmc, observations, priorCmcIds),
     histories,
   ]);
+
+  const inputs:CoinInputs = {asOf,protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,parents:config.parentProtocols,stablecoins:stablecoins.peggedAssets,
+    cmc:[...cmc.byId.values()].sort((a,b)=>Number(a.id)-Number(b.id)),cmcLookups:[...cmcLookups].sort(([a],[b])=>a-b),cmcDiscoveryComplete:cmc.discoveryComplete !== false,
+    gecko:[...gecko.byId.values()].sort((a,b)=>String(a.id).localeCompare(String(b.id))),geckoLookups:[...gecko.lookups].sort(([a],[b])=>a.localeCompare(b)),
+    revenueHistories,holderHistories,recoveredRevenue:[...recoveredRevenue].sort(([a],[b])=>a.localeCompare(b)),observations:[...observations],priorCmcTargets};
+  // A broad discovery row outside this source universe cannot taint its rows.
+  const linkedCmcIds=new Set(normalizeCoinInputs(inputs).flatMap(c=>c.marketSources?.requests?.cmc.map(q=>q.id) ?? []));
+  for(const row of inputs.cmc) if(linkedCmcIds.has(String(row.id)) && Array.isArray(row.quoteInvalidFields) && row.quoteInvalidFields.length && typeof row.quoteSchemaUrl === "string" && row.quoteSchemaUrl.includes("/listings/latest")) {
+    observations.push({url:row.quoteSchemaUrl,observedAt:sourceObservedAt(row.quoteSchemaUrl),status:"withheld",reason:"schema_mismatch",quoteIds:[String(row.id)]});
+  }
+  // Completion order must not make captured and replayed inputs differ.
+  observations.sort((a,b)=>a.url.localeCompare(b.url) || a.observedAt.localeCompare(b.observedAt) || a.status.localeCompare(b.status) || JSON.stringify(a.quoteIds ?? a.sourceSlugs ?? []).localeCompare(JSON.stringify(b.quoteIds ?? b.sourceSlugs ?? [])));
+  inputs.observations=[...observations];
+  return inputs;
+}
+
+/** Pure join and financial classification; no clock, cache, or network reads. */
+export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
+  const {protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,revenueHistories,holderHistories,observations}=inputs;
+  const parents = new Map(inputs.parents.flatMap(p => typeof p.id === "string" ? [[p.id,p] as const] : []));
+  const identityRows = [...protocols,...feesL,...revL,...hrL,...dexsL,...inputs.parents];
+  const recoveredRevenue = new Map(inputs.recoveredRevenue);
+  const cmc: CmcIndex = {byId:new Map(),bySlug:new Map(),byNameSymbol:new Map(),bySymbol:new Map(),discoveryComplete:inputs.cmcDiscoveryComplete};
+  indexCmcRows(cmc,inputs.cmc);
+  const cmcLookups = new Map(inputs.cmcLookups);
+  const gecko = {byId:new Map(inputs.gecko.map(row=>[String(row.id),row])),lookups:new Map(inputs.geckoLookups)};
+  const priorCmcBySource = new Map<string,number[]>();
+  for (const [id,slugs] of inputs.priorCmcTargets ?? []) for (const slug of slugs) priorCmcBySource.set(slug,[...(priorCmcBySource.get(slug) ?? []),id]);
 
   // /protocols also carries parent links, including children absent from revenue overviews.
   const parentOf = new Map<string, string>();
@@ -517,10 +622,12 @@ export async function fetchCoins(observations: SourceObservation[] = [], baselin
     const feesChange =
       fees && fees.prev30 !== null && fees.prev30 > 0 && fees.d30 !== null ? ((fees.d30 - fees.prev30) / fees.prev30) * 100 : null;
 
+    const sourceSlugs = [...new Set([k, ...members.map(m => String(m.slug))])];
+    const requestedCmcIds = [...new Set([...memberCmcIds,...(cmcId !== null ? [cmcId] : []),...sourceSlugs.flatMap(slug=>priorCmcBySource.get(slug) ?? [])])].sort((a,b)=>a-b);
     coins.push({
       fundamentals: combineFundamentals(revenueDefinitions.get(k) as MetricDefinition<RevenueKind> | undefined, feeDefinitions.get(k) as MetricDefinition<FeeKind> | undefined, hrL.filter(h => typeof h.slug === "string" && h.doublecounted !== true && groupKey(h.slug) === k)),
       slug: k,
-      sourceSlugs: [...new Set([k, ...members.map(m => String(m.slug))])],
+      sourceSlugs,
       name,
       symbol: (cmcRow ? str(cmcRow.symbol) : g ? str(g.symbol)?.toUpperCase() : null) ?? symbol,
       category: str(rep.category),
@@ -533,15 +640,15 @@ export async function fetchCoins(observations: SourceObservation[] = [], baselin
       isParent,
       identityStatus,
       identityReason,
-      capitalExclusionReason: capitalExclusion(geckoId ?? (cmcRow ? str(cmcRow.slug) : null), (cmcRow ? str(cmcRow.symbol) : g ? str(g.symbol) : null) ?? symbol, stablecoins.peggedAssets),
+      capitalExclusionReason: capitalExclusion(geckoId ?? (cmcRow ? str(cmcRow.slug) : null), (cmcRow ? str(cmcRow.symbol) : g ? str(g.symbol) : null) ?? symbol, inputs.stablecoins),
       description: str(parent?.description) ?? str(rep.description),
       descriptionKo: koreanDescription(str(parent?.description) ?? str(rep.description)),
       descriptionSource: `https://defillama.com/protocol/${encodeURIComponent(String(rep.slug))}`,
       website: str(parent?.url) ?? str(rep.url),
       revenueHistory: history,
-      revenueSource: { url: recoveredRevenue.get(k) ?? REVENUE_OVERVIEW_URL, observedAt: observations.find(s => s.url === (recoveredRevenue.get(k) ?? REVENUE_OVERVIEW_URL) && s.status === "ok")!.observedAt, periods: sourceRevAgg.get(k) },
+      revenueSource: { url: recoveredRevenue.get(k) ?? REVENUE_OVERVIEW_URL, observedAt: observations.find(s => s.url === (recoveredRevenue.get(k) ?? REVENUE_OVERVIEW_URL) && s.status === "ok")?.observedAt ?? inputs.asOf, periods: sourceRevAgg.get(k) },
       holderHistory: holderHistories[k] ?? null,
-      sales: resolveSalesEvidence({ slug: k, geckoId, symbol, identityStatus }, new Date().toISOString()),
+      sales: resolveSalesEvidence({ slug: k, geckoId, symbol, identityStatus }, inputs.asOf),
 
       mcap: cap.value,
       marketSources: {
@@ -549,7 +656,11 @@ export async function fetchCoins(observations: SourceObservation[] = [], baselin
         price: price.source,
         fdv: fdv.source,
         gecko: geckoId ? gecko.lookups.get(geckoId) ?? null : null,
-        cmc: cmcId !== null ? !cmcRow && cmc.byId.has(cmcId) ? { ...cmcLookups.get(cmcId)!, status: "identity_mismatch" } : cmcLookups.get(cmcId) ?? null : null,
+        cmc: cmcId !== null ? !cmcRow && cmc.byId.has(cmcId) && cmcLookups.get(cmcId)?.status === "received" ? { ...cmcLookups.get(cmcId)!, status: "identity_mismatch" } : cmcLookups.get(cmcId) ?? null : null,
+        requests: {
+          gecko:[...memberGeckoIds].sort().flatMap(id=>gecko.lookups.has(id) ? [gecko.lookups.get(id)!] : []),
+          cmc:requestedCmcIds.flatMap(id=>cmcLookups.has(id) ? [cmcLookups.get(id)!] : []),
+        },
       },
       tvl,
       change1d: num(quote?.percent_change_24h) ?? num(g?.price_change_percentage_24h),
@@ -605,4 +716,8 @@ export async function fetchCoins(observations: SourceObservation[] = [], baselin
   if (new Set(coins.map(c => c.slug)).size !== coins.length || expected.some(slug => !represented.has(slug))) throw new Error("Source directory coverage mismatch");
   if (coins.some(c => c.geckoId && !c.marketSources?.gecko)) throw new Error("Unattempted CoinGecko identity");
   return coins;
+}
+
+export async function fetchCoins(observations: SourceObservation[] = [], baseline?: ScreenerResponse): Promise<CoinRaw[]> {
+  return normalizeCoinInputs(await collectCoinInputs(observations,baseline));
 }

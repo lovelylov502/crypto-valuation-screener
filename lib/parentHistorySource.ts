@@ -2,9 +2,11 @@ import { sameMethodology } from "./fundamentalSource";
 import { summarizeRevenueHistory, type RevenueHistory } from "./revenueHistory";
 import type { SourceObservation } from "./types";
 import { readHistorySummary } from "./historyRequest";
+import { sourceObservedAt } from "./sourceBundle";
+import { validateSummaryHistory } from "./sourceValidation";
 
 type Row = Record<string, unknown>;
-type ParentSource = { key: string; members: Row[]; summary: Row; url: string; uniqueNames: boolean };
+type ParentSource = { key: string; members: Row[]; summary: Row; url: string; observedAt: string; uniqueNames: boolean };
 const DAY = 86400;
 const differs = (a: number, b: number) => Math.abs(a - b) > Math.max(1, Math.abs(b)) * 1e-8;
 
@@ -17,8 +19,8 @@ export function sameParentScope(key: string, members: Row[], summary: Row): bool
   return members.every(p => children.some(child => child.defillamaId === p.defillamaId && child.name === p.name && child.doublecounted !== true && sameMethodology(p.methodology, child.methodology)));
 }
 
-/** Runs alongside child supplementation, under its own bounded source-request budget. */
-export async function fetchParentHistorySources(protocols: Row[], chart: unknown[], now: number, dataType: "dailyRevenue" | "dailyHoldersRevenue", eligible: (p: Row) => boolean, observations: SourceObservation[]): Promise<ParentSource[]> {
+/** Runs alongside child supplementation; the enclosing capture owns the shared deadline. */
+export async function fetchParentHistorySources(protocols: Row[], chart: unknown[], now: number, dataType: "dailyRevenue" | "dailyHoldersRevenue", eligible: (p: Row) => boolean, observations: SourceObservation[], preservedWindows: ReadonlyMap<string, readonly number[]> = new Map()): Promise<ParentSource[]> {
   const groups = new Map<string, Row[]>();
   const nameCounts = new Map<string, number>();
   for (const p of protocols) nameCounts.set(String(p.name), (nameCounts.get(String(p.name)) ?? 0) + 1);
@@ -27,29 +29,36 @@ export async function fetchParentHistorySources(protocols: Row[], chart: unknown
   }
   const rows = new Map(chart.filter((p): p is [number, Row] => Array.isArray(p) && typeof p[0] === "number" && !!p[1] && typeof p[1] === "object"));
   const end = Math.floor(now / 1000 / DAY) * DAY - DAY;
-  const candidates = [...groups].filter(([, members]) => members.some(p => typeof p.total30d === "number") &&
+  const candidates = [...groups].filter(([key, members]) => (members.some(p => [p.total24h,p.total7d,p.total30d,p.total1y].some(v=>typeof v === "number" && Number.isFinite(v))) || preservedWindows.has(key)) &&
     (Array.from({ length: 30 }, (_, i) => rows.get(end - i * DAY)).some(row => members.some(p => !Number.isFinite(row?.[String(p.name)]))) ||
+      (preservedWindows.get(key) ?? []).some(days=>Array.from({length:days},(_,i)=>rows.get(end-i*DAY)).some(row=>members.some(p=>!Number.isFinite(row?.[String(p.name)])))) ||
       Array.from({ length: 730 }, (_, i) => rows.get(end - i * DAY)).some(row => members.some(p => typeof row?.[String(p.name)] === "number") && members.some(p => typeof row?.[String(p.name)] !== "number"))));
+  candidates.sort(([a],[b])=>a.localeCompare(b));
+  const parentUrl = (key: string, members: Row[]) => {
+    const name = members.map(p => Array.isArray(p.linkedProtocols) ? p.linkedProtocols[0] : null).find(n => typeof n === "string");
+    const slug = typeof name === "string" ? name.toLowerCase().replace(/\s+/g, "-") : key.replace(/^parent#/, "");
+    return `https://api.llama.fi/summary/fees/${encodeURIComponent(slug)}?dataType=${dataType}`;
+  };
   const output: ParentSource[] = [];
   let index = 0;
-  const deadline = Date.now() + 60_000;
   await Promise.all(Array.from({ length: Math.min(6, candidates.length) }, async () => {
     while (index < candidates.length) {
       const [key, members] = candidates[index++];
       // Parent IDs can retain old names (maker/lyra); linkedProtocols carries the current source name.
-      const name = members.map(p => Array.isArray(p.linkedProtocols) ? p.linkedProtocols[0] : null).find(n => typeof n === "string");
-      const slug = typeof name === "string" ? name.toLowerCase().replace(/\s+/g, "-") : key.replace(/^parent#/, "");
-      const url = `https://api.llama.fi/summary/fees/${encodeURIComponent(slug)}?dataType=${dataType}`;
+      const url = parentUrl(key,members);
+      const sourceSlugs = members.map(p => String(p.slug));
       try {
-        const summary = await readHistorySummary(url, now, deadline, observations);
+        const summary = await readHistorySummary(url, now, Infinity, observations, sourceSlugs);
         if (!summary) continue;
         if (!sameParentScope(key, members, summary)) {
-          observations.push({ url, observedAt: new Date(now).toISOString(), status: "withheld", reason: "scope_mismatch" });
+          observations.push({ url, observedAt: sourceObservedAt(url), sourceSlugs, status: "withheld", reason: "scope_mismatch" });
           continue;
         }
         if (!Array.isArray(summary.totalDataChart)) throw new Error("parent history missing");
-        output.push({ key, members, summary, url, uniqueNames: members.every(p => nameCounts.get(String(p.name)) === 1) });
-      } catch { observations.push({ url, observedAt: new Date(now).toISOString(), status: "error", httpStatus: 200 }); }
+        summary.totalDataChart = validateSummaryHistory(summary.totalDataChart, url, sourceSlugs, now, observations);
+        if (observations.some(s => s.url === url && s.reason === "value_conflict")) continue;
+        output.push({ key, members, summary, url, observedAt: sourceObservedAt(url), uniqueNames: members.every(p => nameCounts.get(String(p.name)) === 1) });
+      } catch { observations.push({ url, observedAt: sourceObservedAt(url), sourceSlugs, status: "error", httpStatus: 200 }); }
     }
   }));
   return output;
@@ -58,7 +67,7 @@ export async function fetchParentHistorySources(protocols: Row[], chart: unknown
 /** Merge explicit parent observations; never zero-fill a child's missing or pre-launch days. */
 export function mergeParentHistories(histories: Record<string, RevenueHistory>, chart: unknown[], parents: ParentSource[], now: number, observations: SourceObservation[]): void {
   const end = Math.floor(now / 1000 / DAY) * DAY - DAY;
-  for (const { key, members, summary, url, uniqueNames } of parents) {
+  for (const { key, members, summary, url, observedAt, uniqueNames } of parents) {
     const current = histories[key];
     if (!current) continue;
     const daily = new Map<number, number>();
@@ -76,10 +85,11 @@ export function mergeParentHistories(histories: Record<string, RevenueHistory>, 
     }
     if (!conflict) {
       const recovered = summarizeRevenueHistory([{ slug: key, name: key }], [...daily].map(([t, v]) => [t, { [key]: v }]), now, url, new Map([[key, { fingerprint: current.definitionFingerprint! }]]))[key];
-      recovered.supplementalSources = [...new Set([current.source, ...(current.supplementalSources ?? []), url])];
+      recovered.supplementalSources = [...new Set([current.source, ...(current.supplementalSources ?? []), url])].sort();
+      recovered.observedAt = [current.observedAt,observedAt].sort().at(-1)!;
       if (!current.weeks.length) recovered.weeks = [];
       histories[key] = recovered;
     }
-    observations.push({ url, observedAt: new Date(now).toISOString(), status: conflict ? "withheld" : "ok", ...(conflict ? { reason: "value_conflict" as const } : {}) });
+    observations.push({ url, observedAt, sourceSlugs: members.map(p => String(p.slug)), status: conflict ? "withheld" : "ok", ...(conflict ? { reason: "value_conflict" as const } : {}) });
   }
 }

@@ -73,6 +73,7 @@ export function CollectionStatus({ data, publication, error, refreshing, checked
           {([['CoinGecko', data.collection.gecko], ['CoinMarketCap', data.collection.cmc]] as const).map(([name, q]) => <p key={name}><strong>{name}</strong> 자산 {count(q?.requested)}개 조회 · 수신 {count(q?.received)} · 미반환 {count(q?.notReturned)} · <span className={q?.failed ? "negative" : ""}>실패 {count(q?.failed)}</span></p>)}
           <p>30일 원천 수익 {count(data.collection.sourceRevenue30d)}개 · 금액 표시 {count(data.collection.displayedRevenue30d)}개</p>
           <p>금액·연결 검사 오류 {count(data.collection.errors)}건 · 이력 보완 보류 {health.withheld.length.toLocaleString()}건</p>
+          {health.issueCount > 0 && <p className="caution-text">자료 확인 필요 {count(health.affectedProjects)}개 종목 · {count(health.issueCount)}개 항목. 종목 상세에 원천과 사유를 표시합니다.</p>}
         </div>}
         {p?.attempt.collection && <p>최근 시도: CoinGecko 조회 실패 {count(p.attempt.collection.gecko?.failed)}개 · CoinMarketCap 조회 실패 {count(p.attempt.collection.cmc?.failed)}개</p>}
         {health.firstFailureAt && <p className="collection-note">첫 실패 관측은 이번 수집 안에서의 기록입니다. 실제 장애가 언제 시작됐는지는 이 기록만으로 확정할 수 없습니다.</p>}

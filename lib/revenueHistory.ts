@@ -1,3 +1,6 @@
+import type { CoinDataQuality } from "./types";
+import { hasDataQualityConflict } from "./dataQuality";
+
 /** All windows end on the same completed UTC day. Missing days never become zero. */
 export type RevenueWindowDays = 1 | 7 | 30 | 90 | 365;
 export const REVENUE_WINDOWS = [1, 7, 30, 90, 365] as const;
@@ -35,8 +38,8 @@ export function revenueAmount(c: { revenueHistory?: RevenueHistory | null; reven
   return ({ 1: null, 7: c.revenue7d, 30: c.revenue30d, 90: c.revenue90d, 365: null })[days] ?? null;
 }
 
-export function historyMatches(c: { fundamentals?: { revenue: { fingerprint: string } }; revenueHistory?: RevenueHistory | null }): boolean {
-  return !c.revenueHistory || (!!c.fundamentals && c.revenueHistory.definitionFingerprint === c.fundamentals.revenue.fingerprint);
+export function historyMatches(c: { fundamentals?: { revenue: { fingerprint: string } }; revenueHistory?: RevenueHistory | null; dataQuality?: CoinDataQuality }): boolean {
+  return !hasDataQualityConflict(c, "revenue") && (!c.revenueHistory || (!!c.fundamentals && c.revenueHistory.definitionFingerprint === c.fundamentals.revenue.fingerprint));
 }
 export function revenueBasis(c: { revenueHistory?: RevenueHistory | null }): string {
   return c.revenueHistory ? "completed_utc" : "provider_rolling";

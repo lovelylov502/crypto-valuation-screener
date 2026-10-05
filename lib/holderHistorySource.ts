@@ -5,6 +5,8 @@ import { holderScope } from "./valuationMetrics";
 import type { SourceObservation } from "./types";
 import { completeHistorySource } from "./completeHistorySource";
 import { fetchParentHistorySources, mergeParentHistories } from "./parentHistorySource";
+import { sourceFetch, sourceNow, sourceObservedAt, sourceSessionActive } from "./sourceBundle";
+import { validateHistoryBreakdown, validateProtocolFinancialRows } from "./sourceValidation";
 
 export const HOLDER_HISTORY_URL = "https://api.llama.fi/overview/fees?dataType=dailyHoldersRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false";
 type Row = Record<string, unknown>;
@@ -21,34 +23,48 @@ export function summarizeHolderHistory(protocols: Row[], chart: unknown[], now: 
 }
 let cached: { at: number; value: Record<string, RevenueHistory>; sources: SourceObservation[] } | undefined;
 let pending: Promise<void> | undefined;
-export async function fetchHolderHistory(observations: SourceObservation[]): Promise<Record<string, RevenueHistory>> {
+export async function fetchHolderHistory(observations: SourceObservation[], preservedWindows: ReadonlyMap<string, readonly number[]> = new Map()): Promise<Record<string, RevenueHistory>> {
+  let httpStatus: number | undefined;
   try {
-    if (!cached || Date.now() - cached.at > 1800_000 || Math.floor(Date.now() / 86400_000) !== Math.floor(cached.at / 86400_000)) {
-      pending ??= (async () => {
-        const response = await fetch(HOLDER_HISTORY_URL, { cache: "no-store", signal: AbortSignal.timeout(30000), headers: { accept: "application/json" } });
+    const load = async () => {
+        const response = await sourceFetch(HOLDER_HISTORY_URL, { cache: "no-store", signal: AbortSignal.timeout(30000), headers: { accept: "application/json" } });
+        httpStatus = response.status;
         if (!response.ok) throw new Error(`Holder history ${response.status}`);
         const data = await response.json();
         if (!Array.isArray(data.protocols) || !Array.isArray(data.totalDataChartBreakdown)) throw new Error("Holder history missing");
-        const at = Date.now();
+        const at = sourceNow(), observedAt = sourceObservedAt(HOLDER_HISTORY_URL);
+        const sources: SourceObservation[] = [];
+        data.protocols = validateProtocolFinancialRows(data.protocols, HOLDER_HISTORY_URL, sources);
+        data.totalDataChartBreakdown = validateHistoryBreakdown(data.protocols, data.totalDataChartBreakdown, HOLDER_HISTORY_URL, at, sources);
         const parent = new Map<string,string>(data.protocols.map((p: Row)=>[String(p.slug),String(p.parentProtocol ?? p.slug)]));
         const summaries = aggregateHolderValueByGroup(data.protocols,s=>parent.get(s) ?? s,definitionReviewed);
-        const sources: SourceObservation[] = [];
         const eligible = (p: Row) => !!summaries.get(parent.get(String(p.slug)) ?? String(p.slug))?.components.some(c=>c.slug === p.slug && c.eligible);
+        const reported = (p: Row) => [p.total24h,p.total7d,p.total30d,p.total1y].some(v=>typeof v === "number" && Number.isFinite(v)) || preservedWindows.has(String(p.parentProtocol ?? p.slug));
         const [chart, parentSources] = await Promise.all([
-          completeHistorySource(data.protocols,data.totalDataChartBreakdown,at,"dailyHoldersRevenue",p=>eligible(p) && typeof p.total30d === "number",sources),
-          fetchParentHistorySources(data.protocols,data.totalDataChartBreakdown,at,"dailyHoldersRevenue",eligible,sources),
+          completeHistorySource(data.protocols,data.totalDataChartBreakdown,at,"dailyHoldersRevenue",reported,sources,preservedWindows),
+          fetchParentHistorySources(data.protocols,data.totalDataChartBreakdown,at,"dailyHoldersRevenue",()=>true,sources,preservedWindows),
         ]);
-        cached = { at, value: summarizeHolderHistory(data.protocols, chart, at), sources };
-        for (const [key,h] of Object.entries(cached.value)) h.supplementalSources = sources.filter(s=>s.status === "ok" && (parent.get(decodeURIComponent(new URL(s.url).pathname.split("/").at(-1)!)) ?? "") === key).map(s=>s.url);
-        mergeParentHistories(cached.value, chart, parentSources, at, sources);
-      })().finally(() => { pending = undefined; });
+        const value = summarizeHolderHistory(data.protocols, chart, at);
+        for (const [key,h] of Object.entries(value)) {
+          const supplements = sources.filter(s=>s.status === "ok" && s.sourceSlugs?.some(slug=>(parent.get(slug) ?? slug) === key));
+          h.observedAt = [observedAt,...supplements.map(s=>s.observedAt)].sort().at(-1)!;
+          h.supplementalSources = [...new Set(supplements.map(s=>s.url))].sort();
+        }
+        // A full raw parent must never widen an economically eligible subset.
+        mergeParentHistories(value, chart, parentSources.filter(p=>p.members.every(eligible)), at, sources);
+        return {at,value,sources:[{url:HOLDER_HISTORY_URL,observedAt,status:"ok" as const},...sources]};
+    };
+    if (sourceSessionActive()) {
+      const result=await load();observations.push(...result.sources);return result.value;
+    }
+    if (!cached || sourceNow() - cached.at > 1800_000 || Math.floor(sourceNow() / 86400_000) !== Math.floor(cached.at / 86400_000)) {
+      pending ??= load().then(result=>{cached=result;}).finally(() => { pending = undefined; });
       await pending;
     }
-    observations.push({ url: HOLDER_HISTORY_URL, observedAt: new Date(cached!.at).toISOString(), status: "ok" });
     observations.push(...cached!.sources);
     return cached!.value;
   } catch {
-    observations.push({ url: HOLDER_HISTORY_URL, observedAt: new Date().toISOString(), status: "error" });
+    observations.push({ url: HOLDER_HISTORY_URL, observedAt: sourceObservedAt(HOLDER_HISTORY_URL), status: "error", httpStatus });
     return {};
   }
 }

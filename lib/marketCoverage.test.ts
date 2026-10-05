@@ -14,7 +14,7 @@ it.each(["absent", "partial"])("rechecks a previously identified CMC asset with 
   vi.stubGlobal("fetch", vi.fn(async (input: string) => {
     const url = String(input); calls.push(url);
     const body = url.endsWith("/protocols") ? [{ slug: "token", name: "Token", symbol: "T" }]
-      : url.endsWith("/config") ? { parentProtocols: [] }
+      : url.endsWith("/config") ? { parentProtocols: [{ id: "parent#unrelated", name: "Unrelated Parent" }] }
       : url.includes("/quotes/latest") ? { data: [{ ...asset, quote: [{ symbol: "USD", market_cap: 250, price: 2.5, fully_diluted_market_cap: 500 }] }] }
       : url.includes("coinmarketcap") ? { data: scenario === "partial" ? [asset] : [{ id: 1, slug: "other" }] }
       : url.includes("stablecoins") ? { peggedAssets: [{ gecko_id: "usdd", symbol: "USDD" }] }
@@ -65,7 +65,7 @@ it.each([0, 200])("does not let an unverified zero CMC cap hide a Gecko cap (%s)
   vi.stubGlobal("fetch", vi.fn(async (input: string) => {
     const url = String(input);
     const body = url.endsWith("/protocols") ? [{slug:"token",name:"Token",symbol:"T",gecko_id:"token"}]
-      : url.endsWith("/config") ? {parentProtocols:[]}
+      : url.endsWith("/config") ? {parentProtocols: [{ id: "parent#unrelated", name: "Unrelated Parent" }]}
       : url.includes("/coins/markets") ? [{id:"token",symbol:"t",market_cap:geckoCap,circulating_supply:100,current_price:2,fully_diluted_valuation:400}]
       : url.includes("coinmarketcap") ? {data:[{id:1,slug:"token",symbol:"T",circulating_supply:0,quote:[{symbol:"USD",market_cap:0,price:0,fully_diluted_market_cap:0}]}]}
       : url.includes("stablecoins") ? {peggedAssets:[{gecko_id:"usdd",symbol:"USDD"}]}
@@ -138,7 +138,7 @@ it.each([false, true])("supplements canonical CMC IDs outside listings and uses 
   vi.stubGlobal("fetch", vi.fn(async (input: string) => {
     const url = String(input); requests.push(url);
     const body = url.endsWith("/protocols") ? [{ slug: "token", name: "Token", symbol: "T", cmcId: "99999", gecko_id: null }]
-      : url.endsWith("/config") ? { parentProtocols: [] }
+      : url.endsWith("/config") ? { parentProtocols: [{ id: "parent#unrelated", name: "Unrelated Parent" }] }
       : url.includes("/coins/markets") ? [{ id: "token", symbol: "t", market_cap: 200, current_price: 2, fully_diluted_valuation: 400, last_updated: "2026-09-28T00:00:00Z" }]
       : url.includes("/quotes/latest") ? { data: [{ id: 99999, symbol: conflict ? "WRONG" : "T", slug: "token", quote: [{ symbol: "USD", market_cap: 100, price: null }] }] }
       : url.includes("coinmarketcap") ? { data: [] }

@@ -39,7 +39,7 @@ export function marketDataReason(c: CoinRaw, field: "mcap" | "fdv" | "price") {
 
 export function collectionCoverage(coins: CoinRaw[]): NonNullable<ScreenerResponse["collection"]> {
   const quotes = (vendor: "gecko" | "cmc") => {
-    const lookups = new Map(coins.flatMap(c => c.marketSources?.[vendor] ? [[c.marketSources[vendor]!.id, c.marketSources[vendor]!] as const] : []));
+    const lookups = new Map(coins.flatMap(c => [...(c.marketSources?.requests?.[vendor] ?? []),...(c.marketSources?.[vendor] ? [c.marketSources[vendor]!] : [])].map(q=>[q.id,q] as const)));
     return { requested: lookups.size, received: [...lookups.values()].filter(v => v.status === "received" || v.status === "identity_mismatch").length,
       notReturned: [...lookups.values()].filter(v => v.status === "not_returned").length, failed: [...lookups.values()].filter(v => v.status === "error").length };
   };

@@ -48,6 +48,29 @@ export function inspectHome(readback, expectedSnapshot) {
   return { errors, missingMarkers, legacyMarkers };
 }
 
+export function publicationProofKey(data) {
+  const p = data?.publication?.published, proof = data?.pipeline;
+  return JSON.stringify([p?.id, p?.sha256, p?.dataAt, p?.witnessSha256, p?.rawBundleUrl, p?.rawBundleSha256,
+    p?.normalizedSha256, p?.replayVerified, proof?.schema, proof?.asOf, proof?.rawBundleSha256,
+    proof?.normalizedSha256, proof?.outputSha256, proof?.replayVerified, proof?.quality]);
+}
+
+export function inspectPipelineProof(data) {
+  const proof = data?.pipeline, p = data?.publication?.published;
+  if (!proof) return p?.rawBundleUrl || p?.rawBundleSha256 ? ["API omitted published pipeline proof"] : [];
+  const errors = [];
+  const hashes = [proof.rawBundleSha256, proof.normalizedSha256, proof.outputSha256];
+  const prefix = DEPLOY_CONTRACT.githubRemote.replace(/\.git$/, "") + "/releases/download/";
+  if (proof.schema !== 1 || proof.replayVerified !== true || proof.asOf !== data.updatedAt ||
+    !hashes.every(h => typeof h === "string" && /^[a-f0-9]{64}$/.test(h)) ||
+    !Number.isInteger(proof.quality?.affectedProjects) || proof.quality.affectedProjects < 0 ||
+    !Number.isInteger(proof.quality?.issueCount) || proof.quality.issueCount < proof.quality.affectedProjects) errors.push("invalid pipeline source proof");
+  if (!p || p.dataAt !== data.updatedAt || p.rawBundleSha256 !== proof.rawBundleSha256 ||
+    p.normalizedSha256 !== proof.normalizedSha256 || p.replayVerified !== true ||
+    p.rawBundleUrl !== `${prefix}${p.id}/source-bundle.json.gz`) errors.push("pipeline proof differs from published artifact");
+  return errors;
+}
+
 export function inspectApi(readback, requireUsableHistory = true) {
   const errors = [];
   let data;
@@ -67,23 +90,32 @@ export function inspectApi(readback, requireUsableHistory = true) {
   if (!data.pagination || data.pagination.total < data.pagination.filtered || data.pagination.filtered < data.coins?.length || ![50,100,200].includes(data.pagination.size) || data.coins?.length > data.pagination.size) errors.push("invalid paginated universe");
   if (data.universe?.projects !== data.pagination?.total || !(data.universe?.linkedTokens > 0)) errors.push("universe coverage missing");
   const coverage = data.collection;
-  if (!coverage || coverage.projects !== data.pagination?.total || coverage.errors !== 0 || coverage.gecko.failed !== 0 || coverage.cmc?.failed !== 0 ||
-    coverage.gecko.requested !== coverage.gecko.received + coverage.gecko.notReturned + coverage.gecko.failed ||
+  errors.push(...inspectPipelineProof(data));
+  if (!coverage || coverage.projects !== data.pagination?.total || coverage.errors !== 0 || (!data.pipeline && (coverage.gecko?.failed !== 0 || coverage.cmc?.failed !== 0)) ||
+    [coverage.gecko, coverage.cmc].some(q => !q || ![q.requested,q.received,q.notReturned,q.failed].every(n=>Number.isInteger(n)&&n>=0) || q.requested !== q.received + q.notReturned + q.failed) ||
     coverage.displayedRevenue30d < coverage.sourceRevenue30d) errors.push("collection coverage incomplete");
-  if (!Array.isArray(data.coins) || data.coins.length === 0) {
+  if (!Array.isArray(data.coins) || (data.coins.length === 0 && (requireUsableHistory || !data.pipeline || data.pagination?.filtered !== 0))) {
     errors.push("API coins array is missing or empty");
-  } else {
+  } else if (data.coins.length) {
     const sample = data.coins.find((coin) => coin && typeof coin === "object");
     for (const field of ["status", "scoreAxes", "holderValue", "opportunities", "peerCounts", "descriptionKo"]) {
       if (!(field in sample)) errors.push(`API advanced field missing: ${field}`);
     }
-    if (requireUsableHistory && !data.coins.some((coin) => coin.revenueHistory?.periods?.[30]?.total > 0 && coin.revenueHistory?.weeks?.length === 13)) {
+    if (requireUsableHistory && !data.pipeline && !data.coins.some((coin) => coin.revenueHistory?.periods?.[30]?.total > 0 && coin.revenueHistory?.weeks?.length === 13)) {
       errors.push("API has no usable completed-day revenue history");
     }
     if (!data.coins.some((coin) => typeof coin.descriptionKo === "string" && /[가-힣]/u.test(coin.descriptionKo))) {
       errors.push("API has no Korean protocol descriptions");
     }
     for (const coin of data.coins) {
+      if (data.pipeline) {
+        const quality = coin.dataQuality;
+        if (!quality || !["complete","partial","unavailable"].includes(quality.state) || !Array.isArray(quality.issues) ||
+          (quality.state === "complete") !== (quality.issues.length === 0) || quality.issues.some(i =>
+            !["market","revenue","holders","fees","volume"].includes(i.scope) || typeof i.code !== "string" || typeof i.source !== "string" || typeof i.retryable !== "boolean")) errors.push(`invalid local data quality: ${coin.slug}`);
+        if (quality?.issues?.some(i => i.code === "value_conflict" && i.scope === "holders") && coin.multiples.phr !== null) errors.push(`conflicting holder history used: ${coin.slug}`);
+        if (quality?.issues?.some(i => i.code === "value_conflict" && i.scope === "revenue") && coin.multiples.pr !== null) errors.push(`conflicting revenue history used: ${coin.slug}`);
+      }
       if (!Array.isArray(coin.sourceSlugs) || !coin.sourceSlugs.includes(coin.slug) || !coin.marketSources) errors.push(`source accounting missing: ${coin.slug}`);
       if (coin.geckoId && coin.marketSources?.gecko?.id !== coin.geckoId) errors.push(`unqueried asset: ${coin.slug}`);
       for (const lookup of [coin.marketSources?.gecko, coin.marketSources?.cmc]) if (lookup?.status === "received") {
@@ -112,7 +144,7 @@ export function inspectApi(readback, requireUsableHistory = true) {
       if (coin.capitalExclusionReason && Object.values(coin.multiples).some(v=>v!==null)) errors.push(`ineligible capital: ${coin.slug}`);
     }
     const venice = data.coins.find(c => c.slug === "venice");
-    if (venice && (venice.fundamentals?.revenue.kind !== "holder_return" || venice.fundamentals?.fees.kind !== "holder_return" || venice.opportunities.business || venice.valueCapture.eligibleHolderValueShare !== null || venice.multiples.pf !== null)) errors.push("VVV scope regression");
+    if (!data.pipeline && venice && (venice.fundamentals?.revenue.kind !== "holder_return" || venice.fundamentals?.fees.kind !== "holder_return" || venice.opportunities.business || venice.valueCapture.eligibleHolderValueShare !== null || venice.multiples.pf !== null)) errors.push("VVV scope regression");
   }
   return { errors, data };
 }
@@ -148,10 +180,10 @@ export async function verifyProduction() {
       lastErrors = [...homeInspection.errors, ...apiInspection.errors, ...namedInspection.errors, ...fwaInspection.errors];
       const publication = apiInspection.data?.publication;
       if (!publication?.published || publication.published.dataAt !== apiInspection.data?.updatedAt || publication.storeError) lastErrors.push("verified publication identity unavailable");
-      for (const result of [namedInspection, fwaInspection]) if (result.data?.publication?.published?.id !== publication?.published?.id) lastErrors.push("API queries use different publications");
-      if (!namedInspection.data?.coins?.some(c => c.slug === "venice")) lastErrors.push("VVV lookup unavailable");
+      for (const result of [namedInspection, fwaInspection]) if (publicationProofKey(result.data) !== publicationProofKey(apiInspection.data)) lastErrors.push("API queries use different publication proofs");
+      if (!apiInspection.data?.pipeline && !namedInspection.data?.coins?.some(c => c.slug === "venice")) lastErrors.push("VVV lookup unavailable");
       const fwaCoin = fwaInspection.data?.coins?.find(c => c.slug === "parent#fake-world-assets");
-      lastErrors.push(...inspectFwa(fwaCoin));
+      if (!apiInspection.data?.pipeline) lastErrors.push(...inspectFwa(fwaCoin));
       if (lastErrors.length === 0) {
         console.log(JSON.stringify({
           path: "/",
@@ -173,7 +205,8 @@ export async function verifyProduction() {
           universeRows: apiInspection.data.pagination.total,
           updatedAt: apiInspection.data.updatedAt,
         }));
-        console.log(JSON.stringify({ publication: publication.published.id, collectionOutcome: publication.attempt.outcome, protected: publication.attempt.outcome !== "published", lastVerifiedDataAt: publication.published.dataAt }));
+        console.log(JSON.stringify({ publication: publication.published.id, collectionOutcome: publication.attempt.outcome, protected: publication.attempt.outcome !== "published", lastVerifiedDataAt: publication.published.dataAt,
+          ...(apiInspection.data.pipeline ? { quality: apiInspection.data.pipeline.quality, requiresSourceReplayAudit: true } : {}) }));
         console.log("[production-readback] PASS (publication integrity; see collection outcome)");
         return;
       }

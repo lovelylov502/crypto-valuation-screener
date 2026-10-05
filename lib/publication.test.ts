@@ -108,3 +108,24 @@ it("refuses corrupt bytes and snapshots containing failures despite a matching c
   expect(()=>decodeSnapshot(Buffer.from("corrupt"),ref(d))).toThrow("hash mismatch");
   d.sources[0].status="error";expect(()=>decodeSnapshot(gzipSync(JSON.stringify(d)),ref(d))).toThrow("failed verification");
 });
+
+it("records accepted partial publications without a global incident and keeps their slot retryable", () => {
+  const good = baseline();
+  const a = { ...attempt("data-partial"), startedAt: "2026-09-29T14:00:00Z", scheduledFor: "2026-09-29T14:00:00.000Z", partial: true, failureClass: "transient" as const };
+  const running = startJournal(good, a, "data-partial-start");
+  const next = data(a.startedAt);
+  const partial = finishJournal(running, { ...a, completedAt: a.startedAt, outcome: "published" }, ref(next, "data-partial-complete"), "data-partial-complete");
+  expect(partial.published?.id).toBe("data-partial-complete");
+  expect(partial.incident).toBeNull();
+  expect(partial.schedule).toMatchObject({ attemptCount: 1, manualRepairCount: 0, successfulPublicationId: "data-partial-complete", settled: false, nextRetryAt: "2026-09-29T14:05:00.000Z" });
+  const retry = { ...attempt("data-repair"), startedAt: "2026-09-29T14:10:00Z", manualRepair: true };
+  const repairing = startJournal(JSON.parse(JSON.stringify(partial)), retry, "data-repair-start");
+  expect(repairing.schedule).toMatchObject({ attemptCount: 2, manualRepairCount: 1, successfulPublicationId: "data-partial-complete" });
+  const completed = finishJournal(repairing, { ...retry, completedAt: retry.startedAt, outcome: "published" }, ref(data(retry.startedAt), "data-repair-complete"), "data-repair-complete");
+  expect(completed.schedule).toMatchObject({ settled: true, nextRetryAt: null, successfulPublicationId: "data-repair-complete" });
+});
+
+it("rejects a scheduled attempt that crosses into another slot before its durable start", () => {
+  const a = { ...attempt("data-crossed-slot"), startedAt: "2026-09-29T14:00:01Z", scheduledFor: "2026-09-29T02:00:00.000Z" };
+  expect(() => startJournal(baseline(), a, "data-crossed-slot-start")).toThrow("planned slot");
+});

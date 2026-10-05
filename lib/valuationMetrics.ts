@@ -2,6 +2,7 @@ import { eligibleCapital } from "./capitalEligibility";
 import type { CoinRaw } from "./types";
 import { revenueAmount, historyMatches, annualizedMultiple, type RevenueWindowDays } from "./revenueHistory";
 import { sourceDefinitionsChanged, revenueKind } from "./fundamentals";
+import { hasDataQualityConflict } from "./dataQuality";
 
 export type CapitalBasis = "mcap" | "fdv";
 export interface SalesEvidence {
@@ -46,6 +47,7 @@ export function protocolReason(c: CoinRaw, days: RevenueWindowDays, basis: Capit
   if (c.capitalExclusionReason) return "스테이블코인 · 배수 비적용";
   if (c.identityStatus !== "verified") return "토큰 연결 확인 필요";
   if (!(c[basis]! > 0)) return basis === "fdv" ? "FDV 미확인" : "유통 시총 미확인";
+  if (hasDataQualityConflict(c, "revenue")) return "원천 금액 충돌 · 계산 보류";
   if (sourceDefinitionsChanged(c)) return "원천 정의 변경 · 재검토 필요";
   if (revenueKind(c) === "holder_return") return "환원으로 분류";
   if (!c.fundamentals.revenue.components.length) return "수익 원천 미연결";
@@ -66,7 +68,7 @@ export function holderHistoryMatches(c: CoinRaw): boolean {
   return !!c.holderHistory && c.holderHistory.definitionFingerprint === holderScope(c);
 }
 export function holderAmount(c: CoinRaw, days: RevenueWindowDays): number | null {
-  if (sourceDefinitionsChanged(c) || !holderHistoryMatches(c)) return null;
+  if (sourceDefinitionsChanged(c) || !holderHistoryMatches(c) || hasDataQualityConflict(c, "holders")) return null;
   return c.holderHistory!.periods[days]?.total ?? null;
 }
 export function holderMultiple(c: CoinRaw, days: RevenueWindowDays = 30, basis: CapitalBasis = "mcap"): number | null {
@@ -85,6 +87,7 @@ export function holderReason(c: CoinRaw, days: RevenueWindowDays, basis: Capital
   if (c.capitalExclusionReason) return "스테이블코인 · 배수 비적용";
   if (!eligibleCapital(c)) return "토큰 연결 확인 필요";
   if (!(c[basis]! > 0)) return basis === "fdv" ? "FDV 미확인" : "유통 시총 미확인";
+  if (hasDataQualityConflict(c, "holders")) return "원천 금액 충돌 · 계산 보류";
   if (sourceDefinitionsChanged(c)) return "원천 정의 변경 · 재검토 필요";
   if (!c.holderValue.components.length) return "환원 원천 미연결";
   if (!c.holderValue.components.some(p => p.eligible)) return c.holderValue.phrUnavailableReason ?? "적격 환원 자료 없음";

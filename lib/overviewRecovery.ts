@@ -1,6 +1,7 @@
 import type { ScreenerResponse, SourceObservation } from "./types";
-import { definitionReviewed } from "./fundamentalSource";
 import { readHistorySummary } from "./historyRequest";
+import { sourceObservedAt } from "./sourceBundle";
+import { validateProtocolFinancialRows } from "./sourceValidation";
 
 type Row = Record<string, unknown>;
 type Metric = "dailyFees" | "dailyRevenue" | "dailyHoldersRevenue";
@@ -13,22 +14,23 @@ export async function recoverOverviewRows(directory: Row[], rows: Row[], baselin
     const amount = metric === "dailyRevenue" ? coin.revenue30d : metric === "dailyFees" ? coin.fees30d : coin.holderValue.rawCurrent30d;
     if (coin.isParent || amount === null || rows.some(r => r.slug === coin.slug)) continue;
     const identity = directory.find(r => r.slug === coin.slug);
-    if (!identity || identity.parentProtocol != null || !["gecko_id", "cmcId"].some(k => identity[k] != null)) continue;
+    if (!identity || identity.parentProtocol != null) continue;
     const url = `https://api.llama.fi/summary/fees/${encodeURIComponent(coin.slug)}?dataType=${metric}`;
-    const summary = await readHistorySummary(url, Date.now(), deadline, observations);
+    const sourceSlugs = [coin.slug];
+    const summary = await readHistorySummary(url, Date.now(), deadline, observations, sourceSlugs);
     if (!summary) continue;
     const id = identity.category === "Chain" ? `chain#${coin.slug}` : String(identity.id);
     const sameIdentity = summary.slug === coin.slug && summary.name === identity.name && summary.defillamaId === id &&
       summary.parentProtocol == null && summary.doublecounted !== true &&
       ["gecko_id", "cmcId"].every(k => identity[k] == null || String(identity[k]) === String(summary[k]));
-    if (!sameIdentity || !definitionReviewed(summary)) {
-      observations.push({ url, observedAt: new Date().toISOString(), status: "withheld", reason: "scope_mismatch" });
+    if (!sameIdentity) {
+      observations.push({ url, observedAt: sourceObservedAt(url), sourceSlugs, status: "withheld", reason: "scope_mismatch" });
       continue;
     }
     // Recovered rows go through the original aggregation and calculation gates.
-    rows.push(summary);
+    rows.push(...validateProtocolFinancialRows([summary], url, observations));
     recovered.set(coin.slug, url);
-    observations.push({ url, observedAt: new Date().toISOString(), status: "ok" });
+    observations.push({ url, observedAt: sourceObservedAt(url), sourceSlugs, status: "ok" });
   }
   return recovered;
 }

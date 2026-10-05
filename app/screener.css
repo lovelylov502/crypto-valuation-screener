@@ -20,7 +20,7 @@
 .collection-badge:focus-visible { outline:2px solid #fff; outline-offset:3px; }
 .health-healthy { color:#5ae2ba; background:rgba(41,166,126,.12); }
 .health-error { color:#ff99a6; background:rgba(226,75,96,.15); }
-.health-warning,.health-stale { color:#f6ce79; background:rgba(210,155,54,.13); }
+.health-partial,.health-warning,.health-stale { color:#f6ce79; background:rgba(210,155,54,.13); }
 .health-checking,.health-unknown { color:#b2c5e1; background:rgba(141,168,205,.1); }
 .collection-summary { display:flex; align-items:center; gap:9px; padding:12px; border-radius:5px; }
 .collection-detail p { margin:12px 0; line-height:1.65; overflow-wrap:anywhere; }

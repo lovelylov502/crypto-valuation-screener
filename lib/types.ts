@@ -6,6 +6,7 @@ import type { SalesEvidence } from "./valuationMetrics";
 
 // 조인된 코인 1건의 원천 데이터 (밸류에이션 계산 전)
 export interface CoinRaw {
+  dataQuality?: CoinDataQuality;
   fundamentals: Fundamentals;
   slug: string;
   name: string;
@@ -34,6 +35,8 @@ export interface CoinRaw {
     fdv: "CoinMarketCap" | "CoinGecko" | null;
     gecko: QuoteLookup | null;
     cmc: QuoteLookup | null;
+    /** Every queried identity attached to this source group, including unselected alternatives. */
+    requests?: { gecko: QuoteLookup[]; cmc: QuoteLookup[] };
   };
   holderHistory?: RevenueHistory | null;
   sales?: SalesEvidence | null;
@@ -189,9 +192,19 @@ export interface QuoteLookup {
   observedAt: string;
   available: ("mcap" | "price" | "fdv")[];
   positive?: ("mcap" | "price" | "fdv")[];
+  invalidFields?: string[];
 }
 
 export interface ScreenerResponse {
+  pipeline?: {
+    schema: 1;
+    asOf: string;
+    rawBundleSha256: string;
+    normalizedSha256: string;
+    outputSha256: string;
+    replayVerified: boolean;
+    quality: { affectedProjects: number; issueCount: number };
+  };
   publication?: import("./publicationTypes").PublicationJournal;
   coins: CoinScored[];
   categories: string[];
@@ -216,6 +229,21 @@ export interface SourceObservation {
   url: string;
   observedAt: string; // 이 수집에서 응답을 읽은 시각. 원천 데이터 생성 시각과 다름
   status: "ok" | "error" | "withheld";
-  reason?: "scope_mismatch" | "value_conflict";
+  reason?: "scope_mismatch" | "value_conflict" | "request_budget" | "schema_mismatch";
+  sourceSlugs?: string[];
+  quoteIds?: string[];
   httpStatus?: number;
+}
+
+export type DataQualityScope = "market" | "revenue" | "holders" | "fees" | "volume";
+export interface DataQualityIssue {
+  scope: DataQualityScope;
+  code: string;
+  source: string;
+  retryable: boolean;
+}
+/** Collection issues only. A complete collection may still have genuinely unavailable source data. */
+export interface CoinDataQuality {
+  state: "complete" | "partial" | "unavailable";
+  issues: DataQualityIssue[];
 }

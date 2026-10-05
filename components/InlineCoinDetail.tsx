@@ -12,6 +12,7 @@ import { windowLabel } from "@/lib/metricCoverage";
 import { ValuationEvidence } from "./ValuationEvidence";
 import { revenueReading } from "@/lib/revenueReading";
 import { marketDataReason } from "@/lib/collectionQuality";
+import { dataQualityReason } from "@/lib/dataQuality";
 
 export const signedUsd = (v: number | null) => v === null ? "–" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${fmtUsd(Math.abs(v))}`;
 export const tone = (v: number | null) => v === null || v === 0 ? "muted" : v > 0 ? "positive" : "negative";
@@ -29,6 +30,10 @@ export function InlineCoinDetail({ coin: c, capital, onClose }: { coin: CoinScor
       <div>{c.logo && <img src={c.logo} alt="" width={34} height={34}/>}<h3>{c.name}</h3><span>{c.symbol ?? "토큰 미연결"}{c.chains.length > 0 && ` · ${c.chains.slice(0, 3).join(", ")}`}</span></div>
       <div><a href={coinUrl(c)} target="_blank" rel="noreferrer">{c.cmcSlug ? "CoinMarketCap에서 보기" : "DefiLlama에서 보기"}<ExternalLink size={14}/></a><button onClick={onClose} className="text-button" aria-label={c.name + " 상세 접기"}>접기<ChevronUp size={17}/></button></div>
     </header>
+    {!!c.dataQuality?.issues.length && <div className="notice" role="status">
+      <strong>자료 확인 필요</strong>
+      <ul>{c.dataQuality.issues.map(issue => <li key={`${issue.scope}:${issue.code}:${issue.source}`}>{dataQualityReason(issue)} · <a href={issue.source} target="_blank" rel="noreferrer">원천 확인 ↗</a></li>)}</ul>
+    </div>}
     <dl className="inline-market">
       <div><dt>현재 가격</dt><dd className="inline-price">{fmtPrice(c.price)}</dd><small>{marketDataReason(c, "price")}</small></div>
       <div><dt>유통 시총</dt><dd>{fmtUsd(c.mcap)}</dd><small>{marketDataReason(c, "mcap")}</small></div>

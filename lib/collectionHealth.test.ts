@@ -4,14 +4,35 @@ import { RULE_VERSION } from "./fundamentals";
 import type { ScreenerResponse } from "./types";
 
 const at = "2026-09-29T10:32:53.309Z", now = Date.parse(at) + 60_000;
-function healthy(): Pick<ScreenerResponse, "updatedAt" | "sources" | "scoreVersion" | "collection"> {
+function healthy(): Pick<ScreenerResponse, "updatedAt" | "sources" | "scoreVersion" | "collection" | "pipeline"> {
   return { updatedAt: at, scoreVersion: RULE_VERSION, sources: [{ url: "https://api.coingecko.com/api/v3/coins/markets", observedAt: at, status: "ok" }],
     collection: { projects: 7145, sourceSlugs: 9454, errors: 0, gecko: { requested: 2768, received: 1530, notReturned: 1238, failed: 0 },
       cmc: { requested: 2152, received: 2138, notReturned: 14, failed: 0 }, marketCap: 1710, price: 1687, fdv: 2458,
       sourceRevenue30d: 1594, displayedRevenue30d: 1594, partialRevenue30d: 25 } };
 }
 
+function partial() {
+  const data = healthy();
+  data.pipeline = { schema: 1, asOf: at, rawBundleSha256: "a".repeat(64), normalizedSha256: "b".repeat(64), outputSha256: "c".repeat(64), replayVerified: true,
+    quality: { affectedProjects: 12, issueCount: 17 } };
+  data.sources.push({ url: "https://api.llama.fi/summary/fees/sample?dataType=dailyRevenue", observedAt: at, status: "error", httpStatus: 503 });
+  return data;
+}
+
 describe("collection health, independent of HTTP 200 and current filtered rows", () => {
+  it("discloses accepted local failures without marking current unaffected rows globally blocked", () => {
+    expect(collectionHealth(partial(), now)).toMatchObject({ state: "partial", label: "일부 자료 확인 필요", affectedProjects: 12, issueCount: 17, stale: false });
+  });
+  it("keeps replay proof, global failures, failed checks, and scheduled freshness ahead of partial availability", () => {
+    const data = partial();
+    data.pipeline!.replayVerified = false;
+    expect(collectionHealth(data, now).state).toBe("error");
+    data.pipeline!.replayVerified = true;
+    expect(collectionHealth(data, now, "서버 연결 실패", true).label).toBe("확인 오류");
+    expect(collectionHealth(data, Date.parse("2026-09-29T15:30:00Z")).state).toBe("stale");
+    data.sources.push({ url: "https://api.llama.fi/protocols", observedAt: at, status: "error", httpStatus: 503 });
+    expect(collectionHealth(data, now).state).toBe("error");
+  });
   it("allows explicit provider absence and partial original amounts without claiming missing data is zero", () => {
     expect(collectionHealth(healthy(), now).state).toBe("healthy");
   });

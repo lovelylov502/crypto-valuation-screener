@@ -2,6 +2,13 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { GET } from "../app/api/cron/collect/route";
 import { collectionTriggerDecision } from "./scheduledCollection";
 import { schedulerReceipt, signSchedulerReceipt, verifySchedulerReceipt } from "./schedulerDispatch";
+import type { PublicationJournal } from "./publicationTypes";
+
+function prior(startedAt: string): PublicationJournal {
+  return { schema: 1, id: "data-prior", createdAt: startedAt, trackingStartedAt: startedAt, previousId: null, previousStateUrl: null,
+    published: null, incident: null, recoveredAt: null, attempt: { id: "data-prior", startedAt, completedAt: startedAt, outcome: "published",
+      errors: [], sourceFailures: [], affectedProjects: 0, changeCount: 0, affected: [], runUrl: "", reportUrl: "" } };
+}
 
 const secret = "test-only-scheduler-secret-32-characters";
 const now = Date.parse("2026-10-04T02:59:00Z");
@@ -66,7 +73,7 @@ it("does not retry an ambiguous dispatch or claim it started a collection", asyn
 });
 it("rejects unsigned or modified automatic receipts", () => {
   for (const input of [{ ...dispatch, signature: "" }, { ...dispatch, receipt: receipt.replace("02:00", "14:00") }, { ...dispatch, secret: "" }]) {
-    expect(() => collectionTriggerDecision(input, "2026-10-03T14:01:00Z", now)).toThrow();
+    expect(() => collectionTriggerDecision(input, prior("2026-10-03T14:01:00Z"), now)).toThrow();
   }
 });
 it("rejects future receipts and does not relabel a stale dispatch as the next slot", () => {
@@ -77,19 +84,20 @@ it("permits a delayed GitHub queue within the original slot without extending it
   expect(verifySchedulerReceipt(receipt, signature, secret, Date.parse("2026-10-04T05:00:00Z")).scheduledFor).toBe("2026-10-04T02:00:00.000Z");
 });
 it("serializes both schedulers and replayed requests against the same start record", () => {
-  let lastStartedAt = "2026-10-03T14:01:00Z";
+  let previous = prior("2026-10-03T14:01:00Z");
   const inputs = [dispatch, { ...dispatch, event: "schedule", receipt: "", signature: "" }, dispatch];
   const decisions = inputs.map(input => {
-    const result = collectionTriggerDecision(input, lastStartedAt, now);
-    if (result.collect) lastStartedAt = new Date(now).toISOString();
+    const result = collectionTriggerDecision(input, previous, now);
+    if (result.collect) previous = prior(new Date(now).toISOString());
     return result.collect;
   });
   expect(decisions).toEqual([true, false, false]);
 });
-it("never counts a manual trigger as scheduled and prevents a second collection in that slot", () => {
+it("never counts a manual repair as scheduled while allowing a same-slot repair", () => {
   const manual = { ...dispatch, receipt: "", signature: "" };
-  expect(collectionTriggerDecision(manual, "2026-10-03T14:01:00Z", now)).toMatchObject({ collect: true, trigger: { source: "manual", scheduledFor: null } });
-  expect(collectionTriggerDecision(manual, "2026-10-04T02:01:00Z", now).collect).toBe(false);
+  expect(collectionTriggerDecision(manual, prior("2026-10-03T14:01:00Z"), now)).toMatchObject({ collect: true, trigger: { source: "manual", scheduledFor: "2026-10-04T02:00:00.000Z" } });
+  expect(collectionTriggerDecision(manual, prior("2026-10-04T02:01:00Z"), now)).toMatchObject({ collect: true, manualRepair: true, trigger: { source: "manual" } });
+  expect(collectionTriggerDecision(dispatch, prior("2026-10-04T02:01:00Z"), now)).toMatchObject({ collect: false, manualRepair: false });
 });
 it("allows an explicit first manual bootstrap but rejects automatic bootstrap and unknown triggers", () => {
   expect(collectionTriggerDecision({ ...dispatch, receipt: "", signature: "", bootstrap: true }, null, now).collect).toBe(true);

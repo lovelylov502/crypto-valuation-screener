@@ -1,10 +1,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { collectionCoverage, collectionErrors } from "../lib/collectionQuality";
 import { revenueReading } from "../lib/revenueReading";
 import { fundamentalErrors } from "../lib/fundamentalContract";
 import { DEPLOY_CONTRACT } from "./deploy-contract.mjs";
-import type { CoinScored } from "../lib/types";
+import type { CoinScored, ScreenerResponse } from "../lib/types";
+import type { PublishedSnapshot } from "../lib/publicationTypes";
 import type { ScreenerPage } from "../lib/screenerQuery";
 import { gunzipSync } from "node:zlib";
 import { checkArchiveUrl, readSnapshot, sha256 } from "../lib/snapshotArchive";
@@ -13,6 +15,10 @@ import { COLLECTION_DEADLINE_MS } from "../lib/publication";
 import { collectionSchedule } from "../lib/collectionSchedule";
 import { geckoRequests, GECKO_INTERVAL_MS } from "../lib/geckoRequests";
 import { inspectFwa } from "./verify-production.mjs";
+import { replayDataPipeline } from "../lib/dataPipeline";
+import { pipelineIntegrityErrors, pipelineOutputHash } from "../lib/pipelineIntegrity";
+import { objectHash, witnessFromBundle, type SourceBundle } from "../lib/sourceBundle";
+import { scopedSourceErrors } from "../lib/dataQuality";
 
 const base = process.env.SCREENER_BASE_URL ?? DEPLOY_CONTRACT.liveBaseUrl;
 const output = process.env.SCREENER_AUDIT_DIR;
@@ -48,7 +54,9 @@ async function allPages() {
     let changed = false;
     for (let page = 2; coins.length < first.pagination.total; page++) {
       const next = await read(`${base}/api/screener?size=200&page=${page}`) as ScreenerPage;
-      if (next.updatedAt !== first.updatedAt || next.pagination.total !== first.pagination.total) { changed = true; break; }
+      if (next.updatedAt !== first.updatedAt || next.pagination.total !== first.pagination.total || next.publication?.published?.id !== first.publication?.published?.id) { changed = true; break; }
+      if (objectHash(next.publication?.published ?? null) !== objectHash(first.publication?.published ?? null) || objectHash(next.pipeline ?? null) !== objectHash(first.pipeline ?? null)) throw new Error("API proof changed within the same publication");
+      if (next.scoreVersion !== first.scoreVersion || objectHash(next.sources) !== objectHash(first.sources) || objectHash(next.collection ?? null) !== objectHash(first.collection ?? null)) throw new Error("API source accounting changed within the same publication");
       if (next.pagination.page !== page || !next.coins.length) throw new Error(`Pagination stalled at ${page}`);
       coins.push(...next.coins);
     }
@@ -57,28 +65,57 @@ async function allPages() {
   throw new Error("Snapshot changed during all three pagination attempts");
 }
 
+export function apiArchiveErrors(first: ScreenerPage, coins: CoinScored[], archived: ScreenerResponse): string[] {
+  const errors: string[] = [];
+  const archivedCoins = new Map(archived.coins.map(c => [c.slug, c]));
+  if (archived.updatedAt !== first.updatedAt || archived.coins.length !== coins.length) errors.push("published archive identity differs from API");
+  for (const coin of coins) if (objectHash(coin) !== objectHash(archivedCoins.get(coin.slug) ?? null)) errors.push(`published bytes changed:${coin.slug}`);
+  if (objectHash(first.sources) !== objectHash(archived.sources) || objectHash(first.collection ?? null) !== objectHash(archived.collection ?? null)) errors.push("API source accounting differs from archive");
+  if (archived.pipeline || first.pipeline) {
+    if (objectHash(first.pipeline ?? null) !== objectHash(archived.pipeline ?? null)) errors.push("API pipeline proof differs from archive");
+    const { pagination, coverage, visibleCoverage, universe, publication, ...page } = first;
+    const reconstructed = { ...page, coins } as ScreenerResponse;
+    errors.push(...pipelineIntegrityErrors(reconstructed), ...scopedSourceErrors(first.sources, coins));
+    if (pipelineOutputHash(reconstructed) !== pipelineOutputHash(archived)) errors.push("API snapshot differs from replay-bound archive");
+  }
+  return [...new Set(errors)];
+}
+
+export async function auditArchivedPipeline(archived: ScreenerResponse, published: PublishedSnapshot, rawBytes: Uint8Array, witness: unknown[]) {
+  if (!archived.pipeline || !published.rawBundleUrl || published.replayVerified !== true ||
+    sha256(rawBytes) !== published.rawBundleSha256 || published.rawBundleSha256 !== archived.pipeline.rawBundleSha256 ||
+    published.normalizedSha256 !== archived.pipeline.normalizedSha256) throw new Error("Archived raw source proof mismatch");
+  const bundle = JSON.parse(gunzipSync(rawBytes, { maxOutputLength: 500_000_000 }).toString("utf8")) as SourceBundle;
+  const replayed = await replayDataPipeline(bundle, sha256(rawBytes));
+  const errors = [...pipelineIntegrityErrors(archived), ...pipelineIntegrityErrors(replayed), ...scopedSourceErrors(archived.sources, archived.coins)];
+  if (bundle.asOf !== archived.updatedAt || pipelineOutputHash(replayed) !== pipelineOutputHash(archived) ||
+    objectHash(replayed.pipeline) !== objectHash(archived.pipeline)) errors.push("archived source replay differs from published snapshot");
+  if (objectHash(witnessFromBundle(bundle)) !== objectHash(witness)) errors.push("archived witness differs from original source bundle");
+  return { errors: [...new Set(errors)], receipts: bundle.receipts.length, rawBundleSha256: published.rawBundleSha256,
+    normalizedSha256: replayed.pipeline!.normalizedSha256, outputSha256: replayed.pipeline!.outputSha256 };
+}
+
 async function main() {
   const { first, coins } = await allPages();
   report.updatedAt = first.updatedAt;
   report.collection = collectionCoverage(coins);
   report.sourceFailures = first.sources.filter(s => s.status === "error");
-  if (first.sources.some(s => s.status === "error")) errors.push("source requests failed; inspect sourceFailures");
+  if (first.pipeline) errors.push(...scopedSourceErrors(first.sources, coins));
+  else if (first.sources.some(s => s.status === "error")) errors.push("source requests failed; inspect sourceFailures");
   if (first.scoreVersion !== DEPLOY_CONTRACT.scoreVersion) errors.push("wrong deployed version");
   const checkedAt = Date.now();
   const stale = Date.parse(first.updatedAt) < collectionSchedule(checkedAt).requiredAt;
   if (coins.length !== first.pagination.total || new Set(coins.map(c => c.slug)).size !== coins.length) errors.push("pagination omitted or duplicated projects");
   errors.push(...collectionErrors(coins));
   for (const c of coins) errors.push(...fundamentalErrors(c).map(e => `${c.slug}: ${e}`));
-  if (first.collection?.gecko.failed) errors.push(`${first.collection.gecko.failed} asset quote queries failed`);
+  if (!first.pipeline && first.collection?.gecko.failed) errors.push(`${first.collection.gecko.failed} asset quote queries failed`);
 
   // A protected stale publication must prove the retained bytes and the blocked
   // candidate's baseline, rather than comparing yesterday's snapshot to today's feed.
   const p = first.publication;
   if (!p?.published || p.storeError) throw new Error("Verified publication metadata unavailable");
   const archived = await readSnapshot(p.published);
-  const archivedCoins = new Map(archived.coins.map(c => [c.slug, c]));
-  if (archived.updatedAt !== first.updatedAt || archived.coins.length !== coins.length) errors.push("published archive identity differs from API");
-  for (const coin of coins) if (JSON.stringify(coin) !== JSON.stringify(archivedCoins.get(coin.slug))) errors.push(`published bytes changed:${coin.slug}`);
+  errors.push(...apiArchiveErrors(first, coins, archived));
   checkArchiveUrl(p.published.witnessUrl);
   const witnessResponse = await fetch(p.published.witnessUrl, { signal: AbortSignal.timeout(30_000) });
   if (!witnessResponse.ok) throw new Error(`Archived witness HTTP ${witnessResponse.status}`);
@@ -86,6 +123,17 @@ async function main() {
   if (sha256(witnessBytes) !== p.published.witnessSha256) throw new Error("Archived witness hash mismatch");
   const witness = JSON.parse(gunzipSync(witnessBytes).toString("utf8"));
   errors.push(...witnessErrors(archived, witness));
+  if (archived.pipeline) {
+    if (!p.published.rawBundleUrl) throw new Error("Published raw source bundle unavailable");
+    checkArchiveUrl(p.published.rawBundleUrl);
+    const response = await fetch(p.published.rawBundleUrl, { cache: "no-store", signal: AbortSignal.timeout(60_000) });
+    if (!response.ok) throw new Error(`Archived raw source bundle HTTP ${response.status}`);
+    const replay = await auditArchivedPipeline(archived, p.published, new Uint8Array(await response.arrayBuffer()), witness);
+    errors.push(...replay.errors);
+    report.sourceReplay = replay;
+    report.liveSourcesChecked = false;
+    report.quality = archived.pipeline.quality;
+  }
   report.publication = { id:p.published.id, journal:p.id, outcome:p.attempt.outcome, dataAt:p.published.dataAt, sha256:p.published.sha256, stale, verifiedArchiveRows:archived.coins.length };
   if (p.attempt.outcome !== "published") {
     if (p.attempt.outcome === "running") {
@@ -103,6 +151,15 @@ async function main() {
     return;
   }
   if (stale) errors.push("published snapshot missed the scheduled collection deadline");
+  if (archived.pipeline) {
+    // The captured source bytes are the authoritative observation. A later quote
+    // or overview response must never change the verdict on this capture.
+    report.mode = "current-publication-and-source-replay";
+    report.currentCollectionPassed = !stale && errors.length === 0;
+    report.partial = archived.pipeline.quality.affectedProjects > 0;
+    if (output) { await mkdir(output,{recursive:true}); await writeFile(join(output,"all-coins.json"),JSON.stringify({...first,coins})); }
+    return;
+  }
   // Between scheduled collections, audit against the archived source witness.
   // Today's changing feed cannot prove that a deliberately retained snapshot lost data.
   if (checkedAt - Date.parse(first.updatedAt) > 45 * 60_000) {
@@ -180,7 +237,7 @@ async function main() {
   }
 }
 
-main().catch(error => errors.push(error instanceof Error ? error.message : String(error))).finally(async () => {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch(error => errors.push(error instanceof Error ? error.message : String(error))).finally(async () => {
   report.completedAt = new Date().toISOString(); report.errors = errors;
   if (output) { await mkdir(output, { recursive: true }); await writeFile(join(output, "coverage-audit.json"), JSON.stringify(report, null, 2)); }
   console.log(JSON.stringify(report, null, 2));

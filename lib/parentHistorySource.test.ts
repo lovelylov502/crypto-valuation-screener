@@ -14,6 +14,17 @@ const summary = () => ({ defillamaId: key, parentProtocol: null, childProtocols:
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe("verified parent histories", () => {
+  it("attempts every parent gap beyond the former fixed request cap", async () => {
+    const protocols = Array.from({ length: 40 }, (_, i) => ({ slug: `child-${i}`, name: `Child ${i}`, defillamaId: String(i), parentProtocol: `parent#group-${i}`, total30d: 0 }));
+    const fetcher = vi.fn(async (input: string) => {
+      const key = `parent#${new URL(String(input)).pathname.split("/").at(-1)}`;
+      const child = protocols.find(p => p.parentProtocol === key)!;
+      return Response.json({ defillamaId: key, childProtocols: [child], totalDataChart: [[end, 0]] });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    expect(await fetchParentHistorySources(protocols, [], now, "dailyRevenue", () => true, [])).toHaveLength(40);
+    expect(fetcher).toHaveBeenCalledTimes(40);
+  });
   it.each([503, 429, "network"])("recovers transient %s failures instead of discarding a previously complete history", async failure => {
     vi.useFakeTimers();
     const fetcher = vi.fn().mockImplementationOnce(async () => {

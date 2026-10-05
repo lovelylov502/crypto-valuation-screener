@@ -1,5 +1,9 @@
 import { afterEach, expect, it, vi } from "vitest";
 import reviews from "./fundamentalDefinitions.json";
+import { aggregateDefinitions, combineFundamentals } from "./fundamentalSource";
+import { protocolMultiple } from "./valuationMetrics";
+import { sample } from "./testFixtures";
+import type { SourceObservation } from "./types";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); vi.resetModules(); });
 
@@ -21,7 +25,7 @@ it("recovers all-missing child series from the exact parent, including an empty 
   expect(result[key].periods[365].total).toBeNull();
 });
 
-it("reserves supplemental requests for reviewed revenue while retaining unreviewed overview history", async () => {
+it("recovers exact raw unreviewed parent history while keeping economic ratios withheld", async () => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-09-27T12:00:00Z"));
   const end = Date.parse("2026-09-26") / 1000;
@@ -40,12 +44,19 @@ it("reserves supplemental requests for reviewed revenue while retaining unreview
     const url = String(input);
     if (url.includes("/overview/")) return new Response(JSON.stringify({ protocols: [...unknown, ...fwa], totalDataChartBreakdown: chart }));
     if (url.includes("/fake-world-assets?")) return new Response(JSON.stringify({ defillamaId: key, childProtocols: fwa, totalDataChart: chart.map(([t], i) => [t, i < 9 ? 12 : 10]) }));
+    if (url.includes("/unknown?")) return new Response(JSON.stringify({defillamaId:"parent#unknown",childProtocols:unknown,totalDataChart:chart.map(([t],i)=>[t,i<9?12:10])}));
     return new Response("", { status: 404 });
   });
   vi.stubGlobal("fetch", fetcher);
   const { fetchRevenueHistory } = await import("./revenueSource");
-  const result = await fetchRevenueHistory([]);
+  const observations:SourceObservation[]=[];
+  const result = await fetchRevenueHistory(observations);
   expect(result[key].periods[30]).toMatchObject({ total: 318, reportedDays: 30 });
-  expect(result["parent#unknown"].periods[30].reportedDays).toBe(9);
-  expect(fetcher.mock.calls.some(([url]) => String(url).includes("/summary/fees/unknown"))).toBe(false);
+  expect(result["parent#unknown"].periods[30]).toMatchObject({total:318,reportedDays:30});
+  expect(fetcher.mock.calls.some(([url]) => String(url).includes("/summary/fees/unknown?"))).toBe(true);
+  expect(observations.some(s=>s.status === "ok" && s.sourceSlugs?.includes("unknown-1"))).toBe(true);
+  const definition=aggregateDefinitions(unknown,()=>"parent#unknown","Revenue").get("parent#unknown");
+  expect(definition?.kind).toBe("unknown");
+  const coin=sample({slug:"parent#unknown",revenueHistory:result["parent#unknown"],fundamentals:combineFundamentals(definition as any,undefined,[])});
+  expect(protocolMultiple(coin)).toBeNull();
 });

@@ -1,16 +1,14 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { gzipSync, gunzipSync } from "node:zlib";
-import { fetchCoins } from "../lib/sources";
-import { assembleScreener } from "../lib/screener";
 import type { ScreenerResponse, SourceObservation } from "../lib/types";
 import type { CollectionAttempt, PublicationJournal, PublishedSnapshot } from "../lib/publicationTypes";
-import { assessCandidate, startJournal, finishJournal, JOURNAL_DOWNLOAD, snapshotErrors } from "../lib/publication";
+import { startJournal, finishJournal, JOURNAL_DOWNLOAD, snapshotErrors } from "../lib/publication";
 import { checkArchiveUrl, readSnapshot, sha256 } from "../lib/snapshotArchive";
-import { collectWitness, witnessErrors } from "../lib/sourceWitness";
-import { reviewedSourceChanges } from "../lib/reviewedSourceChanges";
-import { reviewPendingHistory } from "../lib/pendingHistoryReview";
-import { reviewUpstreamChanges } from "../lib/upstreamChangeReview";
+import { witnessErrors } from "../lib/sourceWitness";
+import { assessPipelineCandidate, captureDataPipeline, encodeSourceBundle, replayDataPipeline } from "../lib/dataPipeline";
+import { normalizedCoin } from "../lib/pipelineIntegrity";
+import { objectHash, witnessFromBundle, type SourceBundle } from "../lib/sourceBundle";
 import { withDeadline } from "../lib/withDeadline";
 import { latestJournal, publishJournal } from "./github-journal";
 import { collectionTriggerDecision } from "../lib/scheduledCollection";
@@ -27,10 +25,10 @@ async function due() {
   const previous = await latestJournal();
   const decision = collectionTriggerDecision({ event, receipt: process.env.SCREENER_SCHEDULER_RECEIPT ?? "",
     signature: process.env.SCREENER_SCHEDULER_SIGNATURE ?? "", secret: process.env.SCREENER_SCHEDULER_SECRET ?? "",
-    bootstrap: !!process.env.SCREENER_BOOTSTRAP_URL }, previous?.attempt.startedAt ?? null, Date.now());
+    bootstrap: !!process.env.SCREENER_BOOTSTRAP_URL }, previous, Date.now());
   if (decision.collect) {
     await mkdir(output, { recursive: true });
-    await save("trigger.json", json(decision.trigger));
+    await save("trigger.json", json({ ...decision.trigger, manualRepair: decision.manualRepair }));
   }
   await writeFile(process.env.GITHUB_OUTPUT, `collect=${decision.collect}\nslot_at=${decision.slotAt}\n`, { flag: "a" });
   if (process.env.GITHUB_STEP_SUMMARY) await writeFile(process.env.GITHUB_STEP_SUMMARY,
@@ -43,7 +41,9 @@ async function start() {
   const previous = await latestJournal();
   if (!previous && !process.env.SCREENER_BOOTSTRAP_URL) throw new Error("Initial publication requires a preserved independently audited snapshot");
   if (previous && process.env.SCREENER_BOOTSTRAP_URL) throw new Error("Bootstrap cannot replace an existing publication");
+  const trigger = await load("trigger.json");
   const attempt: CollectionAttempt = { id: runId, startedAt: new Date().toISOString(), completedAt: null, outcome: "running",
+    scheduledFor: trigger.scheduledFor || null, manualRepair: trigger.manualRepair === true,
     runUrl: `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
     reportUrl: `${JOURNAL_DOWNLOAD}${runId}-complete/report.json`, errors: [], sourceFailures: [], comparisonCompleted: false, affectedProjects: 0, changeCount: 0, affected: [] };
   const journal = startJournal(previous, attempt, `${runId}-start`);
@@ -54,7 +54,7 @@ async function start() {
 async function collect() {
   const current = await load("start.json") as PublicationJournal;
   const sources: SourceObservation[] = [];
-  let data: ScreenerResponse | undefined, witness: unknown[] = [], assessment: ReturnType<typeof assessCandidate> | undefined;
+  let data: ScreenerResponse | undefined, witness: unknown[] = [], assessment: ReturnType<typeof assessPipelineCandidate> | undefined;
   const errors: string[] = [];
   let bootstrapReceipt: unknown;
   let stage = "baseline";
@@ -76,22 +76,14 @@ async function collect() {
       if (!current.published) throw new Error("Missing verified baseline; bootstrap must be reviewed");
       const baseline = await readSnapshot(current.published);
       progress("sources");
-      const raw = await fetchCoins(sources, baseline);
-      progress("snapshot");
-      await save("inputs.json.gz", gzipSync(json(raw)));
-      data = assembleScreener(raw, new Date().toISOString(), sources);
-      progress("witness");
-      witness = await collectWitness();
-      progress("source-change-review");
-      const pendingReview = await reviewPendingHistory(data, baseline, witness);
-      if (pendingReview.proofs.length) await save("pending-history-review.json.gz", gzipSync(json(pendingReview.proofs)));
-      const reviews = reviewedSourceChanges(data, baseline);
-      if (reviews.length) await save("source-change-review.json", json(reviews));
-      const reviewed = new Set([...pendingReview.keys, ...reviews.map(r => `${r.slug}:${r.issue}`)]);
-      const upstream = await reviewUpstreamChanges(data, baseline, witness, reviewed);
-      if (upstream.proofs.length || Object.keys(upstream.evidence).length) await save("upstream-change-review.json.gz", gzipSync(json({ proofs: upstream.proofs, evidence: upstream.evidence })));
+      const result = await captureDataPipeline(baseline, new Date().toISOString(), async bundle => {
+        await save("source-bundle.json.gz", encodeSourceBundle(bundle));
+        progress("offline-replay");
+      }, sources);
+      data = result.data; witness = result.witness;
+      await save("inputs.json.gz", gzipSync(json(data.coins.map(normalizedCoin))));
       progress("assessment");
-      assessment = assessCandidate(data, baseline, current.attempt.startedAt, new Date().toISOString(), new Set([...reviewed, ...upstream.keys]));
+      assessment = assessPipelineCandidate(data, result.bundle, baseline, current.attempt.startedAt, new Date().toISOString(), result.data);
       errors.push(...assessment.errors);
     }
     errors.push(...witnessErrors(data!, witness));
@@ -103,7 +95,7 @@ async function collect() {
   const report = { schema: 1, codeCommit: process.env.GITHUB_SHA, scheduledFor: trigger.scheduledFor, trigger,
     startedAt: current.attempt.startedAt, completedAt: new Date().toISOString(), stage,
     comparisonCompleted: !!assessment || !!bootstrapReceipt,
-    baseline: current.published, dataAt: data?.updatedAt ?? null, sources: data?.sources ?? sources, collection: data?.collection,
+    baseline: current.published, dataAt: data?.updatedAt ?? null, sources: data?.sources ?? sources, collection: data?.collection, pipeline: data?.pipeline,
     errors: [...new Set(errors)], changes: assessment?.changes ?? [], reviewedChanges: assessment?.reviewedChanges ?? [], unreviewedChanges: assessment?.unreviewedChanges ?? [], affected: assessment?.affected ?? [], bootstrapReceipt,
     artifacts: await Promise.all((await readdir(output)).filter(n => n.endsWith(".gz")).map(async name => { const bytes = await readFile(join(output, name)); return { name, bytes: bytes.length, sha256: sha256(bytes) }; })) };
   await save("report.json", json(report));
@@ -124,15 +116,41 @@ async function finish() {
   const errors = [...report.errors];
   if (!files["data.json.gz"] || !files["witness.json.gz"]) errors.push("candidate_artifacts_missing");
   if (!report.comparisonCompleted) errors.push("comparison_not_completed");
+  // A separate process verifies the saved candidate against the original bytes before promotion.
+  // A forged result/hash or a collector cache cannot stand in for source replay.
+  if (!report.bootstrapReceipt && !errors.length) {
+    try {
+      if (!files["source-bundle.json.gz"]) throw new Error("Raw source bundle missing");
+      const bundle = JSON.parse(gunzipSync(files["source-bundle.json.gz"]).toString()) as SourceBundle;
+      const candidate = JSON.parse(gunzipSync(files["data.json.gz"]).toString()) as ScreenerResponse;
+      if (report.dataAt !== candidate.updatedAt || objectHash(report.pipeline) !== objectHash(candidate.pipeline) ||
+        objectHash(report.collection) !== objectHash(candidate.collection) || objectHash(report.sources) !== objectHash(candidate.sources)) throw new Error("Candidate report differs from saved snapshot");
+      if (objectHash(report.baseline) !== objectHash(current.published)) throw new Error("Candidate report baseline mismatch");
+      const savedWitness = JSON.parse(gunzipSync(files["witness.json.gz"]).toString());
+      if (objectHash(savedWitness) !== objectHash(witnessFromBundle(bundle))) throw new Error("Saved witness differs from original source bundle");
+      const baseline = current.published ? await readSnapshot(current.published) : null;
+      const replayed = await replayDataPipeline(bundle, sha256(files["source-bundle.json.gz"]));
+      errors.push(...assessPipelineCandidate(candidate, bundle, baseline, current.attempt.startedAt, new Date().toISOString(), replayed, files["source-bundle.json.gz"]).errors);
+    } catch (error) { errors.push(error instanceof Error ? error.message : "Offline replay failed"); }
+  }
+  // The permanent report must describe the final promotion decision, including
+  // failures found by this separate verification process.
+  report = { ...report, collectorCompletedAt: report.completedAt, completedAt: new Date().toISOString(), errors: [...new Set(errors)] };
+  files["report.json"] = json(report);
+  await writeFile(join(output, "report.json"), files["report.json"]);
   const accepted = errors.length === 0;
+  const partial = accepted && (report.pipeline?.quality?.affectedProjects ?? 0) > 0;
+  const hasRetryableIssue = accepted && files["data.json.gz"] && (JSON.parse(gunzipSync(files["data.json.gz"]).toString()) as ScreenerResponse).coins.some(c => c.dataQuality?.issues.some(i => i.retryable));
   const attempt: CollectionAttempt = { ...current.attempt, completedAt: report.completedAt, outcome: accepted ? "published" : "blocked",
+    partial, ...(partial ? { failureClass: hasRetryableIssue ? "transient" as const : "validation" as const } : {}),
     errors, sourceFailures: report.sources.filter((s: SourceObservation) => s.status === "error"), collection: report.collection, comparisonCompleted: report.comparisonCompleted === true,
     affectedProjects: report.affected.length, changeCount: report.changes.length,
     affected: report.affected.slice(0, 20).map(({slug,name,issues}: {slug:string;name:string;issues:string[]}) => ({slug,name,issues})) };
   const id = `${runId}-complete`;
   const published: PublishedSnapshot | null = accepted ? { id, url: `${JOURNAL_DOWNLOAD}${id}/data.json.gz`, sha256: sha256(files["data.json.gz"]),
     dataAt: report.dataAt, validatedAt: report.completedAt, publishedAt: new Date().toISOString(), codeCommit: process.env.GITHUB_SHA!,
-    reportUrl: `${JOURNAL_DOWNLOAD}${id}/report.json`, witnessUrl: `${JOURNAL_DOWNLOAD}${id}/witness.json.gz`, witnessSha256: sha256(files["witness.json.gz"]) } : null;
+    reportUrl: `${JOURNAL_DOWNLOAD}${id}/report.json`, witnessUrl: `${JOURNAL_DOWNLOAD}${id}/witness.json.gz`, witnessSha256: sha256(files["witness.json.gz"]),
+    ...(report.pipeline ? { rawBundleUrl: `${JOURNAL_DOWNLOAD}${id}/source-bundle.json.gz`, rawBundleSha256: sha256(files["source-bundle.json.gz"]), normalizedSha256: report.pipeline.normalizedSha256, replayVerified: true } : {}) } : null;
   // Re-read/revalidate the exact bytes immediately before making their pointer public.
   if (published) { const { decodeSnapshot } = await import("../lib/snapshotArchive"); decodeSnapshot(files["data.json.gz"], published); }
   const journal = finishJournal(current, attempt, published, id);
