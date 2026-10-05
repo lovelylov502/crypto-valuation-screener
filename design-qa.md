@@ -1,56 +1,67 @@
-# Inline valuation screener — 2026-09-26
+# TOVENIT interface QA — 2026-10-05
 
 final result: passed
 
-## Target, viewport and state
+## Visual truth and evidence
 
-Source visual truth: `C:/Users/TAE/.codex/generated_images/01a0da35-e9ce-7852-99bb-df3acfdf526b/exec-b0bf647e-58cf-4e4a-b502-ef1c2f87220b.png` (1536×1024). This is the user's selected navy table with AERO expanded below its row. It supersedes the earlier right-panel design.
+Approved source directory: `C:/Users/TAE/.codex/visualizations/2026/10/05/01a10a20-3b43-7af0-b088-97364e06cdae/tovenit-mockups/`
 
-Implementation: the existing application, production build at `http://127.0.0.1:3000/`. Evidence root outside Git: `C:/Users/TAE/Documents/Codex/2026-09-26/crypto-screener-v9-qa/`.
+Sources: `01-list-light.png`, `02-list-dark.png`, `03-detail-overview-light.png`, `04-detail-overview-dark.png`, `05-detail-comparison-light.png`, `06-detail-comparison-dark.png`.
 
-Desktop CSS viewport 1536×1024. Final screenshot `desktop-final.png` exports at 1521×1014 because of provider scrollbar/export scaling. The comparison normalizes it to 1536×1024 (about 1.01×); this is not a pixel-difference score. Responsive CSS viewports are 390×844 and 1024×768; `mobile-final.png` exports at 375×811. Layout assertions use CSS client dimensions, not screenshot pixels. There is no device frame or browser chrome in the comparison.
+Implementation directory: `C:/Users/TAE/.codex/visualizations/2026/10/05/01a10a20-3b43-7af0-b088-97364e06cdae/tovenit-implementation/`
 
-State: default 16 columns, MCap, ascending 30-day P/R, AERO search and expanded detail. The mock has five synthetic rows with AERO third; the real filtered list has three rows with AERO first. Row position, dollar amounts, chains, missing periods and timestamps intentionally differ. The implementation does not copy synthetic financial values. Full and focused comparisons preserve this declared content difference.
+Evidence: `01-list-light.png`, `02-list-dark.png`, `12-detail-overview-final-light.png`, `14-production-build-comparison-dark.png`, `07-mobile-detail-light.png`, `09-mobile-detail-dark.png`, `10-mobile-filter-dark.png`.
 
-## Evidence and comparison history
+URLs: development at `http://localhost:3100`; final production build at `http://localhost:3101`.
 
-- Full view: `comparison-final.png` combines source and browser capture in one 3072×1024 input. Both were actually reviewed together.
-- Focused detail: `comparison-detail-final.png` stacks the source and implementation's market/growth/holder bands at native width. This is necessary because the full side-by-side image reduces dense table text.
-- Responsive evidence: `mobile-final.png`, `mobile-lower-final.png`, `tablet-final.png`. The lower mobile capture shows the fixed header, readable holder conditions, formula and evidence disclosure.
-- Early `desktop-initial.png` / `comparison-initial.png` were captured before the expanded state painted and while the source refresh failed. They are not treated as a valid fidelity comparison or a design iteration.
+Desktop source: 1536 × 1024 pixels. Browser CSS viewport: 1536 × 1024; screenshot output: 1536 × 1024, one image pixel per CSS pixel. Content width is 1521 because of the browser scrollbar. No density scaling. Mobile CSS viewport and output: 390 × 844. Compare application content only; the development indicator is absent from the production build.
 
-1. **P2 — small table/detail type and loose detail rhythm.** `comparison-revised.png` showed smaller numeric and supporting type than the source. Primary table values were raised to 14 px, growth text to 12 px, detail labels to 14 px, explanatory text to 13 px and title to 18 px. Market/holder padding was reduced while retaining the three horizontal bands. Rechecked in the final full and focused comparisons.
-2. **P2 — coverage icon wrapped onto its own line.** The first rendered coverage summary broke its inline control. It now uses an explicit inline flex row; final desktop/mobile captures show counts and the information icon together.
-3. **P2 — document-level mobile horizontal overflow.** After keyboard scrolling to detail, the root overflowed by 877 CSS px even though the body appeared contained. `mobile-lower-before-fix.png` and geometry measurements exposed the transformed table header escaping its static ancestor. The table scroller now establishes its containing/paint boundary. Post-fix root overflow is zero; ArrowRight scrolls the table by 80 px while document scrollX stays zero and identity/detail left edges stay fixed. `mobile-lower-final.png` is the post-fix capture.
-4. **P2 — mobile freshness omitted.** A desktop-only status would hide source failures on phones. The final mobile layout has a dedicated visible collection-time/status line. This preserves the earlier product's useful data-health disclosure.
-5. **P2 — small favorite hit area and redundant keyboard stops.** Favorite controls now have a 24×44 px mobile target. Numeric-cell duplicate actions leave the tab sequence; the named row button remains the keyboard disclosure control. Inline close returns focus to that row. Settings retain their focus trap and Escape return.
+State: light/dark list; Sat Rush inline detail, FDV selected, original and calculation disclosures initially closed; overview and scrolled comparison/holder sections. The final dark comparison capture uses the production build. All six references and corresponding implementation views were visually inspected; reference and implementation images were supplied together for comparisons, including the final overview and comparison passes. The detail overview and lower-section captures are the focused evidence for typography, values, sources and missing states; the initial full-list captures establish overall composition.
+
+## Findings and iteration history
+
+- Resolved P2: inherited table hover rules colored nested detail cells and hid the comparison header/30-day emphasis. Scoped list rules to direct children. Development CSS caching retained the earlier rule even after reload, so final verification used the production build. `14-production-build-comparison-dark.png` shows the repaired header and selected row; computed colors are `#282d28` and `#2d3930`.
+- Resolved P2: sticky list headings covered the detail while scrolling, especially on mobile. Suspend their translation while the inline detail is being read. `09-mobile-detail-dark.png` and the production comparison capture show unobstructed content.
+- Resolved P2: mobile toolbar created an isolated extra control row. Reduced narrow-screen spacing while retaining named controls. `08-mobile-top-dark.png` and `10-mobile-filter-dark.png` show the revised arrangement.
+- Resolved P2: the initial detail hierarchy was too small and dense. Increased section headings, introduction, key values and comparison figures; separated four summary groups, five periods and holder routes. Final overview/lower captures show the correction.
+- No remaining actionable P0/P1/P2 findings.
 
 ## Required fidelity surfaces
 
-- **Typography:** Inter/system/Segoe UI/Malgun Gothic stack, numeric tabular figures, distinct large market values, medium growth totals and smaller explanatory labels. Native Korean wrapping is preserved. The source's exact raster font is unspecified; this is a hierarchy/layout implementation, not a claim of identical glyph rendering.
-- **Spacing/layout:** full-width table, grouped period headers, sticky identity/header, inline detail with market → growth → holder bands. Wider real holder conditions and an evidence disclosure add detail height relative to the mock. Coverage counts are an intentional additional metadata line. No chart or right drawer appears in the active flow. Mobile detail becomes a two-column market grid; the table alone scrolls horizontally.
-- **Color/tokens:** navy page `#0d1421`, table heading `#122238`, selected row `#142d4e`, detail `#0f2035`, blue border `#478ff0`, mint `#42e1c3` and coral `#ff8592`. Signed colors describe movement, not investment quality. Focus outlines remain visible.
-- **Images/icons:** actual provider token logos are used, including the AERO logo seen in the source; they render cleanly at desktop/mobile sizes. The existing typographic V brand and Lucide control family remain. No dashboard screenshot is used as a page background.
-- **Copy/content:** P/R/P/HR periods, numerator and source state are explicit. The real AERO missing-period state replaces the mock's invented complete data. Conditional lock/voter return, provider references and completed UTC dates remain visible. “0 유지”, zero-to-positive and missing comparison are distinct. Current-price time and revenue-day end are separate. CMC is the verified market link and DefiLlama the fallback.
+- Typography: system sans stack with Malgun Gothic Korean fallback and tabular figures. Generated reference letterforms are approximated using existing installed fonts. Clear title/section/value/note hierarchy; long source states wrap without covering values. Dense list typography remains smaller than detail typography.
+- Spacing: neutral page surface, generous detail sections, four desktop summary groups and three holder columns; mobile summary uses two columns and holder routes stack. Tables scroll within their own regions. Document width is 1521/1536 desktop and 375/390 mobile, with no page overflow.
+- Color: warm off-white `#f6f7f3`, white panels, charcoal text; dark `#181a19` page and `#202320` panels. Green selection/positive values, rose negatives, amber source totals. Theme tokens extend to dialogs, status and evidence, removing the old navy treatment.
+- Assets: supplied TOVENIT raster logo and source token logos retained. Lucide icons continue the established icon set. No placeholder illustrations, handmade logos or new decorative assets.
+- Copy: Korean introduction precedes numbers; price, capital, revenue and holder amounts retain their units and periods. Provider aggregates, unavailable history and non-applicable metrics remain distinct. Korean wording was reviewed against source meaning, including conditional rewards and unverified payouts. Existing finance calculations and source provenance remain intact.
 
-## Interaction and runtime verification
+## Intentional production differences
 
-- Search covers the full 7,123-row directory. UI page 2 shows 101–200; a subsequent AERO search resets to 1–3. Full server replay covered every row exactly once.
-- Both growth and holder filters at 7 days return 23 rows in the observation. Revenue delta sorting selects the expected period/direction; fixtures independently verify percent-vs-dollar order.
-- Favorites and keyboard-reordered columns survive reload. Default column reset preserves favorites; the temporary QA favorite was removed afterward. Existing storage keys are unchanged.
-- CMC link resolves to `https://coinmarketcap.com/currencies/aerodrome-finance/`. Unit tests cover the DefiLlama fallback and absence of symbol-only URLs.
-- FDV selection changes the numerator and its coverage (148 distinct FDV rows in the browser observation); missing FDV never substitutes market cap. MCap was restored after testing.
-- Empty search shows the explicit no-results state and recovers on a valid search. Loading retains the previous result with a busy state; collection failure retains data with a retry notice.
-- Keyboard reorder, dialog Escape/focus return, inline disclosure and scroll confinement were exercised. The window-following header measures at y=0 after scrolling. Desktop and responsive root horizontal overflow measure zero.
-- Browser warning/error logs are empty in the production-preview tab. Earlier dev-cache errors were resolved by bounded chunks and returning a fresh build directly; cold-process/no-cache readback and cache eviction tests pass.
-- 214 application tests, six deployment-contract probes, TypeScript and production build passed. Final HTML/default API/targeted VVV API pass the production readback inspector against localhost; no live deployment or field-validation claim is made.
+The mockups show five example rows and a compact three-period context strip. Production retains the complete universe, user-selected five-period columns, pagination, filters and favorites. There is no new sidebar or chart. Collection status and detailed source qualifications remain available. Lower-page content scrolls naturally rather than reproducing the mockup's repeated fixed identity/header. No pixel-perfect claim is made for generated type or screenshot framing.
 
-## Checklist and acceptable differences
+Unknown or changed English descriptions show an explicit translation-pending state and their original text. CoinMarketCap has priority when its verified slug exists; CoinGecko is the fallback. If neither market identity exists, the interface states that the market page is unlinked rather than fabricating a URL.
 
-- [x] Table and inline detail match the selected structural direction.
-- [x] Real missing-data states preserve the financial contract.
-- [x] Combined filters, page/search flow, saved preferences and links work.
-- [x] Mobile/tablet/desktop layout and keyboard behavior verified.
-- [x] Final post-typography capture compared and mobile freshness confirmed.
+## Interaction and technical verification
 
-Accepted differences: live content vs synthetic mock numbers; provider collection status and coverage metadata; evidence disclosure; native page controls for thousands of rows. The source contains no mobile specification, so responsive arrangements are implementation choices. No P3 follow-up is required for handoff.
+- Light/dark toggle, saved theme after reload, and selected button state.
+- Sat Rush Korean introduction, original disclosure, DefiLlama + CoinGecko links.
+- Aerodrome DefiLlama + CoinMarketCap links.
+- FDV and market-cap switches update existing calculations (Sat Rush 30-day P/R 1.23/0.94 and P/HR 5.50/4.19 for the verified snapshot).
+- Favorite and favorites-only state persisted after reload, then restored.
+- Price column add/remove, page size 50/100, next/previous result page, filter empty state and recovery.
+- Inline close and Escape restore the row; mobile filter dialog fits the viewport.
+- Browser warning/error logs empty in the final local production-build check.
+- Baseline full suite: 453 tests in 43 files. Added link/translation tests: focused run 6 tests in 2 files. Typecheck and production build passed. Deployment wrapper will run the full final suite and independent production readback.
+
+## Follow-up polish
+
+P3: generated mockup typography and fixed repeated headers are not reproduced exactly; current responsive structure preserves the existing product behavior. OS browser-chrome theme color follows the system media query, while page color follows the explicit user choice.
+
+## Implementation checklist
+
+- [x] Compare references, overview and lower detail states.
+- [x] Fix nested table styles, mobile toolbar and sticky header overlap.
+- [x] Verify real interactions, responsive layout and console.
+- [x] Preserve saved settings and financial definitions.
+- [x] Keep screenshots and generated deployment artifacts outside Git.
+
+final result: passed

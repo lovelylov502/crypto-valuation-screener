@@ -26,6 +26,8 @@ import { businessRevenue } from "@/lib/fundamentals";
 import { BRAND } from "@/lib/brand";
 import { CollectionStatus } from "./CollectionStatus";
 import { comparisonSummary } from "@/lib/collectionHealth";
+import { ThemeSwitch } from "./ThemeSwitch";
+import { metricStatus } from "@/lib/metricStatus";
 
 const FAVORITES_KEY = "crypto-valuation-favorites-v1";
 
@@ -95,15 +97,15 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
       const trend = revenueTrend(c, revenueDays);
       const reading = revenueReading(c, revenueDays);
       const provider = reading.basis === "provider_total" || reading.basis === "provider_partial";
-      const note = reading.amount === null ? reading.basisLabel : !businessRevenue(c) ? reading.kindLabel : provider ? reading.basisLabel : prefs.revenueSort === "delta" ? signedUsd(trend.delta) : growthLabel(trend);
-      return <span className="revenue-reading" title={`${reading.kindLabel} · ${reading.basisLabel} · 직전 ${windowLabel(revenueDays)} ${fmtUsd(trend.previous)} · 증가액 ${signedUsd(trend.delta)}`}><strong>{fmtUsd(reading.amount)}</strong><small className={tone(trend.delta)}>{note}</small>{provider && !businessRevenue(c) && <small>{reading.basisLabel}</small>}</span>;
+      const note = reading.amount === null ? "자료 부족" : !businessRevenue(c) ? reading.kindLabel : provider ? reading.basis === "provider_partial" ? "부분 집계" : "제공처 집계" : prefs.revenueSort === "delta" ? signedUsd(trend.delta) : trend.delta === null ? "" : growthLabel(trend);
+      return <span className="revenue-reading" title={`${reading.kindLabel} · ${reading.basisLabel} · 직전 ${windowLabel(revenueDays)} ${fmtUsd(trend.previous)} · 증가액 ${signedUsd(trend.delta)}`}><strong>{fmtUsd(reading.amount)}</strong>{note && <small className={provider ? "source-badge" : tone(trend.delta)}>{note}</small>}{provider && !businessRevenue(c) && <small className="source-badge">{reading.basis === "provider_partial" ? "부분 집계" : "제공처 집계"}</small>}</span>;
     }
     const days = METRIC_COLUMN_DAYS[key];
     if (days) {
       const holder = key.startsWith("phr");
       const value = holder ? holderMultiple(c, days, prefs.capital) : protocolMultiple(c, days, prefs.capital);
       const reason = holder ? holderReason(c, days, prefs.capital) : protocolReason(c, days, prefs.capital);
-      return <span className={value === null ? "unavailable-metric" : "ratio-reading"} title={reason}>{fmtMult(value)}{value === null && <span className="sr-only"> · {reason}</span>}</span>;
+      return <span className={value === null ? "unavailable-metric" : "ratio-reading"} title={reason}>{fmtMult(value)}{value === null && <><small>{metricStatus(reason)}</small><span className="sr-only"> · {reason}</span></>}</span>;
     }
     return renderCell(c, key, prefs.capital);
   };
@@ -127,30 +129,30 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
     finally { setExporting(false); }
   };
 
-  return <main className="research-app valuation-workspace scan-workspace">
+  return <main className={`research-app valuation-workspace scan-workspace${selectedSlug ? " detail-open" : ""}`}>
     <a className="skip-link" href="#screener-results">결과 표로 이동</a>
     <header className="valuation-header">
       <a className="brand-home" href="/" aria-label={`${BRAND.name} ${BRAND.koreanName} 홈`}>
         <img className="brand-mark" src="/brand/tovenit-mark.png" alt="" width={44} height={44}/>
         <div className="brand-title"><h1>{BRAND.name}<span className="sr-only"> {BRAND.koreanName}</span></h1><p>{BRAND.tagline}</p></div>
       </a>
-      <div className="header-actions"><span className="header-status">{data ? fmtKstMinute(data.updatedAt) : "자료 준비 중"}</span><CollectionStatus data={data} publication={publication} error={error} refreshing={refreshing} checkedAt={checkedAt} onRefresh={refresh}/><button className="icon-button" aria-label="최신 자료 확인" title="최신 자료 확인" disabled={refreshing} onClick={refresh}><RefreshCw size={16} className={refreshing ? "spinning" : ""}/></button><button className="icon-button" aria-label="지표 안내" title="지표 안내" onClick={() => setSourceOpen(true)}><Info size={17}/></button></div>
+      <div className="header-actions"><span className="header-status">{data ? fmtKstMinute(data.updatedAt) : "자료 준비 중"}</span><CollectionStatus data={data} publication={publication} error={error} refreshing={refreshing} checkedAt={checkedAt} onRefresh={refresh}/><button className="icon-button" aria-label="최신 자료 확인" title="최신 자료 확인" disabled={refreshing} onClick={refresh}><RefreshCw size={16} className={refreshing ? "spinning" : ""}/></button><button className="icon-button" aria-label="지표 안내" title="지표 안내" onClick={() => setSourceOpen(true)}><Info size={17}/></button><ThemeSwitch/></div>
     </header>
     {data && <p className="mobile-data-status">표시 자료 수집 · {fmtKstMinute(data.updatedAt)}</p>}
-    {publication && <div className={`publication-notice ${publication.incident || publication.attempt.outcome === "blocked" ? "publication-blocked" : ""}`} role="status">
-      <strong>{publication.incident || publication.attempt.outcome === "blocked" ? "새 수집본 공개 보류" : data?.pipeline?.quality.issueCount ? "일부 자료 확인 필요" : "검증본 표시"}</strong>
+    {publication && (publication.incident || publication.attempt.outcome === "blocked") && <div className="publication-notice publication-blocked" role="status">
+      <strong>새 수집본 공개 보류</strong>
       <span>{data ? `${fmtKstMinute(data.updatedAt)}에 수집한 자료입니다. 이번 수집에서 확인한 값을 표시합니다.` : "검사를 통과한 자료를 불러오고 있습니다."}</span>
       {publication.attempt.outcome === "blocked" && <span>{comparisonSummary(publication.attempt)} 오른쪽 상단에서 원인과 이력을 볼 수 있습니다.</span>}
     </div>}
     {error && <div className="workspace-status" role="alert">{error} {data && "기존 결과를 표시하고 있습니다."}<button className="text-button" onClick={refresh}>다시 시도</button></div>}
     {storageError && <p className="notice">브라우저 저장소를 사용할 수 없어 설정·관심종목이 유지되지 않을 수 있습니다.</p>}
     {migrationNotice && <div className="migration-notice" role="status"><Info size={15}/><span>{migrationNotice}</span><button className="icon-button" aria-label="설정 변경 안내 닫기" onClick={() => setMigrationNotice(null)}><X size={16}/></button></div>}
+    <div className="scan-heading"><h2 aria-label="DefiLlama 전체 종목">전체 종목</h2><p>프로토콜 수익과 홀더 환원을 같은 기준으로 비교합니다.</p></div>
     <div className="scan-toolbar">
-      <h2>DefiLlama 전체 종목</h2>
-      <label className="search-box"><Search size={18}/><input aria-label="코인 또는 심볼 검색" placeholder="코인 검색" value={prefs.search} onChange={e => update("search", e.target.value)}/>{prefs.search && <button aria-label="검색 지우기" onClick={() => update("search", "")}><X size={15}/></button>}</label>
+      <label className="search-box"><Search size={18}/><input aria-label="코인 또는 심볼 검색" placeholder="코인 또는 심볼 검색…" value={prefs.search} onChange={e => update("search", e.target.value)}/>{prefs.search && <button aria-label="검색 지우기" onClick={() => update("search", "")}><X size={15}/></button>}</label>
       <button className="icon-button watchlist-toggle" aria-label="관심종목만 보기" aria-pressed={prefs.view === "favorites"} title="관심종목만 보기" onClick={() => update("view", prefs.view === "favorites" ? "all" : "favorites")}><Star size={17} fill={prefs.view === "favorites" ? "currentColor" : "none"}/>{favorites.size > 0 && <small>{favorites.size}</small>}</button>
       <div className="capital-switch"><span>배수 기준</span><div className="choice-buttons" role="group" aria-label="배수 분자"><button aria-pressed={prefs.capital === "mcap"} onClick={() => update("capital", "mcap")}>유통 시총</button><button aria-pressed={prefs.capital === "fdv"} onClick={() => update("capital", "fdv")}>FDV</button></div></div>
-      <button className="icon-button" aria-label="필터" title="필터" onClick={() => setPopup("filters")}><SlidersHorizontal size={18}/>{activeFilters > 0 && <small>{activeFilters}</small>}</button>
+      <button className="button filter-trigger" aria-label="필터" title="필터" onClick={() => setPopup("filters")}><SlidersHorizontal size={18}/>필터{activeFilters > 0 && <small>{activeFilters}</small>}</button>
       <button className="button" onClick={() => setPopup("columns")}><Columns3 size={16}/>열 표시<ChevronDown size={13}/></button>
     </div>
     <div className="scan-meta" ref={resultsRef} id="screener-results" tabIndex={-1}>
@@ -160,7 +162,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
     </div>
     <div ref={tableRef} className="table-scroll scan-table-scroll thin-scroll" role="region" aria-label="프로토콜 비교 표 · 가로 스크롤 가능" tabIndex={0} aria-busy={refreshing}>
       <table className="screener-table scan-table"><caption className="sr-only">프로토콜 수익 배수, 수익 성장, 홀더 환원 비교. 종목을 누르면 행 아래 상세를 엽니다. 빈 값은 0이 아닙니다.</caption>
-        <thead><tr><th className="coin-column" rowSpan={2} scope="col" aria-sort={prefs.sortKey === "name" ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort("name")}>종목 · {capitalName}{sortIcon("name")}</button></th>{bands.map((band, i) => <th key={i} colSpan={band.count} scope="colgroup" className="band-heading">{band.label}{selectedCols[band.start].key in REVENUE_COLUMN_DAYS && <select aria-label="수익 정렬 기준" value={prefs.revenueSort} onChange={e => { setPrefs(p => ({ ...p, revenueSort: e.target.value as WorkspacePreferences["revenueSort"], sortKey: p.sortKey in REVENUE_COLUMN_DAYS ? p.sortKey : selectedCols.find(c => c.key in REVENUE_COLUMN_DAYS)!.key, sortDir: "desc" })); setPage(1); }}><option value="amount">금액</option><option value="percent">증가율</option><option value="delta">증가액</option></select>}</th>)}</tr>
+        <thead><tr><th className="coin-column" rowSpan={2} scope="col" aria-sort={prefs.sortKey === "name" ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort("name")}>종목 · {capitalName}{sortIcon("name")}</button></th>{bands.map((band, i) => <th key={i} colSpan={band.count} scope="colgroup" className="band-heading">{band.label}{(band.label.includes("P/R") || band.label.includes("P/HR")) && <span className="band-basis"> ({capitalName} 기준)</span>}{selectedCols[band.start].key in REVENUE_COLUMN_DAYS && <select aria-label="수익 정렬 기준" value={prefs.revenueSort} onChange={e => { setPrefs(p => ({ ...p, revenueSort: e.target.value as WorkspacePreferences["revenueSort"], sortKey: p.sortKey in REVENUE_COLUMN_DAYS ? p.sortKey : selectedCols.find(c => c.key in REVENUE_COLUMN_DAYS)!.key, sortDir: "desc" })); setPage(1); }}><option value="amount">금액</option><option value="percent">증가율</option><option value="delta">증가액</option></select>}</th>)}</tr>
           <tr>{selectedCols.map((col, i) => { const days = METRIC_COLUMN_DAYS[col.key] ?? REVENUE_COLUMN_DAYS[col.key as keyof typeof REVENUE_COLUMN_DAYS]; return <th key={col.key} className={`${bands.some(b => b.start === i) ? "band-start " : ""}${prefs.sortKey === col.key ? "active-sort" : ""}`} scope="col" title={col.title} aria-sort={prefs.sortKey === col.key ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort(col.key)} aria-label={col.label + " 정렬"}>{days ? windowLabel(days) : col.label}{sortIcon(col.key)}</button></th>; })}</tr>
         </thead>
         <tbody>{rows.map(c => <Fragment key={c.slug}>
@@ -173,7 +175,8 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
       </table>
     </div>
     {!rows.length && <div className="empty-state"><Search size={26}/><h3>{!data ? "자료를 준비하고 있습니다" : prefs.view === "favorites" && !favorites.size ? "별표로 관심종목을 모아 보세요" : "조건에 맞는 종목이 없습니다"}</h3><p>{!data ? "공개 자료 응답을 기다립니다." : "검색어 또는 필터 조건을 조절하세요."}</p><button className="button" onClick={!data ? refresh : resetFilters}>{!data ? "다시 확인" : "조건 초기화"}</button></div>}
-    <div className="scan-footer"><p>배수: 24h는 UTC 완료 하루 · 1·7·30·90일 연환산 · 1년은 365일 합계. Revenue 원본의 ‘제공처 집계’는 별도 표시하며, 원본 금액의 표시와 배수·성장률 계산 가능 여부는 구분합니다.</p><Pagination total={total} page={currentPage} size={pageSize} position="top" onPage={goPage} onSize={s => { setPageSize(s); setPage(1); }}/></div>
+    <div className="table-legend"><span><b className="source-badge">제공처 집계</b> 제공처 기간 집계 · 완료일 이력과 구분</span><span><b>자료 부족</b> 기간 이력 미확보</span><span><b>미연결</b> 원천 자료 미연결</span></div>
+    <div className="scan-footer"><p>24시간은 완료된 UTC 하루 · 1·7·30·90일 배수는 연환산 · 1년은 365일 합계</p><Pagination total={total} page={currentPage} size={pageSize} position="top" onPage={goPage} onSize={s => { setPageSize(s); setPage(1); }}/></div>
     <span className="sr-only" role="status" aria-live="polite">{status}</span>
 
     {popup === "columns" && <SettingsDialog title="열 표시" wide onClose={() => setPopup(null)} headerAction={<button className="text-button" onClick={() => { setPrefs(p => withVisibleColumns(p, [...DEFAULT_VISIBLE_COLUMNS])); setStatus("기본 열을 복원했습니다."); }}><RotateCcw size={15}/>기본 열 복원</button>}><DisplaySettings columns={prefs.columns} onChange={columns => setPrefs(p => withVisibleColumns(p, columns))} onStatus={setStatus}/><button className="button export-results" disabled={exporting || !data} onClick={() => void exportResults()}><Download size={15}/>{exporting ? "전체 결과 준비 중…" : "검색 결과 전체 내보내기"}</button><p role="status">{exporting || status.includes("내보") ? status : ""}</p></SettingsDialog>}

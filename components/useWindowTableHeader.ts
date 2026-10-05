@@ -12,7 +12,10 @@ export function useWindowTableHeader() {
     let frame = 0;
     const update = () => {
       const top = table.getBoundingClientRect().top;
-      const offset = Math.max(0, Math.min(-top, table.offsetHeight - head.offsetHeight));
+      const detail = scroller.querySelector(".inline-detail")?.getBoundingClientRect();
+      // The list headings do not describe the separate comparison table inside a detail.
+      const readingDetail = detail && detail.top < head.offsetHeight && detail.bottom > head.offsetHeight;
+      const offset = readingDetail ? 0 : Math.max(0, Math.min(-top, table.offsetHeight - head.offsetHeight));
       head.style.transform = `translateY(${offset}px)`;
       frame = 0;
     };

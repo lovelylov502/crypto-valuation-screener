@@ -128,7 +128,7 @@ export const DEFAULT_VISIBLE_COLUMNS: SortKey[] = [
 export const REVENUE_COLUMN_DAYS = { revenue24h: 1, revenue7d: 7, revenue30d: 30, revenue90d: 90, revenue1y: 365 } as const;
 export function columnBand(key: SortKey): string {
   if (["pr24h", "pr7d", "pr", "pr90d", "pr1y"].includes(key)) return "수익 배수 P/R";
-  if (key in REVENUE_COLUMN_DAYS) return "Revenue 원본";
+  if (key in REVENUE_COLUMN_DAYS) return "프로토콜 수익";
   if (["phr24h", "phr7d", "phr", "phr90d", "phr1y"].includes(key)) return "홀더 배수 P/HR";
   return "추가 지표";
 }

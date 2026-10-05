@@ -6,6 +6,10 @@ export interface ProtocolResearch {
   reviewedAt: string;
   scope: string;
   holder?: {
+    summary?: string;
+    evidenceLabel?: string;
+    routes?: { label: string; description: string; condition: string }[];
+    scopeNote?: string;
     funding: string;
     route: string;
     asset: string;
@@ -18,6 +22,20 @@ export interface ProtocolResearch {
 
 // Source-backed research records. No inferred payout asset or policy from an amount alone.
 export const PROTOCOL_RESEARCH: Record<string, ProtocolResearch> = {
+  "sat-rush": {
+    description: "Solana에서 게임 요소를 접목한 비트코인 채굴 프로젝트입니다.",
+    source: "https://defillama.com/protocol/sat-rush", reviewedAt: "2026-10-05", scope: "DefiLlama 프로젝트 소개와 수익·홀더 환원 방법론",
+    holder: {
+      funding: "프로토콜 수수료 중 환원에 배정된 몫", route: "RUSH 매입·소각 + BTC 매입·스테이킹 보상", summary: "매입·소각 / 스테이킹 보상", evidenceLabel: "DefiLlama 설명 확인",
+      asset: "RUSH 소각 · BTC 스테이킹 보상", recipient: "소각은 직접 수령인 없음 · BTC 보상은 스테이커", condition: "BTC 보상은 스테이킹 조건 · 세부 조건 확인 필요",
+      status: "DefiLlama 설명 기준 · 개별 지급 거래 미대조", source: "https://defillama.com/protocol/sat-rush",
+      scopeNote: "환원액은 프로토콜 수익에 포함됩니다.",
+      routes: [
+        { label: "RUSH 매입·소각", description: "토큰 매입과 소각에 배정된 금액", condition: "토큰 소각 · 보유자 직접 지급 없음" },
+        { label: "BTC 매입·스테이킹 보상", description: "BTC 매입 후 스테이킹 보상에 배정된 금액", condition: "수령 조건: 스테이킹 · 세부 조건 확인 필요" },
+      ],
+    },
+  },
   "aerodrome": {
     description: "Base의 토큰 교환·유동성 시장입니다. 원천 수익에는 veAERO 투표자에게 귀속되는 거래 수수료와 외부 투표 인센티브가 함께 포함됩니다. AERO 신규 발행 보상은 별도이며 수익·환원액을 더하지 않습니다.",
     source: "https://aerodrome.finance/docs", reviewedAt: "2026-09-26", scope: "Aerodrome V1·Slipstream 원천 어댑터와 공식 문서 대조 · Aero Lite는 원천상 프로토콜 귀속분 0",

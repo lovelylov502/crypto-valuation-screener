@@ -103,7 +103,7 @@ export function renderCell(c: CoinScored, key: SortKey, basis: CapitalBasis = "m
     case "revenue7d": return fmtUsd(revenueAmount(c, 7));
     case "revenue90d": return fmtUsd(revenueAmount(c, 90));
     case "revenue1y": return fmtUsd(revenueAmount(c, 365));
-    case "holderRoute": return <span className="route-cell">{protocolResearch(c)?.holder?.route ?? holderTypeSummary(c)}<small>{protocolResearch(c)?.holder ? "공식 문서 확인" : "원천 설명 자동 분류"}</small></span>;
+    case "holderRoute": return <span className="route-cell">{protocolResearch(c)?.holder?.summary ?? protocolResearch(c)?.holder?.route ?? (c.holderValue.components.length ? holderTypeSummary(c) : "자료 미연결")}<small>{protocolResearch(c)?.holder?.evidenceLabel ?? (protocolResearch(c)?.holder ? "공식 문서 확인" : c.holderValue.components.length ? "원천 설명 자동 분류" : "")}</small></span>;
     case "payoutAsset": return <span className="route-cell">{protocolResearch(c)?.holder?.asset ?? "미확인"}</span>;
     case "holderCondition": return <span className="route-cell">{protocolResearch(c)?.holder?.recipient ?? holderConditionSummary(c)}</span>;
     case "signals":

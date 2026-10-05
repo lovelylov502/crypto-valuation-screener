@@ -26,7 +26,10 @@ export const metadata: Metadata = {
   appleWebApp: { title: BRAND.name },
 };
 
-export const viewport: Viewport = { themeColor: BRAND.background, colorScheme: "dark" };
+export const viewport: Viewport = {
+  themeColor: [{ media: "(prefers-color-scheme: light)", color: "#f6f7f3" }, { media: "(prefers-color-scheme: dark)", color: "#181a19" }],
+  colorScheme: "light dark",
+};
 
 export default function RootLayout({
   children,
@@ -34,7 +37,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: `(function(){var t;try{t=localStorage.getItem('tovenit-theme')}catch(e){}document.documentElement.dataset.theme=t==='light'||t==='dark'?t:matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'})()` }}/></head>
       <body>{children}</body>
     </html>
   );

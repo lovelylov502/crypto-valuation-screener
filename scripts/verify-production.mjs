@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import { pathToFileURL } from "node:url";
 import { DEPLOY_CONTRACT } from "./deploy-contract.mjs";
 
-const ADVANCED_UI_MARKERS = ["DefiLlama 전체 종목", "열 표시", "필터", "연결 토큰", "배수 분자", "P/R · 24시간", "P/HR · 24시간", "P/R · 30일", "P/HR · 30일", "지표 안내", "최신 자료 확인", "page-size-top", "scan-table", "수익 정렬 기준"];
+const ADVANCED_UI_MARKERS = ["화면 모드", "tovenit-theme", "밝게", "어둡게", "DefiLlama 전체 종목", "열 표시", "필터", "연결 토큰", "배수 분자", "P/R · 24시간", "P/HR · 24시간", "P/R · 30일", "P/HR · 30일", "지표 안내", "최신 자료 확인", "page-size-top", "scan-table", "수익 정렬 기준"];
 const LEGACY_UI_MARKERS = ["저평가 80+", "고평가 20 이하", "P/S 참고선", "P/S · 30일", "P/S · 사업 매출", 'aria-label="결과 정렬"'];
 const MAX_API_BYTES = 4_500_000;
 const MAX_ATTEMPTS = 8;

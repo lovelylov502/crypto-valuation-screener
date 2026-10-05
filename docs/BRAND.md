@@ -11,7 +11,8 @@ TOVENIT is a crypto fundamentals research tool for comparing protocol revenue, v
 - Functional description: **프로토콜 수익 · 수익 배수 · 홀더 환원**.
 - Symbol: a mint T with an angled crossbar tip. Keep its original proportions and clear space; do not rotate, stretch, outline or add effects.
 - Wordmark: bold uppercase sans serif, modest tracking. In the app, Arial/Helvetica keeps the wordmark local and fast; the existing Korean text and table fonts remain in place.
-- Palette: navy `#0D1421`, mint `#58DCC4`, ivory `#EDF1F9`, muted text `#ADC0DC`. Mint marks brand identity and selected controls; the existing positive/negative data colors retain their meaning.
+- Application palette (approved October 5, 2026): off-white `#F6F7F3` with white surfaces and green `#14765A` in light mode; neutral charcoal `#181A19` / `#202320`, ivory `#EFF2EC` and mint `#72D5AD` in dark mode. The original mint T symbol is retained. Positive/negative values use accessible green/red; amber identifies source aggregates and data caveats. `app/globals.css` owns shared theme tokens.
+- The six approved list/detail mockups supersede the former navy application palette. Earlier exported icon/social artwork remains the original brand asset.
 
 ## Assets
 
