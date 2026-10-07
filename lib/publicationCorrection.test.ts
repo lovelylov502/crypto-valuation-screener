@@ -46,10 +46,20 @@ it.each(["running","wrong baseline","no failure","unconfirmed target","healthy l
  expect(()=>preparePublicationCorrection(c,t,b,data(false),baseline,"data-maintenance-correction",now,null)).toThrow();
 });
 it("local commit is rejected before any network request; expected parent changes fail before archive or promotion",async()=>{
+ vi.stubEnv("GITHUB_ACTIONS","false");vi.stubEnv("SCREENER_POINTER_CORRECTION","false");
  const network=vi.fn();vi.stubGlobal("fetch",network);expect(()=>correctionWriteGuard()).toThrow("serialized maintenance");
  await expect(correctPublication("commit","data-old","data-good")).rejects.toThrow("serialized maintenance");expect(network).not.toHaveBeenCalled();
  vi.stubGlobal("fetch",vi.fn(async()=>Response.json(journal("data-new",badAt))));
  await expect(correctPublication("prepare","data-old","data-good","unused")).rejects.toThrow("parent changed");expect(fetch).toHaveBeenCalledTimes(1);
+});
+it("serialized maintenance context is explicitly authorized and each required context field remains enforced",()=>{
+ const maintenance={GITHUB_ACTIONS:"true",GITHUB_REPOSITORY:"lovelylov502/crypto-valuation-screener",GITHUB_REF:"refs/heads/main",GITHUB_EVENT_NAME:"workflow_dispatch",SCREENER_POINTER_CORRECTION:"true",GITHUB_RUN_ID:"12345",GITHUB_RUN_ATTEMPT:"1"};
+ for(const [key,value] of Object.entries(maintenance))vi.stubEnv(key,value);
+ const network=vi.fn();vi.stubGlobal("fetch",network);expect(()=>correctionWriteGuard()).not.toThrow();
+ for(const [key,value] of Object.entries(maintenance)) {
+  vi.stubEnv(key,"");expect(()=>correctionWriteGuard()).toThrow("serialized maintenance");vi.stubEnv(key,value);
+ }
+ expect(network).not.toHaveBeenCalled();
 });
 it("correction rejects a changed live revision or pause even in canonical GH context",async()=>{
  vi.stubEnv("GITHUB_SHA","a".repeat(40));
