@@ -2,7 +2,7 @@ import { sameMethodology } from "./fundamentalSource";
 import { summarizeRevenueHistory, type RevenueHistory } from "./revenueHistory";
 import type { SourceObservation } from "./types";
 import { readHistorySummary } from "./historyRequest";
-import { sourceObservedAt } from "./sourceBundle";
+import { sourceObservedAt, sourcePipelineSchema } from "./sourceBundle";
 import { validateSummaryHistory } from "./sourceValidation";
 
 type Row = Record<string, unknown>;
@@ -84,9 +84,10 @@ export function mergeParentHistories(histories: Record<string, RevenueHistory>, 
       daily.set(point[0], point[1]);
     }
     if (!conflict) {
-      const recovered = summarizeRevenueHistory([{ slug: key, name: key }], [...daily].map(([t, v]) => [t, { [key]: v }]), now, url, new Map([[key, { fingerprint: current.definitionFingerprint! }]]))[key];
+      const recovered = summarizeRevenueHistory([{ slug: key, name: key }], [...daily].map(([t, v]) => [t, { [key]: v }]), now, url, new Map([[key, { fingerprint: current.definitionFingerprint! }]]), undefined, sourcePipelineSchema())[key];
       recovered.supplementalSources = [...new Set([current.source, ...(current.supplementalSources ?? []), url])].sort();
       recovered.observedAt = [current.observedAt,observedAt].sort().at(-1)!;
+      if (recovered.freshness) { recovered.freshness.components = current.freshness!.components; recovered.freshness.sources = recovered.supplementalSources; recovered.freshness.observedAt = recovered.observedAt; recovered.freshness.coverageBasis="exact_parent"; }
       if (!current.weeks.length) recovered.weeks = [];
       histories[key] = recovered;
     }

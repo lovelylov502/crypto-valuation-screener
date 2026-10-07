@@ -5,7 +5,7 @@ import { holderScope } from "./valuationMetrics";
 import type { SourceObservation } from "./types";
 import { completeHistorySource } from "./completeHistorySource";
 import { fetchParentHistorySources, mergeParentHistories } from "./parentHistorySource";
-import { sourceFetch, sourceNow, sourceObservedAt, sourceSessionActive } from "./sourceBundle";
+import { sourceFetch, sourceNow, sourceObservedAt, sourceSessionActive, sourcePipelineSchema, objectHash } from "./sourceBundle";
 import { validateHistoryBreakdown, validateProtocolFinancialRows } from "./sourceValidation";
 
 export const HOLDER_HISTORY_URL = "https://api.llama.fi/overview/fees?dataType=dailyHoldersRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false";
@@ -16,7 +16,14 @@ export function summarizeHolderHistory(protocols: Row[], chart: unknown[], now: 
   const summaries = aggregateHolderValueByGroup(protocols, group, definitionReviewed);
   const eligible = protocols.filter(p => p.doublecounted !== true && summaries.get(group(String(p.slug)))?.components.some(c => c.slug === p.slug && c.eligible));
   const fingerprints = new Map([...summaries].map(([key, holderValue]) => [key, { fingerprint: holderScope({ holderValue, fundamentals: combineFundamentals(undefined, undefined, protocols.filter(p => p.doublecounted !== true && group(String(p.slug)) === key)) }) }]));
-  const result = summarizeRevenueHistory(eligible, chart, now, HOLDER_HISTORY_URL, fingerprints, protocols);
+  const result = summarizeRevenueHistory(eligible, chart, now, HOLDER_HISTORY_URL, fingerprints, protocols, sourcePipelineSchema());
+  if (sourcePipelineSchema() === 2) {
+    const raw = summarizeRevenueHistory(protocols, chart, now, HOLDER_HISTORY_URL, new Map([...summaries].map(([key]) => [key,{ fingerprint: objectHash(protocols.filter(p=>group(String(p.slug))===key).map(p=>[p.slug,p.defillamaId,p.methodology,p.parentProtocol]).sort()) }])), protocols, 2);
+    for (const [key,h] of Object.entries(raw)) {
+      if (!result[key]) result[key] = { ...h, definitionFingerprint: fingerprints.get(key)?.fingerprint, periods: Object.fromEntries(Object.entries(h.periods).map(([d,p]) => [d,{...p,total:null,reportedDays:0}])) as RevenueHistory["periods"], previous30: {...h.previous30,total:null,reportedDays:0}, previous: undefined, weeks: [] };
+      result[key].rawFreshness = h.freshness;
+    }
+  }
   // Keep period totals; the table does not render weekly holder charts.
   for (const h of Object.values(result)) h.weeks = [];
   return result;
@@ -49,9 +56,18 @@ export async function fetchHolderHistory(observations: SourceObservation[], pres
           const supplements = sources.filter(s=>s.status === "ok" && s.sourceSlugs?.some(slug=>(parent.get(slug) ?? slug) === key));
           h.observedAt = [observedAt,...supplements.map(s=>s.observedAt)].sort().at(-1)!;
           h.supplementalSources = [...new Set(supplements.map(s=>s.url))].sort();
+          if (h.rawFreshness) { h.rawFreshness.sources = [HOLDER_HISTORY_URL,...h.supplementalSources]; h.rawFreshness.observedAt = h.observedAt; }
         }
         // A full raw parent must never widen an economically eligible subset.
+        const rawHistories = sourcePipelineSchema() === 2 ? summarizeRevenueHistory(data.protocols,chart,at,HOLDER_HISTORY_URL,
+          new Map(Object.entries(value).map(([key,h])=>[key,{fingerprint:h.rawFreshness?.definition ?? "unknown"}])),data.protocols,2) : {};
+        for(const [key,h] of Object.entries(rawHistories)) {
+          h.observedAt=value[key]?.observedAt??observedAt;h.supplementalSources=value[key]?.supplementalSources??[];
+          if(h.freshness){h.freshness.observedAt=h.observedAt;h.freshness.sources=[HOLDER_HISTORY_URL,...h.supplementalSources];}
+        }
+        if (sourcePipelineSchema() === 2) mergeParentHistories(rawHistories,chart,parentSources,at,sources);
         mergeParentHistories(value, chart, parentSources.filter(p=>p.members.every(eligible)), at, sources);
+        for (const [key,h] of Object.entries(value)) if (rawHistories[key]?.freshness) h.rawFreshness=rawHistories[key].freshness;
         return {at,value,sources:[{url:HOLDER_HISTORY_URL,observedAt,status:"ok" as const},...sources]};
     };
     if (sourceSessionActive()) {

@@ -4,6 +4,7 @@ import type { ScreenerResponse } from "./types";
 import type { PublicationJournal, PublishedSnapshot } from "./publicationTypes";
 import { JOURNAL_DOWNLOAD, JOURNAL_LATEST, snapshotErrors } from "./publication";
 import { pipelineIntegrityErrors } from "./pipelineIntegrity";
+import { validateRecovery } from "./freshnessRecovery";
 
 export const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 export function checkArchiveUrl(url: string) {
@@ -20,7 +21,7 @@ export function decodeSnapshot(bytes: Uint8Array, ref: PublishedSnapshot): Scree
 }
 export function parseJournal(value: unknown): PublicationJournal {
   const j = value as PublicationJournal;
-  if (!j || j.schema !== 1 || !/^data-[a-zA-Z0-9-]+$/.test(j.id) || !j.attempt || !["running", "published", "blocked"].includes(j.attempt.outcome)
+  if (!j || ![1,2].includes(j.schema) || !/^data-[a-zA-Z0-9-]+$/.test(j.id) || !j.attempt || !["running", "published", "blocked"].includes(j.attempt.outcome)
     || !Number.isFinite(Date.parse(j.createdAt)) || !Number.isFinite(Date.parse(j.attempt.startedAt))
     || !Array.isArray(j.attempt.errors) || !Array.isArray(j.attempt.sourceFailures) || !Array.isArray(j.attempt.affected)
     || (j.attempt.comparisonCompleted !== undefined && typeof j.attempt.comparisonCompleted !== "boolean")
@@ -47,6 +48,7 @@ export function parseJournal(value: unknown): PublicationJournal {
     || (s.settled && (a.outcome !== "published" || (a.partial === true && a.failureClass === "transient") || s.successfulPublicationId !== j.published?.id))
     || (s.nextRetryAt !== null && (!Number.isFinite(Date.parse(s.nextRetryAt)) || s.settled)))) throw new Error("Invalid collection slot state");
   if (j.previousStateUrl) checkArchiveUrl(j.previousStateUrl);
+  if (j.schema===2) validateRecovery(j);
   return j;
 }
 export async function readJournal(): Promise<PublicationJournal> {

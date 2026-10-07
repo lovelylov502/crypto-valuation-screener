@@ -19,7 +19,7 @@ export function snapshotErrors(data: ScreenerResponse): string[] {
   if (!Array.isArray(data.coins) || !data.coins.length) return [...errors, "empty_universe"];
   if (!Array.isArray(data.sources) || !data.sources.length) return [...errors, "missing_source_observations"];
   if (data.pipeline) {
-    if (data.pipeline.schema !== 1 || data.pipeline.replayVerified !== true || data.pipeline.asOf !== data.updatedAt ||
+    if (![1,2].includes(data.pipeline.schema) || data.pipeline.replayVerified !== true || data.pipeline.asOf !== data.updatedAt ||
       JSON.stringify(data.pipeline.quality) !== JSON.stringify(dataQualitySummary(data.coins))) errors.push("pipeline_accounting_invalid");
     errors.push(...scopedSourceErrors(data.sources, data.coins));
   } else errors.push(...data.sources.filter(s => s.status === "error").map(s => `source_request_failed:${s.httpStatus ?? "network"}`));

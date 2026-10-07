@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
-import { expect, it } from "vitest";
+import { expect, it,vi } from "vitest";
+// These are archived schema-1 scheduling semantics; schema-2 scenarios live in freshnessRecovery.test.
+vi.mock("./pipeline-release.json",()=>({default:{readerRelease:"four-daily-freshness-v2",writerSchema:1,schedule:"legacy",phaseA:null}}));
 import { collectionSchedule } from "./collectionSchedule";
 import { scheduledCollectionDecision, collectionTriggerDecision, classifyAttemptFailure } from "./scheduledCollection";
 import { startJournal, finishJournal } from "./publication";
@@ -119,6 +121,7 @@ it("keeps collection steps behind the due guard and writer lock", () => {
   expect(workflow).toContain("group: screener-publication\n  cancel-in-progress: false");
   for (const step of ["Persist collection start", "Collect and validate candidate"]) {
     const block = workflow.split(`- name: ${step}`)[1].split("\n      - ")[0];
-    expect(block).toContain("if: steps.due.outputs.collect == 'true'");
+    expect(block).toContain(step === "Persist collection start"?"if: steps.due.outputs.collect == 'true'":"if: steps.start.outputs.claimed == 'true'");
   }
+  expect(workflow).toContain("queue: max");
 });

@@ -10,7 +10,7 @@
 
 ## Current product and data engine
 
-- Collection has two daily slots at 11:00/23:00 KST, one serialized writer, separate attempt/publication state and bounded retries. A failed attempt no longer consumes the entire slot. See [PUBLICATION.md](./docs/PUBLICATION.md) for trigger, lease and recovery semantics.
+- The checked-in release contract is Phase A: compatible pipeline/journal 1/2 readers, schema-1 writing and two legacy daily slots. Phase B activates four slots at 05:00/11:00/17:00/23:00 KST plus two bounded catch-up stages after exact canonical reader/deployment proof. [PUBLICATION.md](./docs/PUBLICATION.md) owns scheduling; [freshness acceptance](./docs/FRESHNESS_IMPLEMENTATION_ACCEPTANCE_2026-10-08.md) records local evidence and the activation boundary.
 
 - Every new candidate retains original HTTP responses and must reproduce its normalization and complete output in an offline replay. Accounted local failures withhold affected metrics while valid current rows can publish. Required census, identity, financial and source-integrity failures still block publication. [ARCHITECTURE.md](./docs/ARCHITECTURE.md) defines the active contract.
 
@@ -33,7 +33,7 @@
 
 Current rule version: `research-v10-source-revenue-recovery`. See [SCREENER_V10.md](./docs/SCREENER_V10.md) for this repair, [SCREENER_V9.md](./docs/SCREENER_V9.md) for the full directory, [SCREENER_V8.md](./docs/SCREENER_V8.md) for the underlying definition review rules, [HANDOFF.md](./docs/HANDOFF.md) for deployment receipts and [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for production guards. Earlier version documents are historical where superseded.
 
-The October 5 data-engine redesign keeps those financial rules and adds `pipeline.schema=1`. Its [acceptance record](./docs/RELIABILITY_ACCEPTANCE_2026-10-05.md) links the deployed commit, successful recovery, complete source replay, independent review and still-pending natural scheduled acceptance.
+The October 5 data-engine redesign keeps those financial rules and adds `pipeline.schema=1`. Its [acceptance record](./docs/RELIABILITY_ACCEPTANCE_2026-10-05.md) remains historical evidence. Schema 2 adds dated-source currency separately from collection quality and preserves actual schema-1 archive replay. The four-slot repair's operational acceptance requires 72 hours, twelve proven natural regular slots and two UTC transitions after activation; local checks do not supply those observations.
 
 ## 개발
 

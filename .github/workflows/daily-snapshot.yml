@@ -32,6 +32,7 @@ permissions:
 concurrency:
   group: screener-publication
   cancel-in-progress: false
+  queue: max
 
 jobs:
   capture:
@@ -41,6 +42,11 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SCREENER_BOOTSTRAP_URL: ${{ inputs.bootstrap_url }}
       SCREENER_BOOTSTRAP_SHA256: ${{ inputs.bootstrap_sha256 }}
+      SCREENER_SCHEDULER_RECEIPT: ${{ inputs.scheduler_receipt }}
+      SCREENER_SCHEDULER_SIGNATURE: ${{ inputs.scheduler_signature }}
+      SCREENER_SCHEDULER_SECRET: ${{ secrets.SCREENER_SCHEDULER_SECRET }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      SCREENER_GITHUB_SCHEDULE: ${{ github.event.schedule }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,14 +69,14 @@ jobs:
         if: steps.due.outputs.collect == 'true'
         run: npx tsx scripts/publication-job.ts start
       - name: Collect and validate candidate against the published baseline
-        if: steps.due.outputs.collect == 'true'
+        if: steps.start.outputs.claimed == 'true'
         timeout-minutes: 12
         run: npm run snapshot:capture
       - name: Archive result and atomically publish only a passing candidate
-        if: always() && steps.start.outcome == 'success'
+        if: always() && steps.start.outputs.claimed == 'true'
         run: npx tsx scripts/publication-job.ts finish
       - uses: actions/upload-artifact@v7
-        if: always() && steps.start.outcome == 'success'
+        if: always()
         with:
           name: screener-${{ github.run_id }}-${{ github.run_attempt }}
           path: snapshot-output/

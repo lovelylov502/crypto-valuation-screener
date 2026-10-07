@@ -1,5 +1,6 @@
 import type { CoinDataQuality } from "./types";
 import { hasDataQualityConflict } from "./dataQuality";
+import { summarizeDatedFreshness, type DatedFreshness } from "./datedFreshness";
 
 /** All windows end on the same completed UTC day. Missing days never become zero. */
 export type RevenueWindowDays = 1 | 7 | 30 | 90 | 365;
@@ -12,6 +13,8 @@ export interface RevenuePeriod {
   reportedDays: number;
 }
 export interface RevenueHistory {
+  freshness?: DatedFreshness;
+  rawFreshness?: DatedFreshness;
   definitionFingerprint?: string;
   periods: Record<RevenueWindowDays, RevenuePeriod>;
   previous30: RevenuePeriod;
@@ -22,7 +25,7 @@ export interface RevenueHistory {
   supplementalSources?: string[];
   observedAt: string;
 }
-type Protocol = { slug?: unknown; name?: unknown; parentProtocol?: unknown; doublecounted?: unknown };
+type Protocol = { slug?: unknown; name?: unknown; defillamaId?: unknown; parentProtocol?: unknown; doublecounted?: unknown };
 const DAY = 86400;
 const date = (timestamp: number) => new Date(timestamp * 1000).toISOString().slice(0, 10);
 
@@ -46,7 +49,7 @@ export function revenueBasis(c: { revenueHistory?: RevenueHistory | null }): str
 }
 
 export function summarizeRevenueHistory(
-  protocols: Protocol[], chart: unknown[], now: number, source: string, fingerprints: ReadonlyMap<string, { fingerprint: string }> = new Map(), identityUniverse: Protocol[] = protocols,
+  protocols: Protocol[], chart: unknown[], now: number, source: string, fingerprints: ReadonlyMap<string, { fingerprint: string }> = new Map(), identityUniverse: Protocol[] = protocols, schema: 1 | 2 = 1,
 ): Record<string, RevenueHistory> {
   const end = Math.floor(now / 1000 / DAY) * DAY - DAY;
   const groups = new Map<string, string[]>();
@@ -93,7 +96,11 @@ export function summarizeRevenueHistory(
       previous30: period(30, 30),
       weeks: Array.from({ length: 13 }, (_, i) => period(7, (12 - i) * 7)),
       source, observedAt: new Date(now).toISOString(),
+      ...(schema === 2 ? { freshness: summarizeDatedFreshness(key, fingerprints.get(key)?.fingerprint ?? "unknown", end, daily,
+        protocols.filter(p => (p.parentProtocol ?? p.slug) === key && p.doublecounted !== true).map(p => ({ id: `${String(p.slug)}@${String(p.defillamaId ?? "unknown")}`,
+          days: new Set([...rows].filter(([,r]) => nameCounts.get(String(p.name)) === 1 && typeof r[String(p.name)] === "number" && Number.isFinite(r[String(p.name)])).map(([t]) => t)) })), source, new Date(now).toISOString()) } : {}),
     };
+    if(schema===2&&!names.every(name=>nameCounts.get(name)===1))output[key].freshness!.state="conflict";
   }
   return output;
 }

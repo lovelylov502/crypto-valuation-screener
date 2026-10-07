@@ -1,6 +1,8 @@
 import { currentCollectionSlot } from "./collectionSchedule";
 import { verifySchedulerReceipt } from "./schedulerDispatch";
 import type { CollectionAttempt, PublicationJournal } from "./publicationTypes";
+import { recoveryDecision, type CollectionTrigger } from "./freshnessRecovery";
+import { fourDailyActive } from "./pipelineRelease";
 
 export const MAX_AUTOMATIC_ATTEMPTS = 3;
 export const MAX_MANUAL_REPAIRS = 2;
@@ -51,6 +53,7 @@ export function scheduledCollectionDecision(previous: PublicationJournal | null,
 
 export function collectionTriggerDecision(input: {
   event: string | undefined; receipt: string; signature: string; secret: string; bootstrap: boolean;
+  requestId?: string; requestedAt?: string; schedule?: string;
 }, previous: PublicationJournal | null, now: number) {
   const { event, receipt, signature, secret, bootstrap } = input;
   if (event !== "schedule" && event !== "workflow_dispatch") throw new Error("Unexpected collection trigger");
@@ -58,6 +61,14 @@ export function collectionTriggerDecision(input: {
   const external = receipt || signature ? verifySchedulerReceipt(receipt, signature, secret, now) : null;
   if (external && bootstrap) throw new Error("Scheduler cannot bootstrap a publication");
   const manualRepair = event === "workflow_dispatch" && !external;
+  if (fourDailyActive()) {
+    if (bootstrap) throw new Error("Phase B cannot bootstrap a journal");
+    if (external && external.schema !== 2) throw new Error("Legacy occurrence cannot claim new scheduling allowance");
+    const trigger: CollectionTrigger = external ? {source:"vercel-cron",scheduledFor:external.scheduledFor,stage:external.stage!,schedule:external.schedule,requestedAt:external.requestedAt,requestId:external.requestId,occurrenceKnown:true,authentication:"hmac-sha256-verified"}
+      : {source:manualRepair?"manual":"github-recovery-wake",scheduledFor:null,stage:null,schedule:input.schedule??null,requestedAt:input.requestedAt??new Date(now).toISOString(),requestId:input.requestId??"",occurrenceKnown:false,authentication:manualRepair?"github-manual":"github-native-occurrence-unknown"};
+    return recoveryDecision(previous,now,trigger,manualRepair);
+  }
+  if (external?.schema===2 || previous?.schema===2) throw new Error("Schema-2 journal requires compatible scheduling; use paused rollback");
   const decision = !previous && manualRepair && bootstrap
     ? { collect: true, reason: "bootstrap", slotAt: new Date(currentCollectionSlot(now)).toISOString(), previousStartedAt: null, manualRepair: false }
     : scheduledCollectionDecision(previous, now, manualRepair);

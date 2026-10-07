@@ -127,7 +127,7 @@ export function scopedSourceErrors(observations: SourceObservation[], coins: Coi
     if (s.status === "ok") continue;
     // Required sources still block publication, but known transport failures can
     // retry. A malformed HTTP 200 response remains a validation failure.
-    if (s.status === "error" && s.reason === undefined && requiredSourceUrls.has(s.url) &&
+    if (s.status === "error" && (s.reason === undefined || s.reason==="request_budget") && requiredSourceUrls.has(s.url) &&
       (s.httpStatus === undefined || s.httpStatus >= 400)) {
       errors.push(`source_request_failed:${s.httpStatus ?? "network"}:${s.url}`);
       continue;

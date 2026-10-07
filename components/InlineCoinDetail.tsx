@@ -1,5 +1,6 @@
 "use client";
 import { ChevronUp, ExternalLink, Info } from "lucide-react";
+import { useEffect,useState } from "react";
 import type { CoinScored } from "@/lib/types";
 import { fmtKstMinute, fmtMult, fmtPct, fmtPrice, fmtUsd } from "@/lib/format";
 import { growthLabel, revenueTrend } from "@/lib/revenueTrend";
@@ -11,6 +12,7 @@ import { metricStatus } from "@/lib/metricStatus";
 import { protocolResearch } from "@/lib/protocolResearch";
 import { holderEconomicTypeLabel } from "@/lib/holderValue";
 import { REVENUE_WINDOWS, revenueAmount } from "@/lib/revenueHistory";
+import { completedUtcDate,freshnessReason } from "@/lib/datedFreshness";
 import { windowLabel } from "@/lib/metricCoverage";
 import { ValuationEvidence } from "./ValuationEvidence";
 import { revenueReading } from "@/lib/revenueReading";
@@ -22,6 +24,8 @@ export const tone = (v: number | null) => v === null || v === 0 ? "muted" : v > 
 const supply = (v: number | null) => v === null ? "미확인" : new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 }).format(v);
 
 export function InlineCoinDetail({ coin: c, capital, onClose }: { coin: CoinScored; capital: CapitalBasis; onClose: () => void }) {
+  const [targetDate,setTargetDate]=useState(()=>completedUtcDate(Date.now()));
+  useEffect(()=>{const timer=setInterval(()=>setTargetDate(completedUtcDate(Date.now())),30_000);return()=>clearInterval(timer);},[]);
   const month = revenueTrend(c, 30);
   const research = protocolResearch(c);
   const capName = capital === "mcap" ? "유통 시총" : "FDV";
@@ -58,7 +62,8 @@ export function InlineCoinDetail({ coin: c, capital, onClose }: { coin: CoinScor
       <dl className="market-secondary"><div><dt>유통량</dt><dd>{supply(c.circulatingSupply)} {c.symbol}</dd></div><div><dt>총발행량</dt><dd>{supply(c.totalSupply)} {c.symbol}</dd></div><div><dt>24시간 거래대금</dt><dd>{fmtUsd(c.totalVolume)}</dd></div><div><dt>시세 출처</dt><dd>{marketDataReason(c, "price")}</dd></div></dl>
     </section>
     <section className="detail-comparison" aria-label="기간별 비교">
-      <div className="detail-section-title"><h4>기간별 비교</h4><span>{end ? `${end} UTC까지 · ` : ""}변화는 직전 같은 기간과 비교</span><span className="comparison-basis">배수 기준 {capName}</span></div>
+      <div className="detail-section-title"><h4>기간별 비교</h4><span>{end ? `계산 목표 ${end} UTC · ` : ""}변화는 직전 같은 기간과 비교</span><span className="comparison-basis">배수 기준 {capName}</span></div>
+      {c.freshness && <div className="detail-note">{(["revenue","holders"] as const).map(metric=><p key={metric}>{metric==="revenue"?"수익":"환원"} · {freshnessReason(c.freshness![metric])} · 마지막 완전 관측 {c.freshness![metric].latestCompleteDate??"미확인"} UTC · 목표 {c.freshness![metric].targetDate} UTC{c.freshness![metric].coverageBasis==="exact_parent"?" · 동일 구성의 부모 합산 원천으로 확인":""}{targetDate!==c.freshness![metric].targetDate?` · 새 목표 ${targetDate} UTC 미확인`:""}{c.freshness![metric].missingRecentDates.length?` · 최근 30일 누락 ${c.freshness![metric].missingRecentDates.join(", ")}`:""}</p>)}</div>}
       <div className="comparison-scroll" role="region" aria-label="기간별 수익과 환원 비교 · 가로 스크롤 가능" tabIndex={0}>
         <table className="period-comparison"><caption className="sr-only">기간별 수익, 수익 변화, P/R, 홀더 환원액, P/HR</caption><thead><tr><th scope="col">기간</th><th scope="col">{reading30.kindLabel}</th><th scope="col">수익 변화</th><th scope="col">P/R</th><th scope="col">홀더 환원액</th><th scope="col">P/HR</th></tr></thead>
           <tbody>{REVENUE_WINDOWS.map(days => {
@@ -90,7 +95,7 @@ export function InlineCoinDetail({ coin: c, capital, onClose }: { coin: CoinScor
       </div>
       <p className="holder-scope-note">{research?.holder?.scopeNote && <strong>{research.holder.scopeNote}</strong>}<span>{research?.holder ? `${research.holder.status} · 검토 ${research.reviewedAt}` : "DefiLlama 원천 설명 분류 · 개별 지급 거래 미대조"}</span></p>
     </section>
-    <footer className="detail-sources"><span>시세 {c.marketSources?.price ?? "출처 미확인"} · {c.marketDataUpdatedAt ? fmtKstMinute(c.marketDataUpdatedAt) : "시각 미확인"}</span><span>수익·환원 <a href={llama} target="_blank" rel="noreferrer">DefiLlama<ExternalLink size={12}/></a> · {end ? `${end} UTC까지` : "완료일 미확인"} · 수집 {c.revenueHistory ? fmtKstMinute(c.revenueHistory.observedAt) : "시각 미확인"}</span></footer>
+    <footer className="detail-sources"><span>시세 {c.marketSources?.price ?? "출처 미확인"} · {c.marketDataUpdatedAt ? fmtKstMinute(c.marketDataUpdatedAt) : "시각 미확인"}</span><span>수익·환원 <a href={llama} target="_blank" rel="noreferrer">DefiLlama<ExternalLink size={12}/></a> · {c.freshness?`수익 마지막 완전 관측 ${c.freshness.revenue.latestCompleteDate??"미확인"} UTC`:end ? `계산 목표 ${end} UTC` : "완료일 미확인"} · 수집 {c.revenueHistory ? fmtKstMinute(c.revenueHistory.observedAt) : "시각 미확인"}</span></footer>
     <details className="inline-evidence"><summary>계산 근거 · 집계 범위 · 자료 상태</summary>
       <p>가격 변화 · 24시간 {fmtPct(c.change1d)} · 7일 {fmtPct(c.priceChange7d)} · 30일 {fmtPct(c.priceChange30d)}. 최근 7일 수익 중 가장 큰 하루의 비중 {c.revenueHistory?.peakDayShare7d == null ? "미확인" : `${c.revenueHistory.peakDayShare7d.toFixed(1)}%`}.</p>
       {research && <p>{research.description} <a href={research.source} target="_blank" rel="noreferrer">검토 자료</a> · {research.scope}</p>}

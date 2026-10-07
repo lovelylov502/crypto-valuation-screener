@@ -1,5 +1,38 @@
 # Production deployment safety
 
+## Reader-first activation and compatible pause
+
+Phase A is the checked-in contract: pipeline/journal 1/2 readers, writer 1, legacy two-slot schedules. Integrate and deploy this reviewed reader release through the canonical production procedure below. Verify `/api/status` advertises exact reader contracts `[1,2]`, production environment, deployment ID/unique URL and the expected Phase-A code commit. Verify real legacy snapshot reading and preserved source replay. A legacy freshness-accounting verdict remains unavailable; this does not invalidate a safe reader deployment.
+
+Only after that deployment is verified, prepare Phase B in the canonical checkout:
+
+```powershell
+node scripts/prepare-freshness-release.mjs activate <verified-phase-a-commit>
+```
+
+The preparation tool verifies the current canonical status and matching immutable Phase-A deployment identity, then writes the explicit schema-2 release contract, twelve Vercel stage entries and GitHub fallback wakes. It neither deploys nor collects. Review and commit this concrete second-phase diff, push through the approved integration boundary, then run `npm run deploy:production` from clean synchronized canonical main. Writer 2 fails closed until the current canonical alias also advertises the matching active writer fence. Each claim/collection and immediate pre-promotion check verifies the live fence; both old Phase-A jobs and queued Phase-B jobs honor a later pause.
+
+The project's immutable deployment URLs are protected. Keep deployment protection enabled. Preparation needs the existing selected automation-bypass value in local `VERCEL_AUTOMATION_BYPASS_SECRET`; the same existing value must be provisioned securely to the matching GitHub repository secret before Phase B. Vercel exposes it to deployed functions as a system environment variable. Only the exact validated pinned project URL receives the `x-vercel-protection-bypass` header. Canonical requests receive no credential; all reader requests reject redirects. Missing/revoked credentials or mismatched identity fail closed. Do not put the value in arguments, URLs, config/proof JSON, logs or artifacts. [Official automation-bypass documentation](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation).
+
+Rollback after schema-2 publication must keep compatible readers. Prepare a pause using:
+
+```powershell
+node scripts/prepare-freshness-release.mjs pause
+```
+
+This preserves writer/schema-2 capability and reader compatibility, changes the release mode to paused, removes checked-in Vercel/GitHub schedules, and leaves immutable data, metadata obligations and history archives accessible. Review/commit/deploy the compatible pause through `npm run deploy:production`. Current canonical pause capabilities revoke queued/running older writers before promotion. Never revert to a reader that cannot understand the published pipeline/journal versions.
+
+Vercel Instant Rollback does not update active cron configuration; failed cron invocations are not automatically retried. A paused compatible route therefore returns an explicit collection-paused result for retained old/new cron paths, and the live fence blocks queued old collectors. Removing crons is effective through the normal guarded deployment, not an assumed side effect of Instant Rollback. See [Vercel cron management](https://vercel.com/docs/cron-jobs/manage-cron-jobs) and [GitHub writer queue semantics](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+
+After verified Phase-B deployment, record the observation window outside Git before a future full UTC slot:
+
+```powershell
+npx tsx scripts/audit-scheduled-acceptance.ts start <future-UTC-slot> <phase-b-commit> C:/outside-repository/window.json
+npx tsx scripts/audit-scheduled-acceptance.ts check C:/outside-repository/window.json C:/outside-repository/check-001.json
+```
+
+The start command creates a new file and refuses retrospective starts/overwrite. Checks are read-only archive queries, with no source collection. After a correction, pass the prior manifest path as the fourth start argument to preserve its identity/hash while starting a new documented window. A failed/missing check stays unverified; no local test supplies the future observation.
+
 ## Source contract
 
 - The only production source is `C:\Users\TAE\Workspace\projects\hermes\crypto-valuation-screener`.

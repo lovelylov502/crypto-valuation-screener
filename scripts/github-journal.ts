@@ -1,6 +1,8 @@
 import type { PublicationJournal } from "../lib/publicationTypes";
 import { JOURNAL_REPOSITORY } from "../lib/publication";
 import { parseJournal, sha256 } from "../lib/snapshotArchive";
+import { compactRecoveryJournal } from "../lib/freshnessRecovery";
+import {verifyWriterActivation} from "../lib/pipelineRelease";
 
 const api = `https://api.github.com/repos/${JOURNAL_REPOSITORY}`;
 class RetryableArchiveError extends Error {}
@@ -27,6 +29,9 @@ export async function latestJournal(): Promise<PublicationJournal | null> {
 }
 export async function publishJournal(journal: PublicationJournal, files: Record<string, Uint8Array>) {
   headers();
+  const compact=compactRecoveryJournal(journal);
+  journal=compact.journal;
+  if(compact.history)files={...files,"recovery-history.json":compact.history};
   const body = JSON.stringify(journal);
   const expected = { ...files, "state.json": Buffer.from(body) };
   const checkParent = async () => {
@@ -81,7 +86,11 @@ export async function publishJournal(journal: PublicationJournal, files: Record<
         const asset = await response.json();
         if (asset.digest !== digest || asset.size !== bytes.byteLength || asset.state !== "uploaded") throw new Error(`Archive upload hash mismatch: ${name}`);
       }
-      if (!await checkParent()) await request(`/releases/${release.id}`, "PATCH", { draft: false, make_latest: "true" });
+      if (!await checkParent()) {
+        // Queued old binaries must honor a compatible canonical pause immediately before promotion.
+        await verifyWriterActivation();
+        await request(`/releases/${release.id}`, "PATCH", { draft: false, make_latest: "true" });
+      }
       if ((await latestJournal())?.id !== journal.id) throw new RetryableArchiveError("Published journal readback mismatch");
       console.log(JSON.stringify({ journal: journal.id, outcome: journal.attempt.outcome, published: journal.published?.id ?? null, errors: journal.attempt.errors.length }));
       return;

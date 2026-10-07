@@ -15,9 +15,11 @@ export interface SourceReceipt {
 }
 export interface SourceBundle {
   schema: 1;
+  pipelineSchema?: 2;
   asOf: string;
   baseline: ScreenerResponse | null;
   receipts: SourceReceipt[];
+  requestStats?: { requests: number; rateLimited: number; deferred: number; elapsedMs: number };
 }
 interface Session {
   bundle: SourceBundle;
@@ -27,6 +29,8 @@ interface Session {
   successful: Map<string, SourceReceipt>;
   pending: Map<string, Promise<SourceReceipt>>;
   signal?: AbortSignal;
+  cooldowns?: Map<string, number>;
+  deadlineAt?: number;
 }
 const sessions = new AsyncLocalStorage<Session>();
 export const contentHash = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
@@ -38,15 +42,18 @@ function canonical(value: unknown): unknown {
 export const objectHash = (value: unknown) => contentHash(JSON.stringify(canonical(value)));
 export const sourceSessionActive = () => !!sessions.getStore();
 export const sourceReplayActive = () => sessions.getStore()?.replay === true;
+export const sourcePipelineSchema = (): 1 | 2 => sessions.getStore()?.bundle.pipelineSchema ?? 1;
 export const sourceNow = () => sessions.getStore() ? Date.parse(sessions.getStore()!.bundle.asOf) : Date.now();
 export const sourceObservedAt = (url: string) => sessions.getStore()?.latest.get(url)?.observedAt ?? new Date(sourceNow()).toISOString();
-export function sourceDelay(ms: number): Promise<void> {
+export const sourceRequestDeferred = (url:string) => sessions.getStore()?.latest.get(url)?.error==="Recorded source request deferred by provider cooldown";
+export function sourceDelay(ms: number,signal?:AbortSignal): Promise<void> {
   const session = sessions.getStore();
-  if (session?.replay || session?.signal?.aborted) return Promise.resolve();
+  if (session?.replay || session?.signal?.aborted || signal?.aborted) return Promise.resolve();
   return new Promise(resolve => {
-    const finish = () => { clearTimeout(timer); session?.signal?.removeEventListener("abort", finish); resolve(); };
+    const finish = () => { clearTimeout(timer); session?.signal?.removeEventListener("abort", finish); signal?.removeEventListener("abort",finish); resolve(); };
     const timer = setTimeout(finish, ms);
     session?.signal?.addEventListener("abort", finish, { once: true });
+    signal?.addEventListener("abort",finish,{once:true});
   });
 }
 
@@ -87,9 +94,19 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
     let pending = session.pending.get(url);
     if (!pending) {
       pending = (async () => {
-        const requestedAt = new Date().toISOString();
+        let requestedAt = new Date().toISOString();
         let result: SourceReceipt;
         try {
+          if (session.bundle.pipelineSchema===2) {
+            const host=new URL(url).hostname,requestSignal=init?.signal??(input instanceof Request?input.signal:undefined);
+            while ((session.cooldowns?.get(host)??0)>Date.now()) {
+              const until=session.cooldowns!.get(host)!;
+              if (until >= (session.deadlineAt??Infinity)||session.signal?.aborted||requestSignal?.aborted) throw new Error("provider cooldown deferred");
+              await sourceDelay(until-Date.now(),requestSignal??undefined);
+              if(session.signal?.aborted||requestSignal?.aborted)throw new Error("provider cooldown deferred");
+            }
+            requestedAt=new Date().toISOString();
+          }
           const signals = [session.signal, init?.signal ?? (input instanceof Request ? input.signal : null)].filter((s): s is AbortSignal => !!s);
           const signal = signals.length ? AbortSignal.any(signals) : undefined;
           const response = await fetch(input, { ...init, signal });
@@ -97,8 +114,14 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
           const headers: Record<string, string> = {};
           for (const key of ["content-type", "retry-after"]) { const value = response.headers.get(key); if (value) headers[key] = value; }
           result = { url, requestedAt, observedAt: new Date().toISOString(), status: response.status, headers, body, sha256: contentHash(body) };
-        } catch {
-          result = { url, requestedAt, observedAt: new Date().toISOString(), status: null, headers: {}, body: "", sha256: contentHash(""), error: "Recorded source transport failure" };
+          if (response.status===429 && session.bundle.pipelineSchema===2) {
+            const retry=response.headers.get("retry-after"),seconds=retry===null?NaN:Number(retry);
+            const ms=Number.isFinite(seconds)?seconds*1000:Date.parse(retry??"")-Date.now();
+            const host=new URL(url).hostname;
+            session.cooldowns!.set(host,Math.max(session.cooldowns!.get(host)??0,Date.now()+Math.max(5000,Number.isFinite(ms)?ms+1000:60_000)));
+          }
+        } catch (error) {
+          result = { url, requestedAt, observedAt: new Date().toISOString(), status: null, headers: {}, body: "", sha256: contentHash(""), error: error instanceof Error && error.message==="provider cooldown deferred" ? "Recorded source request deferred by provider cooldown" : "Recorded source transport failure" };
         }
         session.bundle.receipts.push(result);
         return result;
@@ -114,7 +137,7 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
 }
 
 export function validateSourceBundle(bundle: SourceBundle): void {
-  if (bundle?.schema !== 1 || !Number.isFinite(Date.parse(bundle.asOf)) || !Array.isArray(bundle.receipts) || !bundle.receipts.length) throw new Error("Invalid source bundle");
+  if (bundle?.schema !== 1 || (bundle.pipelineSchema !== undefined && bundle.pipelineSchema !== 2) || !Number.isFinite(Date.parse(bundle.asOf)) || !Array.isArray(bundle.receipts) || !bundle.receipts.length) throw new Error("Invalid source bundle");
   for (const receipt of bundle.receipts) {
     validateUrl(receipt.url);
     if (typeof receipt.body !== "string" || contentHash(receipt.body) !== receipt.sha256 || !Number.isFinite(Date.parse(receipt.requestedAt))
@@ -123,13 +146,15 @@ export function validateSourceBundle(bundle: SourceBundle): void {
   }
 }
 
-export async function captureSourceBundle<T>(asOf: string, baseline: ScreenerResponse | null, task: () => Promise<T>, signal = AbortSignal.timeout(9 * 60_000)) {
-  const bundle: SourceBundle = { schema: 1, asOf, baseline, receipts: [] };
-  const session: Session = { bundle, replay: false, cursors: new Map(), latest: new Map(), successful: new Map(), pending: new Map(), signal };
+export async function captureSourceBundle<T>(asOf: string, baseline: ScreenerResponse | null, task: () => Promise<T>, signal = AbortSignal.timeout(9 * 60_000), pipelineSchema: 1 | 2 = 1) {
+  const bundle: SourceBundle = { schema: 1, ...(pipelineSchema === 2 ? { pipelineSchema } : {}), asOf, baseline, receipts: [] };
+  const started=Date.now();
+  const session: Session = { bundle, replay: false, cursors: new Map(), latest: new Map(), successful: new Map(), pending: new Map(), signal, cooldowns:new Map(),deadlineAt:started+9*60_000 };
   let value: T | undefined, error: unknown;
   try { value = await sessions.run(session, task); } catch (caught) { error = caught; }
   // Preserve in-flight receipts even if a caller fails before its sibling requests finish.
   while (session.pending.size) await Promise.allSettled([...session.pending.values()]);
+  if (pipelineSchema===2) bundle.requestStats={requests:bundle.receipts.length,rateLimited:bundle.receipts.filter(r=>r.status===429).length,deferred:bundle.receipts.filter(r=>r.error==="Recorded source request deferred by provider cooldown").length,elapsedMs:Date.now()-started};
   return { bundle, value, error };
 }
 

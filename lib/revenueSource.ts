@@ -3,7 +3,7 @@ import type { SourceObservation } from "./types";
 import { aggregateDefinitions } from "./fundamentalSource";
 import { completeHistorySource } from "./completeHistorySource";
 import { fetchParentHistorySources, mergeParentHistories } from "./parentHistorySource";
-import { sourceFetch, sourceNow, sourceObservedAt, sourceSessionActive } from "./sourceBundle";
+import { sourceFetch, sourceNow, sourceObservedAt, sourceSessionActive, sourcePipelineSchema } from "./sourceBundle";
 import { validateHistoryBreakdown, validateProtocolFinancialRows } from "./sourceValidation";
 
 const URL = "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false";
@@ -32,11 +32,12 @@ export async function fetchRevenueHistory(observations: SourceObservation[], pre
           completeHistorySource(data.protocols,data.totalDataChartBreakdown,at,"dailyRevenue",reported,sources,preservedWindows),
           fetchParentHistorySources(data.protocols,data.totalDataChartBreakdown,at,"dailyRevenue",()=>true,sources,preservedWindows),
         ]);
-        const value = summarizeRevenueHistory(data.protocols, chart, at, URL, definitions);
+        const value = summarizeRevenueHistory(data.protocols, chart, at, URL, definitions, data.protocols, sourcePipelineSchema());
         for (const [key,h] of Object.entries(value)) {
           const supplements = sources.filter(s=>s.status === "ok" && s.sourceSlugs?.some(slug=>(parents.get(slug) ?? slug) === key));
           h.observedAt = [observedAt,...supplements.map(s=>s.observedAt)].sort().at(-1)!;
           h.supplementalSources = [...new Set(supplements.map(s=>s.url))].sort();
+          if (h.freshness) { h.freshness.sources = [URL,...h.supplementalSources]; h.freshness.observedAt = h.observedAt; }
         }
         mergeParentHistories(value, chart, parentSources, at, sources);
         return { at, value, sources: [{url:URL,observedAt,status:"ok" as const},...sources] };

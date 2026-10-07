@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it,vi } from "vitest";
+// Historical collection-health fixtures exercise legacy active scheduling; live mode transitions have separate regressions.
+vi.mock("./pipeline-release.json",()=>({default:{readerRelease:"four-daily-freshness-v2",writerSchema:1,schedule:"legacy",phaseA:null}}));
 import { collectionHealth } from "./collectionHealth";
 import { RULE_VERSION } from "./fundamentals";
 import type { ScreenerResponse } from "./types";

@@ -1,4 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
+// Exercise the legacy publication protocol under an explicit Phase-A fixture in both release configurations.
+vi.mock("./pipeline-release.json",()=>({default:{readerRelease:"four-daily-freshness-v2",writerSchema:1,schedule:"legacy",phaseA:null}}));
 import { publishJournal } from "../scripts/github-journal";
 import { startJournal, JOURNAL_REPOSITORY } from "./publication";
 import { sha256 } from "./snapshotArchive";
@@ -12,6 +14,7 @@ function archive(options: { loseUpload?: boolean; losePublish?: boolean; corrupt
   const assets: any[] = [], events: string[] = [];
   vi.stubGlobal("fetch",vi.fn(async(url:URL|string,init:RequestInit={})=>{
     const u = new URL(String(url)), method = init.method ?? "GET";
+    if(u.hostname === "crypto-valuation-screener.vercel.app") return Response.json({compatibility:{release:"four-daily-freshness-v2",pipelineSchemas:[1,2],journalSchemas:[1,2]},collectionRelease:{writerSchema:1,schedule:"legacy"},deployment:{environment:"production",codeCommit:"a".repeat(40),id:"dpl_reader"}});
     events.push(`${method} ${u.pathname}${u.search}`);
     if (u.pathname.endsWith("/latest")) return latest ? Response.json({ body: JSON.stringify(latest) }) : new Response(null,{status:404});
     if (u.pathname.includes("/releases/tags/")) return release && !release.draft ? Response.json(release) : new Response(null,{status:404});

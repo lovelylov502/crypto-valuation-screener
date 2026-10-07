@@ -1,5 +1,6 @@
 import { JOURNAL_REPOSITORY } from "../../../../lib/publication";
-import { schedulerReceipt, secretMatches, signSchedulerReceipt } from "../../../../lib/schedulerDispatch";
+import { schedulerReceipt, stageSchedulerReceipt, secretMatches, signSchedulerReceipt } from "../../../../lib/schedulerDispatch";
+import { fourDailyActive, verifyWriterActivation,writerPaused } from "../../../../lib/pipelineRelease";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -13,10 +14,18 @@ export async function GET(request: Request) {
   if (process.env.VERCEL_ENV !== "production" || !process.env.SCREENER_DISPATCH_TOKEN) {
     return reply({ error: "Scheduler is not configured" }, 503);
   }
+  if(writerPaused())return reply({skipped:true,reason:"collection-paused"},200);
   let receipt;
   try {
     if (request.headers.get("user-agent") !== "vercel-cron/1.0") throw new Error("Missing cron user agent");
-    receipt = schedulerReceipt(request.headers.get("x-vercel-cron-schedule") ?? "", Date.now(), request.headers.get("x-vercel-id") ?? "");
+    const stage=new URL(request.url).searchParams.get("stage");
+    if (fourDailyActive()) {
+      await verifyWriterActivation();
+      receipt=stageSchedulerReceipt(request.headers.get("x-vercel-cron-schedule")??"",stage??"",Date.now(),request.headers.get("x-vercel-id")??"");
+    } else {
+      if (stage) return reply({ skipped:true,reason:"inactive-stage" },200);
+      receipt = schedulerReceipt(request.headers.get("x-vercel-cron-schedule") ?? "", Date.now(), request.headers.get("x-vercel-id") ?? "");
+    }
   }
   catch { return reply({ error: "Invalid scheduler invocation" }, 400); }
   const serialized = JSON.stringify(receipt);

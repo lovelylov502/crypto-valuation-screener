@@ -1,0 +1,7 @@
+{
+  "readerRelease": "four-daily-freshness-v2",
+  "readerSchemas": [1, 2],
+  "writerSchema": 1,
+  "schedule": "legacy",
+  "phaseA": null
+}

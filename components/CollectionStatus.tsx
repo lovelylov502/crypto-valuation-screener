@@ -6,6 +6,7 @@ import { collectionHealth, comparisonSummary, publicationFailure, sourceProvider
 import { fmtKstMinute } from "@/lib/format";
 import { SettingsDialog } from "./SettingsDialog";
 import type { PublicationJournal } from "@/lib/publicationTypes";
+import { nextEligibleCheck } from "@/lib/freshnessRecovery";
 
 const count = (value: number | undefined) => typeof value === "number" && Number.isInteger(value) && value >= 0 ? value.toLocaleString() : "미확인";
 const time = (value: string | null | undefined) => value && Number.isFinite(Date.parse(value)) ? fmtKstMinute(value) : "미확인";
@@ -24,6 +25,7 @@ export function CollectionStatus({ data, publication, error, refreshing, checked
   }, []);
   const health = collectionHealth(data, now, error, refreshing, publication);
   const p = publication ?? data?.publication;
+  const recovery=health.recovery;
   const Icon = health.state === "healthy" ? CheckCircle2 : health.state === "checking" ? LoaderCircle
     : health.state === "stale" ? Clock3 : health.state === "unknown" ? CircleHelp : AlertTriangle;
   const groups = [...new Set(health.failures.map(s => sourceProvider(s.url)))].map(provider => {
@@ -44,11 +46,13 @@ export function CollectionStatus({ data, publication, error, refreshing, checked
         {error && health.failures.length > 0 && <p className="negative">서버 확인도 실패했습니다: {error}</p>}
         {health.stale && health.state !== "stale" && <p className="caution-text">표시 자료의 갱신도 지연되고 있습니다.</p>}
         {health.scheduledRunMissing && health.label !== "예약 실행 미확인" && <p className="caution-text">예정 시각에서 90분이 지났지만 새 수집 시작 기록이 없습니다.</p>}
-        <p>하루 2회 · 11:00 / 23:00 KST부터 수집 예정 · 예약 호출은 해당 시간대 안에서 시작</p>
+        <p>{health.release.schedule==="paused"?"자동 수집 일시 중지":health.release.schedule==="four-daily"?"하루 4회 · 05:00 / 11:00 / 17:00 / 23:00 KST부터 수집 예정 · 필요 시 2시간·4시간 뒤 보완 수집":"하루 2회 · 11:00 / 23:00 KST부터 수집 예정 · 예약 호출은 해당 시간대 안에서 시작"}</p>
         <dl className="collection-times">
           <div><dt>표시 자료 수집</dt><dd>{data ? time(data.updatedAt) : "자료 없음"}</dd></div>
-          <div><dt>다음 수집 예정</dt><dd>{time(new Date(health.schedule.nextAt).toISOString())}</dd></div>
+          <div><dt>다음 수집 예정</dt><dd>{health.schedule.paused?"자동 수집 일시 중지":time(new Date(health.schedule.nextAt).toISOString())}</dd></div>
           <div><dt>수익 일별 집계 기준</dt><dd>{data ? `${new Date(Date.parse(data.updatedAt) - 86400_000).toISOString().slice(0,10)} UTC까지` : "자료 없음"}</dd></div>
+          {health.freshness && <><div><dt>현재 목표 완료일</dt><dd>{health.freshness.targetDate} UTC{health.freshness.unassessed?" · 새 날짜 미확인":""}</dd></div><div><dt>전체 일별 항목</dt><dd>최신일 확인 {health.freshness.current} · 도착 대기 {health.freshness.pending} · 이력 부족 {health.freshness.insufficient} · 미확인 {health.freshness.unknown} · 충돌 {health.freshness.conflict} · 대상 없음 {health.freshness.unsupported}</dd></div></>}
+          {recovery && <div><dt>다음 보완 확인 가능 시각</dt><dd>{health.schedule.paused?"자동 수집 일시 중지":nextEligibleCheck(recovery,now)?`${time(nextEligibleCheck(recovery,now))} · 실제 예약 실행이 필요합니다`:"이번 회차의 추가 보완 대상 또는 남은 시도 없음"}</dd></div>}
           <div><dt>이 브라우저의 서버 확인</dt><dd>{checkedAt ? time(checkedAt) : "아직 확인되지 않음"}</dd></div>
           {health.firstFailureAt && <div><dt>이번 자료의 첫 실패 관측</dt><dd>{fmtKstMinute(health.firstFailureAt)}</dd></div>}
         </dl>
@@ -62,6 +66,7 @@ export function CollectionStatus({ data, publication, error, refreshing, checked
           {p.recoveredAt && <p>최근 회복 확인: {time(p.recoveredAt)}</p>}
           {p.attempt.outcome === "blocked" && <p className="negative">공개 보류 사유: {publicationFailure(p.attempt)}</p>}
           <p>{comparisonSummary(p.attempt)}</p>
+          {recovery && <><p>자동 시도 {recovery.slots.at(-1)?[recovery.slots.at(-1)!.primary,recovery.slots.at(-1)!.catchup1,recovery.slots.at(-1)!.catchup2].reduce((n,s)=>n+s.claims,0):0}/5 · 별도 수동 복구 {recovery.slots.at(-1)?.manualClaims??0}/2</p><p>기한 내 공개 실패 {recovery.projectionDiagnostics?.deadlineMisses??((recovery.history?.deadlineMisses??0)+recovery.slots.filter(s=>s.deadlineMissed).length)}회 · 보완 실행 누락 {recovery.projectionDiagnostics?.missedCatchups??((recovery.history?.missedCatchups??0)+recovery.slots.reduce((n,s)=>n+Number(s.catchup1.missed)+Number(s.catchup2.missed),0))}회 · 24시간 이상 대기 {recovery.obligations.filter(o=>o.disposition==="overdue").length}건</p></>}
           <p>{p.attempt.outcome !== "running" && <><a href={p.attempt.reportUrl} target="_blank" rel="noreferrer">종목별 변경값·검사 결과</a> · </>}<a href={p.attempt.runUrl} target="_blank" rel="noreferrer">수집 작업 기록</a></p>
           <p><a href={`https://github.com/lovelylov502/crypto-valuation-screener/releases/tag/${p.id}`} target="_blank" rel="noreferrer">공개·장애 이력 보관함</a></p>
           {p.attempt.affected.length > 0 && <p>변화가 확인된 종목: {p.attempt.affected.map(c => c.name).join(", ")}{p.attempt.affectedProjects > p.attempt.affected.length ? " 외" : ""}</p>}

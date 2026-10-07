@@ -6,6 +6,7 @@ import { fundamentalErrors } from "@/lib/fundamentalContract";
 import { RULE_VERSION } from "@/lib/fundamentals";
 import type { PublicationJournal } from "@/lib/publicationTypes";
 import { STATUS_POLL_MS } from "@/lib/collectionSchedule";
+import { parseCollectionRelease } from "@/lib/pipelineRelease";
 
 export function pageUrl(prefs: WorkspacePreferences, favorites: Set<string>, page: number, size: number) {
   return "/api/screener?" + new URLSearchParams({ prefs: JSON.stringify(prefs), favorites: [...favorites].join(","), page: String(page), size: String(size) });
@@ -29,7 +30,7 @@ export function useScreenerPage(initial: ScreenerPage | null, prefs: WorkspacePr
         if (!response.ok) throw new Error("검증본을 불러오지 못했습니다. 수집 상태를 확인해 주세요.");
         const next = await response.json() as ScreenerPage;
         if (next.scoreVersion !== RULE_VERSION || !next.pagination || !Number.isFinite(Date.parse(next.updatedAt)) || Date.parse(next.updatedAt) > Date.now() + 300000 || !Array.isArray(next.coins) || next.coins.some(c => fundamentalErrors(c).length)) throw new Error("자료 형식을 확인하지 못했습니다.");
-        if (!controller.signal.aborted) { setData(next); setPublication(next.publication); setCheckedAt(new Date().toISOString()); setError(""); }
+        if (!controller.signal.aborted) { setData(next); setPublication(previous=>next.publication?{...next.publication,...(previous?.collectionRelease?{collectionRelease:previous.collectionRelease}:{})}:previous); setCheckedAt(new Date().toISOString()); setError(""); }
       } catch (e) {
         if (!controller.signal.aborted || controller.signal.reason === "timeout") setError(controller.signal.aborted ? "조회가 지연되고 있습니다. 다시 시도해 주세요." : e instanceof Error ? e.message : "조회 실패");
       } finally {
@@ -49,7 +50,8 @@ export function useScreenerPage(initial: ScreenerPage | null, prefs: WorkspacePr
         const response = await fetch("/api/status", { cache: "no-store", signal: AbortSignal.timeout(10_000) });
         if (!response.ok) throw new Error("수집 상태 확인에 실패했습니다.");
         const next = await response.json() as PublicationJournal;
-        if (next.schema !== 1 || !next.attempt) throw new Error("수집 기록 형식을 확인하지 못했습니다.");
+        if (![1,2].includes(next.schema) || !next.attempt) throw new Error("수집 기록 형식을 확인하지 못했습니다.");
+        if(next.collectionRelease!==undefined)next.collectionRelease=parseCollectionRelease(next.collectionRelease);
         if (active) { setPublication(next); if (next.published?.id && next.published.id !== data?.publication?.published?.id) setRefreshCount(n => n + 1); }
       } catch (e) { if (active) setError(e instanceof Error ? e.message : "수집 상태 조회 실패"); }
       finally { busy = false; }

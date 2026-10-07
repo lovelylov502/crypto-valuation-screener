@@ -1,5 +1,5 @@
 import type { SourceObservation } from "./types";
-import { sourceDelay, sourceFetch, sourceObservedAt, sourceReplayActive } from "./sourceBundle";
+import { sourceDelay, sourceFetch, sourceObservedAt, sourceReplayActive,sourceRequestDeferred } from "./sourceBundle";
 
 /** Child and parent recovery use the same bounded retry policy. */
 export async function readHistorySummary(url: string, now: number, deadline: number, observations: SourceObservation[], sourceSlugs?: string[]): Promise<Record<string, unknown> | undefined> {
@@ -30,5 +30,5 @@ export async function readHistorySummary(url: string, now: number, deadline: num
       await sourceDelay(sourceReplayActive() ? delay : Math.min(delay, Math.max(0, deadline - Date.now())));
     }
   }
-  observations.push({ url, observedAt: sourceObservedAt(url), status: "error", httpStatus, ...(sourceSlugs ? { sourceSlugs } : {}) });
+  observations.push({ url, observedAt: sourceObservedAt(url), status: "error", httpStatus, ...(sourceRequestDeferred(url)?{reason:"request_budget" as const}:{}), ...(sourceSlugs ? { sourceSlugs } : {}) });
 }

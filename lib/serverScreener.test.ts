@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 const store=vi.hoisted(()=>({journal:vi.fn(),snapshot:vi.fn(),collect:vi.fn()}));
+const release=vi.hoisted(()=>({readerRelease:"four-daily-freshness-v2",writerSchema:1,schedule:"legacy",phaseA:null as any}));
+vi.mock("./pipeline-release.json",()=>({default:release}));
 vi.mock("./snapshotArchive",()=>({readJournal:store.journal,readSnapshot:store.snapshot}));
 vi.mock("./sources",()=>({fetchCoins:store.collect}));
 const at="2026-09-29T10:00:00Z";
 const journal=()=>({schema:1,id:"data-2-complete",createdAt:at,previousId:"data-2-start",published:{id:"data-1-complete",dataAt:"2026-09-28T00:00:00Z",url:"archive",sha256:"a"},attempt:{id:"data-2",startedAt:at,completedAt:at,outcome:"blocked",errors:["HTTP 403"]},incident:{firstFailureObservedAt:at,lastFailureObservedAt:at}});
 const data=()=>({updatedAt:"2026-09-28T00:00:00Z",coins:[{slug:"sample",mcap:123}],scoreVersion:"research-v10-source-revenue-recovery"});
-beforeEach(()=>{vi.resetModules();store.journal.mockReset().mockImplementation(async()=>structuredClone(journal()));store.snapshot.mockReset().mockImplementation(async()=>structuredClone(data()));store.collect.mockReset();vi.useFakeTimers({toFake:["Date"]});vi.setSystemTime(new Date(at));});
+beforeEach(()=>{release.writerSchema=1;release.schedule="legacy";release.phaseA=null;vi.resetModules();store.journal.mockReset().mockImplementation(async()=>structuredClone(journal()));store.snapshot.mockReset().mockImplementation(async()=>structuredClone(data()));store.collect.mockReset();vi.useFakeTimers({toFake:["Date"]});vi.setSystemTime(new Date(at));});
 afterEach(()=>vi.useRealTimers());
 it("serves a persisted verified snapshot across restarts and date changes without collecting",async()=>{
   const first=await(await import("./serverScreener")).getScreener();
@@ -33,4 +35,10 @@ it("deduplicates concurrent reads and has an explicit no-verified-data state",as
 });
 it("renders the homepage without importing or awaiting any data network reader",()=>{
   const page=readFileSync(new URL("../app/page.tsx",import.meta.url),"utf8");expect(page).not.toMatch(/getScreener|fetch\(/);expect(page).toContain("initialData={null}");
+});
+it("filtered/page refresh with the same archived publication consistently carries live four-daily and paused release metadata",async()=>{
+ const server=await import("./serverScreener"),first=await server.getScreener();expect(first.publication!.collectionRelease!.schedule).toBe("legacy");
+ release.writerSchema=2;release.schedule="four-daily";release.phaseA={deploymentId:"dpl_reader"};
+ const active=await server.getScreener();expect(active.publication!.published!.id).toBe(first.publication!.published!.id);expect(active.publication!.collectionRelease!.schedule).toBe("four-daily");
+ release.schedule="paused";const paused=await server.getScreener();expect(paused.publication!.collectionRelease!.schedule).toBe("paused");expect(paused.coins).toEqual(first.coins);expect(store.snapshot).toHaveBeenCalledTimes(1);expect(store.collect).not.toHaveBeenCalled();
 });

@@ -19,6 +19,7 @@ import { replayDataPipeline } from "../lib/dataPipeline";
 import { pipelineIntegrityErrors, pipelineOutputHash } from "../lib/pipelineIntegrity";
 import { objectHash, witnessFromBundle, type SourceBundle } from "../lib/sourceBundle";
 import { scopedSourceErrors } from "../lib/dataQuality";
+import { publicationVerdicts } from "../lib/publicationVerdicts";
 
 const base = process.env.SCREENER_BASE_URL ?? DEPLOY_CONTRACT.liveBaseUrl;
 const output = process.env.SCREENER_AUDIT_DIR;
@@ -135,6 +136,7 @@ async function main() {
     report.quality = archived.pipeline.quality;
   }
   report.publication = { id:p.published.id, journal:p.id, outcome:p.attempt.outcome, dataAt:p.published.dataAt, sha256:p.published.sha256, stale, verifiedArchiveRows:archived.coins.length };
+  Object.assign(report,publicationVerdicts({...archived,publication:p},checkedAt,errors));
   if (p.attempt.outcome !== "published") {
     if (p.attempt.outcome === "running") {
       if (Date.now() - Date.parse(p.attempt.startedAt) > COLLECTION_DEADLINE_MS) errors.push("collector did not complete within budget");
@@ -145,7 +147,7 @@ async function main() {
       if (!p.incident || !p.attempt.errors.length) errors.push("blocked candidate missing incident evidence");
     }
     report.mode = "protected-last-verified";
-    report.currentCollectionPassed = false;
+    report.captureReplayPassed = false;
     if (output) { await mkdir(output,{recursive:true}); await writeFile(join(output,"all-coins.json"),JSON.stringify({...first,coins})); }
     // This is a protection/integrity pass, explicitly not fresh upstream coverage.
     return;
@@ -154,8 +156,8 @@ async function main() {
   if (archived.pipeline) {
     // The captured source bytes are the authoritative observation. A later quote
     // or overview response must never change the verdict on this capture.
-    report.mode = "current-publication-and-source-replay";
-    report.currentCollectionPassed = !stale && errors.length === 0;
+    report.mode = "captured-publication-and-source-replay";
+    report.captureReplayPassed = !stale && errors.length === 0;
     report.partial = archived.pipeline.quality.affectedProjects > 0;
     if (output) { await mkdir(output,{recursive:true}); await writeFile(join(output,"all-coins.json"),JSON.stringify({...first,coins})); }
     return;
@@ -164,13 +166,13 @@ async function main() {
   // Today's changing feed cannot prove that a deliberately retained snapshot lost data.
   if (checkedAt - Date.parse(first.updatedAt) > 45 * 60_000) {
     report.mode = "verified-scheduled-snapshot";
-    report.currentCollectionPassed = !stale;
+    report.captureReplayPassed = !stale;
     report.liveSourcesChecked = false;
     if (output) { await mkdir(output,{recursive:true}); await writeFile(join(output,"all-coins.json"),JSON.stringify({...first,coins})); }
     return;
   }
   report.mode = "current-publication-and-live-sources";
-  report.currentCollectionPassed = true;
+  report.captureReplayPassed = true;
   report.liveSourcesChecked = true;
 
   const paths = ["/protocols", "/config", "/overview/fees", "/overview/fees?dataType=dailyRevenue", "/overview/fees?dataType=dailyHoldersRevenue", "/overview/dexs"];
@@ -239,6 +241,9 @@ async function main() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch(error => errors.push(error instanceof Error ? error.message : String(error))).finally(async () => {
   report.completedAt = new Date().toISOString(); report.errors = errors;
+  report.safeReaderDeploymentPassed=errors.length===0;
+  report.integrityPassed=errors.length===0;
+  report.currentRecoveryPassed=report.integrityPassed===true&&report.collectionDeadlinePassed===true&&report.freshnessAccountingPassed===true&&report.allApplicableDataCurrent===true&&report.catchupExecutionPassed===true;
   if (output) { await mkdir(output, { recursive: true }); await writeFile(join(output, "coverage-audit.json"), JSON.stringify(report, null, 2)); }
   console.log(JSON.stringify(report, null, 2));
   if (errors.length) process.exitCode = 1;

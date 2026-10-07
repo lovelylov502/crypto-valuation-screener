@@ -10,7 +10,7 @@ import { koreanDescription } from "./protocolDescriptions";
 import { aggregateDefinitions, combineFundamentals, definitionReviewed } from "./fundamentalSource";
 import type { MetricDefinition, RevenueKind, FeeKind } from "./fundamentals";
 import type { RevenueHistory } from "./revenueHistory";
-import { sourceDelay, sourceFetch, sourceNow, sourceObservedAt, sourceReplayActive } from "./sourceBundle";
+import { sourceDelay, sourceFetch, sourceNow, sourceObservedAt, sourceReplayActive, sourcePipelineSchema,sourceRequestDeferred,objectHash } from "./sourceBundle";
 import { validateDirectoryRows, validateProtocolFinancialRows } from "./sourceValidation";
 import {
   aggregateHolderValueByGroup,
@@ -63,7 +63,7 @@ export async function getJson<T>(url: string, observations: SourceObservation[],
   }
   throw new Error(`fetch ${url} failed`);
   } catch (error) {
-    observations.push({ url, observedAt: sourceObservedAt(url), status: "error", httpStatus });
+    observations.push({ url, observedAt: sourceObservedAt(url), status: "error", httpStatus,...(sourceRequestDeferred(url)?{reason:"request_budget" as const}:{}) });
     throw error;
   }
 }
@@ -410,10 +410,17 @@ export interface CoinInputs {
 
 export async function collectCoinInputs(observations: SourceObservation[] = [], baseline?: ScreenerResponse): Promise<CoinInputs> {
   const asOf = new Date(sourceNow()).toISOString();
-  const preserved = (metric: "revenueHistory" | "holderHistory") => new Map((baseline?.coins ?? []).flatMap(c => {
+  const preserved = (metric: "revenueHistory" | "holderHistory") => {
+    const windows = new Map((baseline?.coins ?? []).flatMap(c => {
     const days = Object.values(c[metric]?.periods ?? {}).filter(p => p.reportedDays === p.days).map(p => p.days);
     return days.length ? [[c.slug,days] as const] : [];
-  }));
+    }));
+    if (sourcePipelineSchema() === 2) for (const o of baseline?.publication?.recovery?.obligations ?? []) if (!["resolved","superseded"].includes(o.disposition) && o.metric === (metric === "revenueHistory" ? "revenue" : "holders")) {
+      const days = Math.min(730,Math.max(1,Math.ceil((Date.parse(asOf)-Date.parse(o.date))/86_400_000)));
+      windows.set(o.slug,[...new Set([...(windows.get(o.slug)??[]),days])]);
+    }
+    return windows;
+  };
   const histories = Promise.all([fetchRevenueHistory(observations, preserved("revenueHistory")), fetchHolderHistory(observations,preserved("holderHistory"))]);
   const initial = await Promise.allSettled([
     getJson<Json[]>(`${LLAMA}/protocols`, observations),
@@ -648,6 +655,8 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
       revenueHistory: history,
       revenueSource: { url: recoveredRevenue.get(k) ?? REVENUE_OVERVIEW_URL, observedAt: observations.find(s => s.url === (recoveredRevenue.get(k) ?? REVENUE_OVERVIEW_URL) && s.status === "ok")?.observedAt ?? inputs.asOf, periods: sourceRevAgg.get(k) },
       holderHistory: holderHistories[k] ?? null,
+      ...(holderHistories[k]?.rawFreshness ? { rawHolderFreshness: holderHistories[k].rawFreshness } : {}),
+      ...(holderHistories[k]?.rawFreshness ? { rawHolderDefinition:objectHash(hrL.filter(p=>p.doublecounted!==true&&typeof p.slug==="string"&&groupKey(p.slug)===k).map(p=>[p.slug,p.defillamaId,p.methodology,p.parentProtocol]).sort()) } : {}),
       sales: resolveSalesEvidence({ slug: k, geckoId, symbol, identityStatus }, inputs.asOf),
 
       mcap: cap.value,

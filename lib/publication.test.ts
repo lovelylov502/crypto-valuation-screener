@@ -1,4 +1,6 @@
-import { expect, it } from "vitest";
+import { expect, it,vi } from "vitest";
+// Archived schema-1 publication fixtures retain their original active schedule.
+vi.mock("./pipeline-release.json",()=>({default:{readerRelease:"four-daily-freshness-v2",writerSchema:1,schedule:"legacy",phaseA:null}}));
 import { gzipSync } from "node:zlib";
 import { assembleScreener } from "./screener";
 import { sample } from "./testFixtures";

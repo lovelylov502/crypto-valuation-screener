@@ -8,14 +8,18 @@ import { snapshotErrors } from "./publication";
 import { collectionRegressions, collectionState } from "./collectionQuality";
 import { witnessErrors } from "./sourceWitness";
 import type { CoinRaw, ScreenerResponse, SourceObservation } from "./types";
+import { annotateFreshness, freshnessSummary } from "./datedFreshness";
+import { activeWriterSchema } from "./pipelineRelease";
 
 export const encodeSourceBundle = (bundle: SourceBundle) => gzipSync(Buffer.from(JSON.stringify(bundle)));
 
 function derive(raw: CoinRaw[], observations: SourceObservation[], bundle: SourceBundle, rawBundleSha256: string): ScreenerResponse {
   const sources = orderedSources(observations);
-  const normalized = annotateDataQuality(raw, sources);
+  const quality = annotateDataQuality(raw, sources);
+  const normalized = bundle.pipelineSchema === 2 ? annotateFreshness(quality, bundle.asOf) : quality;
   const data = assembleScreener(normalized, bundle.asOf, sources);
-  data.pipeline = { schema: 1, asOf: bundle.asOf, rawBundleSha256,
+  if (bundle.pipelineSchema === 2) data.freshness = freshnessSummary(normalized, bundle.asOf);
+  data.pipeline = { schema: bundle.pipelineSchema ?? 1, asOf: bundle.asOf, rawBundleSha256,
     normalizedSha256: normalizedHash(normalized), outputSha256: pipelineOutputHash(data), replayVerified: true,
     quality: dataQualitySummary(normalized) };
   return data;
@@ -29,8 +33,8 @@ export async function replayDataPipeline(bundle: SourceBundle, rawBundleSha256 =
 }
 
 export async function captureDataPipeline(baseline: ScreenerResponse | null, asOf: string,
-  preserve: (bundle: SourceBundle) => Promise<void>, observations: SourceObservation[] = []) {
-  const captured = await captureSourceBundle(asOf, baseline, () => fetchCoins(observations, baseline ?? undefined));
+  preserve: (bundle: SourceBundle) => Promise<void>, observations: SourceObservation[] = [], schema: 1 | 2 = activeWriterSchema()) {
+  const captured = await captureSourceBundle(asOf, baseline, () => fetchCoins(observations, baseline ?? undefined), undefined, schema);
   // Even a failed collection retains original successful and failed responses for diagnosis.
   await preserve(captured.bundle);
   if (captured.error || !captured.value) throw captured.error ?? new Error("Source collection did not produce inputs");

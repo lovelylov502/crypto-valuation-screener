@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+// Retain the original schema-1 dispatch/replay contract independently of the active release.
+vi.mock("./pipeline-release.json",()=>({default:{readerRelease:"four-daily-freshness-v2",writerSchema:1,schedule:"legacy",phaseA:null}}));
 import { GET } from "../app/api/cron/collect/route";
 import { collectionTriggerDecision } from "./scheduledCollection";
 import { schedulerReceipt, signSchedulerReceipt, verifySchedulerReceipt } from "./schedulerDispatch";
