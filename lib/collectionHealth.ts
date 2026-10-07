@@ -72,6 +72,7 @@ export function collectionHealth(data: HealthData | null, now: number, requestEr
   if (p?.storeError) return result("error", "보관소 오류", p.storeError);
   if (p?.attempt.outcome === "running" && now - Date.parse(p.attempt.startedAt) > COLLECTION_DEADLINE_MS) return result("error", "수집 중단", "수집 작업이 15분 안에 완료되지 않았습니다. 마지막 검증본을 유지합니다.");
   if (p?.attempt.outcome === "running" && p.incident) return result("error", "공개 보류", "이전 수집 실패로 마지막 검증본을 유지하며 새 수집 결과를 확인하고 있습니다. 이번 영향 범위는 검사가 끝난 뒤 표시합니다.");
+  if(p?.correction&&p.published?.id===p.correction.to.id)return result("error","이전 검증본 복원","시세 제공처의 광범위한 조회 실패를 확인해 이전 검증본을 복원했습니다. 복원된 자료의 수집 시각을 표시합니다.");
   if (p?.attempt.outcome === "blocked" || p?.incident) return result("error", "공개 보류", p?.published
     ? `${publicationFailure(p.attempt)}로 마지막 검증본을 유지합니다. ${comparisonSummary(p.attempt)}`
     : "수집본이 검사를 통과하지 못했습니다. 공개할 검증본이 아직 없습니다.");

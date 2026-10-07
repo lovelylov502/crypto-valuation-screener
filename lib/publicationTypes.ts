@@ -25,6 +25,7 @@ export interface CollectionAttempt {
   affected: { slug: string; name: string; issues: string[] }[];
 }
 export interface PublicationJournal {
+  correction?: {schema:1;journalId:string;reason:"systemic-market-acquisition";observedAt:string;parentJournalUrl:string;originalJournalUrl:string;targetJournalUrl:string;from:PublishedSnapshot;to:PublishedSnapshot;readiness:ReturnType<typeof import("./marketReadiness").marketAcquisitionReadiness>};
   collectionRelease?: import("./pipelineRelease").CollectionRelease;
   schema: 1 | 2; id: string; createdAt: string; trackingStartedAt: string; previousId: string | null; previousStateUrl: string | null;
   recovery?: import("./freshnessRecovery").RecoveryState;

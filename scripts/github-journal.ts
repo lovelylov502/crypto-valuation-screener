@@ -2,7 +2,7 @@ import type { PublicationJournal } from "../lib/publicationTypes";
 import { JOURNAL_REPOSITORY } from "../lib/publication";
 import { parseJournal, sha256,readArchivedJournal } from "../lib/snapshotArchive";
 import { compactRecoveryJournal,withMigrationEvidence } from "../lib/freshnessRecovery";
-import {verifyWriterActivation} from "../lib/pipelineRelease";
+import {verifyWriterActivation,verifyCorrectionDeployment} from "../lib/pipelineRelease";
 
 const api = `https://api.github.com/repos/${JOURNAL_REPOSITORY}`;
 class RetryableArchiveError extends Error {}
@@ -89,6 +89,7 @@ export async function publishJournal(journal: PublicationJournal, files: Record<
       if (!await checkParent()) {
         // Queued old binaries must honor a compatible canonical pause immediately before promotion.
         await verifyWriterActivation();
+        if(journal.correction?.journalId===journal.id)await verifyCorrectionDeployment();
         await request(`/releases/${release.id}`, "PATCH", { draft: false, make_latest: "true" });
       }
       if ((await latestJournal())?.id !== journal.id) throw new RetryableArchiveError("Published journal readback mismatch");

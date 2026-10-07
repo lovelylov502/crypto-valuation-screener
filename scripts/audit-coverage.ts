@@ -11,7 +11,7 @@ import type { ScreenerPage } from "../lib/screenerQuery";
 import { gunzipSync } from "node:zlib";
 import { checkArchiveUrl, readSnapshot, sha256 } from "../lib/snapshotArchive";
 import { witnessErrors } from "../lib/sourceWitness";
-import { COLLECTION_DEADLINE_MS } from "../lib/publication";
+import { COLLECTION_DEADLINE_MS,JOURNAL_DOWNLOAD } from "../lib/publication";
 import { collectionSchedule } from "../lib/collectionSchedule";
 import { geckoRequests, GECKO_INTERVAL_MS } from "../lib/geckoRequests";
 import { inspectFwa } from "./verify-production.mjs";
@@ -20,6 +20,7 @@ import { pipelineIntegrityErrors, pipelineOutputHash } from "../lib/pipelineInte
 import { objectHash, witnessFromBundle, type SourceBundle } from "../lib/sourceBundle";
 import { scopedSourceErrors } from "../lib/dataQuality";
 import { publicationVerdicts } from "../lib/publicationVerdicts";
+import {marketAcquisitionReadiness} from "../lib/marketReadiness";
 
 const base = process.env.SCREENER_BASE_URL ?? DEPLOY_CONTRACT.liveBaseUrl;
 const output = process.env.SCREENER_AUDIT_DIR;
@@ -92,7 +93,7 @@ export async function auditArchivedPipeline(archived: ScreenerResponse, publishe
   if (bundle.asOf !== archived.updatedAt || pipelineOutputHash(replayed) !== pipelineOutputHash(archived) ||
     objectHash(replayed.pipeline) !== objectHash(archived.pipeline)) errors.push("archived source replay differs from published snapshot");
   if (objectHash(witnessFromBundle(bundle)) !== objectHash(witness)) errors.push("archived witness differs from original source bundle");
-  return { errors: [...new Set(errors)], receipts: bundle.receipts.length, rawBundleSha256: published.rawBundleSha256,
+  return { errors: [...new Set(errors)], receipts: bundle.receipts.length, marketReadiness:marketAcquisitionReadiness(archived,bundle.baseline),rawBundleSha256: published.rawBundleSha256,
     normalizedSha256: replayed.pipeline!.normalizedSha256, outputSha256: replayed.pipeline!.outputSha256 };
 }
 
@@ -134,9 +135,17 @@ async function main() {
     report.sourceReplay = replay;
     report.liveSourcesChecked = false;
     report.quality = archived.pipeline.quality;
+    report.marketReadiness=replay.marketReadiness;report.acquisitionReadinessPassed=replay.marketReadiness.errors.length===0;
   }
   report.publication = { id:p.published.id, journal:p.id, outcome:p.attempt.outcome, dataAt:p.published.dataAt, sha256:p.published.sha256, stale, verifiedArchiveRows:archived.coins.length };
   Object.assign(report,publicationVerdicts({...archived,publication:p},checkedAt,errors));
+  if(p.correction&&p.published.id===p.correction.to.id) {
+    const correction=await read(`${JOURNAL_DOWNLOAD}${p.correction.journalId}/correction.json`);
+    if(objectHash(correction)!==objectHash(p.correction)||!p.incident)errors.push("publication correction evidence mismatch");
+    report.mode="protected-last-verified";report.captureReplayPassed=false;report.publicationCorrection=p.correction;
+    if(output){await mkdir(output,{recursive:true});await writeFile(join(output,"all-coins.json"),JSON.stringify({...first,coins}));}
+    return;
+  }
   if (p.attempt.outcome !== "published") {
     if (p.attempt.outcome === "running") {
       if (Date.now() - Date.parse(p.attempt.startedAt) > COLLECTION_DEADLINE_MS) errors.push("collector did not complete within budget");
@@ -243,7 +252,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   report.completedAt = new Date().toISOString(); report.errors = errors;
   report.safeReaderDeploymentPassed=errors.length===0;
   report.integrityPassed=errors.length===0;
-  report.currentRecoveryPassed=report.integrityPassed===true&&report.collectionDeadlinePassed===true&&report.freshnessAccountingPassed===true&&report.allApplicableDataCurrent===true&&report.catchupExecutionPassed===true;
+  report.currentRecoveryPassed=report.integrityPassed===true&&report.captureReplayPassed!==false&&report.acquisitionReadinessPassed!==false&&report.collectionDeadlinePassed===true&&report.freshnessAccountingPassed===true&&report.allApplicableDataCurrent===true&&report.catchupExecutionPassed===true;
   if (output) { await mkdir(output, { recursive: true }); await writeFile(join(output, "coverage-audit.json"), JSON.stringify(report, null, 2)); }
   console.log(JSON.stringify(report, null, 2));
   if (errors.length) process.exitCode = 1;

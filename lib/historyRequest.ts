@@ -1,16 +1,17 @@
 import type { SourceObservation } from "./types";
-import { sourceDelay, sourceFetch, sourceObservedAt, sourceReplayActive,sourceRequestDeferred } from "./sourceBundle";
+import { sourceDelay, sourceFetch, sourceObservedAt, sourceReplayActive,sourceRequestDeferred,sourceAcquisitionRevision } from "./sourceBundle";
 
 /** Child and parent recovery use the same bounded retry policy. */
 export async function readHistorySummary(url: string, now: number, deadline: number, observations: SourceObservation[], sourceSlugs?: string[]): Promise<Record<string, unknown> | undefined> {
+  const boundedTransport=sourceAcquisitionRevision()===2;
   let httpStatus: number | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {
     let delay = 500;
     try {
       const remaining = sourceReplayActive() ? 15_000 : deadline - Date.now();
       httpStatus = undefined;
-      const signal = remaining <= 0 ? AbortSignal.abort(new Error("history time budget exhausted")) : AbortSignal.timeout(Math.min(15_000, remaining));
-      const response = await sourceFetch(url, { cache: "no-store", headers: { accept: "application/json" }, signal });
+      const signal = boundedTransport?undefined:remaining <= 0 ? AbortSignal.abort(new Error("history time budget exhausted")) : AbortSignal.timeout(Math.min(15_000, remaining));
+      const response = await sourceFetch(url, { cache: "no-store", headers: { accept: "application/json" }, signal },boundedTransport?{timeout:15_000,deadline}:undefined);
       httpStatus = response.status;
       const retryAfter = response.headers.get("retry-after");
       const seconds = retryAfter === null ? NaN : Number(retryAfter);
@@ -24,7 +25,7 @@ export async function readHistorySummary(url: string, now: number, deadline: num
       if (!summary || typeof summary !== "object" || Array.isArray(summary)) throw new Error("invalid history response");
       return summary;
     } catch {
-      if (attempt === 1 || (httpStatus !== undefined && httpStatus !== 429 && httpStatus < 500)) break;
+      if (attempt === 1 || boundedTransport&&sourceRequestDeferred(url) || (httpStatus !== undefined && httpStatus !== 429 && httpStatus < 500)) break;
       // Never bypass Retry-After because the local budget is short. At expiry,
       // the next attempt records an aborted request so replay follows the same path.
       await sourceDelay(sourceReplayActive() ? delay : Math.min(delay, Math.max(0, deadline - Date.now())));

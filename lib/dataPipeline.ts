@@ -10,6 +10,7 @@ import { witnessErrors } from "./sourceWitness";
 import type { CoinRaw, ScreenerResponse, SourceObservation } from "./types";
 import { annotateFreshness, freshnessSummary } from "./datedFreshness";
 import { activeWriterSchema } from "./pipelineRelease";
+import {marketAcquisitionReadiness,failedIdentityChanges} from "./marketReadiness";
 
 export const encodeSourceBundle = (bundle: SourceBundle) => gzipSync(Buffer.from(JSON.stringify(bundle)));
 
@@ -34,7 +35,7 @@ export async function replayDataPipeline(bundle: SourceBundle, rawBundleSha256 =
 
 export async function captureDataPipeline(baseline: ScreenerResponse | null, asOf: string,
   preserve: (bundle: SourceBundle) => Promise<void>, observations: SourceObservation[] = [], schema: 1 | 2 = activeWriterSchema()) {
-  const captured = await captureSourceBundle(asOf, baseline, () => fetchCoins(observations, baseline ?? undefined), undefined, schema);
+  const captured = await captureSourceBundle(asOf, baseline, () => fetchCoins(observations, baseline ?? undefined), undefined, schema,schema===2?2:undefined);
   // Even a failed collection retains original successful and failed responses for diagnosis.
   await preserve(captured.bundle);
   if (captured.error || !captured.value) throw captured.error ?? new Error("Source collection did not produce inputs");
@@ -58,10 +59,13 @@ export function assessPipelineCandidate(data: ScreenerResponse, bundle: SourceBu
   if (baseline && Date.parse(data.updatedAt) <= Date.parse(baseline.updatedAt)) errors.push("candidate_not_newer");
   const previous = baseline && collectionState(baseline), next = collectionState(data);
   const changes = previous ? collectionRegressions(previous, next) : [];
+  const readiness=marketAcquisitionReadiness(data,baseline),unreviewedChanges=failedIdentityChanges(data,baseline,changes);
+  errors.push(...readiness.errors);
+  if(unreviewedChanges.length)errors.push(`unreviewed_identity_losses:${unreviewedChanges.length}`);
   const affected = [...new Set([...changes.map(c => c.slug), ...data.coins.filter(c => c.dataQuality?.issues.length).map(c => c.slug)])].map(slug => ({
     slug, name: data.coins.find(c => c.slug === slug)?.name ?? baseline?.coins.find(c => c.slug === slug)?.name ?? slug,
     issues: [...changes.filter(c => c.slug === slug).map(c => c.issue), ...(data.coins.find(c => c.slug === slug)?.dataQuality?.issues.map(i => `${i.scope}:${i.code}`) ?? [])],
     before: previous?.coins[slug] ?? null, after: next.coins[slug] ?? null,
   }));
-  return { errors: [...new Set(errors)], changes, reviewedChanges: changes, unreviewedChanges: [], affected };
+  return { errors: [...new Set(errors)], changes, reviewedChanges: changes.filter(c=>!unreviewedChanges.includes(c)), unreviewedChanges, affected,marketReadiness:readiness };
 }

@@ -53,6 +53,8 @@ Capture fixes `asOf`, preserves original responses, normalizes/calculates, then 
 
 `snapshotErrors` checks version/time, required census, all quote accounting, original Revenue visibility, scoped failures and row financial invariants. `assessPipelineCandidate` adds ordering, same-capture witness and replay/output integrity. Accounted current absence can remain unavailable; malformed evidence, unexplained omission, unknown failure scope and invented output still block publication.
 
+Candidate acquisition readiness additionally rejects systemic market-provider loss using separate prior-dependency, current-request and essential-provider checks. The explicit 50% boundary, current field-specific fallback and legitimate-omission rules are defined in [MARKET_ACQUISITION_RECOVERY_2026-10-08.md](./MARKET_ACQUISITION_RECOVERY_2026-10-08.md). Historical archive readers remain independent of that promotion policy. A reviewed pointer correction runs under the same writer concurrency group, verifies the exact parent and active canonical revision, and retains the latest actual attempt and recovery ledger without earning availability or cycle credit.
+
 Baseline changes remain diagnostic. Previous success is not a permanent completeness floor; dated exceptions do not authorize the new writer. Raw recovery cannot renew economic approval. Missing dates remain missing, explicit zero remains zero, and definition/identity/period guards still govern multiples.
 
 Legacy assessment and post-collection review modules remain for historical diagnosis/tests only. Checksum-pinned first bootstrap cannot replace an existing journal and retains its original historical date. It is not fresh-data recovery.

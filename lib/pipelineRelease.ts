@@ -15,6 +15,13 @@ export const fourDailyActive = () => contract.schedule === "four-daily";
 export const writerPaused = () => contract.schedule === "paused";
 export function collectionReleaseState():CollectionRelease { return parseCollectionRelease({ writerSchema:activeWriterSchema(),schedule:contract.schedule,
   phaseADeploymentId:(contract.phaseA as null|{deploymentId:string})?.deploymentId??null }); }
+export async function verifyCorrectionDeployment(fetcher=fetch) {
+  if(!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA??""))throw new Error("Correction executing revision unavailable");
+  const response=await fetcher("https://crypto-valuation-screener.vercel.app/api/status",{cache:"no-store",redirect:"error",signal:AbortSignal.timeout(10_000)}),live=await response.json();
+  if(!response.ok||live.deployment?.environment!=="production"||live.deployment?.codeCommit!==process.env.GITHUB_SHA||!/^dpl_[a-zA-Z0-9]+$/.test(live.deployment?.id??"")||
+    live.compatibility?.release!==READER_COMPATIBILITY.release||JSON.stringify(live.compatibility?.pipelineSchemas)!=="[1,2]"||JSON.stringify(live.compatibility?.journalSchemas)!=="[1,2]"||
+    live.collectionRelease?.writerSchema!==2||live.collectionRelease?.schedule!=="four-daily"||live.collectionRelease?.phaseADeploymentId!==(contract.phaseA as null|{deploymentId:string})?.deploymentId)throw new Error("Correction active deployment revision changed or paused");
+}
 export async function verifyWriterActivation(fetcher = fetch) {
   if (writerPaused()) throw new Error("Collection paused by compatible rollback");
   const base = "https://crypto-valuation-screener.vercel.app";

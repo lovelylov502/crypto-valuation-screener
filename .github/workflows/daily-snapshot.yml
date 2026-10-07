@@ -26,6 +26,14 @@ on:
         description: "SHA-256 of that preserved seed asset"
         type: string
         required: false
+      publication_correction_parent:
+        description: "Maintenance only: exact current journal with proved invalid market acquisition"
+        type: string
+        required: false
+      publication_correction_target:
+        description: "Maintenance only: exact confirmed baseline journal to restore"
+        type: string
+        required: false
 
 permissions:
   contents: write
@@ -49,6 +57,7 @@ jobs:
       SCREENER_SCHEDULER_SECRET: ${{ secrets.SCREENER_SCHEDULER_SECRET }}
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
       SCREENER_GITHUB_SCHEDULE: ${{ github.event.schedule }}
+      SCREENER_POINTER_CORRECTION: ${{ inputs.publication_correction_parent != '' || inputs.publication_correction_target != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,7 +66,17 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci --no-audit --no-fund
+      - name: Check maintenance correction code
+        if: env.SCREENER_POINTER_CORRECTION == 'true'
+        run: npm test
+      - name: Append reviewed publication correction without collection
+        if: env.SCREENER_POINTER_CORRECTION == 'true'
+        env:
+          CORRECTION_PARENT: ${{ inputs.publication_correction_parent }}
+          CORRECTION_TARGET: ${{ inputs.publication_correction_target }}
+        run: npx tsx scripts/correct-publication.ts commit "$CORRECTION_PARENT" "$CORRECTION_TARGET"
       - name: Check slot completion, active lease and retry eligibility
+        if: env.SCREENER_POINTER_CORRECTION != 'true'
         id: due
         env:
           SCREENER_SCHEDULER_RECEIPT: ${{ inputs.scheduler_receipt }}

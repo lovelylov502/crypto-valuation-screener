@@ -10,7 +10,7 @@ import { koreanDescription } from "./protocolDescriptions";
 import { aggregateDefinitions, combineFundamentals, definitionReviewed } from "./fundamentalSource";
 import type { MetricDefinition, RevenueKind, FeeKind } from "./fundamentals";
 import type { RevenueHistory } from "./revenueHistory";
-import { sourceDelay, sourceFetch, sourceNow, sourceObservedAt, sourceReplayActive, sourcePipelineSchema,sourceRequestDeferred,objectHash } from "./sourceBundle";
+import { sourceDelay, sourceFetch, sourceNow, sourceObservedAt, sourceReplayActive, sourcePipelineSchema,sourceAcquisitionRevision,sourceRequestDeferred,objectHash } from "./sourceBundle";
 import { validateDirectoryRows, validateProtocolFinancialRows } from "./sourceValidation";
 import {
   aggregateHolderValueByGroup,
@@ -31,6 +31,7 @@ type Json = Record<string, unknown>;
 
 export async function getJson<T>(url: string, observations: SourceObservation[], options: { timeout?: number; beforeAttempt?: () => Promise<void>; deadline?: number } = {}): Promise<T> {
   const { timeout = 30_000, beforeAttempt, deadline = Infinity } = options;
+  const boundedTransport=sourceAcquisitionRevision()===2;
   let httpStatus: number | undefined;
   try {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -41,10 +42,10 @@ export async function getJson<T>(url: string, observations: SourceObservation[],
       // The server caches the compressed joined snapshot; source responses can exceed 2 MB.
       cache: "no-store",
       headers: { accept: "application/json" },
-      signal: remaining <= 0 ? AbortSignal.abort(new Error("Source request budget exhausted")) : AbortSignal.timeout(Math.min(timeout, remaining)),
-    }); } catch (error) {
+      ...(boundedTransport?{}:{signal: remaining <= 0 ? AbortSignal.abort(new Error("Source request budget exhausted")) : AbortSignal.timeout(Math.min(timeout, remaining))}),
+    },boundedTransport?{timeout,deadline}:undefined); } catch (error) {
       httpStatus = undefined;
-      if (attempt === 2) throw error;
+      if (attempt === 2 || boundedTransport&&sourceRequestDeferred(url)) throw error;
       if (sourceReplayActive() || Date.now() + 500 < deadline) await sourceDelay(500);
       continue;
     }
@@ -207,7 +208,7 @@ function indexCmcRows(index: CmcIndex, rows: Json[]) {
   }
 }
 
-export async function fetchCmc(observations: SourceObservation[]): Promise<CmcIndex> {
+export async function fetchCmc(observations: SourceObservation[], deadline = Date.now() + 60_000): Promise<CmcIndex> {
   const empty = (): CmcIndex => ({
     byId: new Map(),
     bySlug: new Map(),
@@ -216,7 +217,7 @@ export async function fetchCmc(observations: SourceObservation[]): Promise<CmcIn
     observedAt: new Map(),
     discoveryComplete: true,
   });
-  const index = empty(), deadline = Date.now() + 60_000;
+  const index = empty();
   for (let start = 1; ; start += 5000) {
     const url = `${CMC}/v3/cryptocurrency/listings/latest?start=${start}&limit=5000&convert=USD`;
     try {
@@ -237,13 +238,13 @@ export async function fetchCmc(observations: SourceObservation[]): Promise<CmcIn
   return index;
 }
 
-async function completeCmc(ids: number[], index: CmcIndex, observations: SourceObservation[], refreshIds: number[] = []) {
+async function completeCmc(ids: number[], index: CmcIndex, observations: SourceObservation[], refreshIds: number[] = [], deadline=Infinity) {
   const lookups = new Map<number, QuoteLookup>();
   for (const [id, row] of index.byId) lookups.set(id, quoteLookup(String(id), row, "cmc",false,index.observedAt?.get(id)));
   await quoteBatches([...new Set([...ids, ...refreshIds])].filter(id => !index.byId.has(id) || refreshIds.includes(id)).sort((a,b) => a-b), async batch => {
     const url = `${CMC}/v3/cryptocurrency/quotes/latest?id=${batch.join(",")}&convert=USD&skip_invalid=true`;
     try {
-      const response = await getJson<{ data?: Json[] } | Json[]>(url, observations, { timeout: 10_000 });
+      const response = await getJson<{ data?: Json[] } | Json[]>(url, observations, { timeout: 10_000,deadline });
       const rows = Array.isArray(response) ? response : response.data;
       if (!Array.isArray(rows)) throw new Error("CMC quote response is invalid");
       // A listings response may omit fields or an asset altogether. Direct ID
@@ -406,6 +407,7 @@ export interface CoinInputs {
   revenueHistories: Record<string, RevenueHistory>; holderHistories: Record<string, RevenueHistory>;
   recoveredRevenue: [string,string][]; observations: SourceObservation[];
   priorCmcTargets: [number,string[]][];
+  priorCmcIdentities?: {slug:string;sourceSlugs:string[];name:string;symbol:string|null;geckoId:string|null;cmcId:number;cmcSlug:string|null;baselineAt:string}[];
 }
 
 export async function collectCoinInputs(observations: SourceObservation[] = [], baseline?: ScreenerResponse): Promise<CoinInputs> {
@@ -422,13 +424,14 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
     return windows;
   };
   const histories = Promise.all([fetchRevenueHistory(observations, preserved("revenueHistory")), fetchHolderHistory(observations,preserved("holderHistory"))]);
+  const cmcDeadline=sourceAcquisitionRevision()===2?Date.now()+180_000:undefined;
   const initial = await Promise.allSettled([
     getJson<Json[]>(`${LLAMA}/protocols`, observations),
     fetchOverviewList("/overview/fees", observations),
     fetchOverviewList("/overview/fees?dataType=dailyRevenue", observations),
     fetchOverviewList("/overview/fees?dataType=dailyHoldersRevenue", observations),
     fetchOverviewList("/overview/dexs", observations),
-    fetchCmc(observations),
+    fetchCmc(observations,cmcDeadline),
     getJson<{ peggedAssets: StablecoinAsset[] }>(STABLECOIN_SOURCE, observations),
     getJson<{ parentProtocols: Json[] }>(`${LLAMA}/config`, observations),
   ]);
@@ -463,14 +466,15 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
   const priorCmcIds = priorCmcTargets.map(([id])=>id);
   const [gecko, cmcLookups, [revenueHistories, holderHistories]] = await Promise.all([
     fetchGecko(identityRows.flatMap(p => str(p.gecko_id) ? [String(p.gecko_id)] : []), observations),
-    completeCmc(identityRows.map(p => Number(p.cmcId)).filter(id => Number.isSafeInteger(id) && id > 0), cmc, observations, priorCmcIds),
+    completeCmc(identityRows.map(p => Number(p.cmcId)).filter(id => Number.isSafeInteger(id) && id > 0), cmc, observations, priorCmcIds,cmcDeadline),
     histories,
   ]);
 
   const inputs:CoinInputs = {asOf,protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,parents:config.parentProtocols,stablecoins:stablecoins.peggedAssets,
     cmc:[...cmc.byId.values()].sort((a,b)=>Number(a.id)-Number(b.id)),cmcLookups:[...cmcLookups].sort(([a],[b])=>a-b),cmcDiscoveryComplete:cmc.discoveryComplete !== false,
     gecko:[...gecko.byId.values()].sort((a,b)=>String(a.id).localeCompare(String(b.id))),geckoLookups:[...gecko.lookups].sort(([a],[b])=>a.localeCompare(b)),
-    revenueHistories,holderHistories,recoveredRevenue:[...recoveredRevenue].sort(([a],[b])=>a.localeCompare(b)),observations:[...observations],priorCmcTargets};
+    revenueHistories,holderHistories,recoveredRevenue:[...recoveredRevenue].sort(([a],[b])=>a.localeCompare(b)),observations:[...observations],priorCmcTargets,
+    ...(sourceAcquisitionRevision()===2?{priorCmcIdentities:(baseline?.coins??[]).flatMap(c=>c.identityStatus==="verified"&&c.cmcId!==null?[{slug:c.slug,sourceSlugs:c.sourceSlugs??[c.slug],name:c.name,symbol:c.symbol,geckoId:c.geckoId,cmcId:c.cmcId,cmcSlug:c.cmcSlug,baselineAt:baseline!.updatedAt}]:[])}:{})};
   // A broad discovery row outside this source universe cannot taint its rows.
   const linkedCmcIds=new Set(normalizeCoinInputs(inputs).flatMap(c=>c.marketSources?.requests?.cmc.map(q=>q.id) ?? []));
   for(const row of inputs.cmc) if(linkedCmcIds.has(String(row.id)) && Array.isArray(row.quoteInvalidFields) && row.quoteInvalidFields.length && typeof row.quoteSchemaUrl === "string" && row.quoteSchemaUrl.includes("/listings/latest")) {
@@ -590,6 +594,12 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
     const g = geckoId ? gecko.byId.get(geckoId) : undefined;
     const cmcRow = findCmc({ cmcIds: [...memberCmcIds], geckoId, groupKey: k, name, symbol, cmc });
     const quote = cmcQuote(cmcRow);
+    const sourceSlugs = [...new Set([k, ...members.map(m => String(m.slug))])];
+    const prior=inputs.priorCmcIdentities?.find(c=>c.slug===k);
+    const continuity=!cmcRow&&prior&&normalize(prior.name)===normalize(name)&&prior.geckoId===geckoId&&memberGeckoIds.size<=1&&memberCmcIds.size<=1&&
+      (!memberCmcIds.size||memberCmcIds.has(prior.cmcId))&&memberSymbols.size<=1&&(!symbol||symbol.toUpperCase()===prior.symbol?.toUpperCase())&&(!str(g?.symbol)||str(g?.symbol)!.toUpperCase()===prior.symbol?.toUpperCase())&&
+      JSON.stringify([...prior.sourceSlugs].sort())===JSON.stringify([...sourceSlugs].sort())&&cmcLookups.get(prior.cmcId)?.status==="error"?prior:undefined;
+    if(continuity&&!symbol)symbol=continuity.symbol;
 
     let identityStatus: IdentityStatus = "review";
     let identityReason = "프로젝트와 시장 토큰의 연결을 확인하지 못함";
@@ -612,6 +622,7 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
       identityStatus = "verified";
       identityReason = "프로젝트명·심볼과 CMC canonical 자산이 일치";
     }
+    if(continuity) {identityStatus="verified";identityReason=`이전 검증본의 CMC 자산 연결 유지 · 현재 시세 조회 실패 (${continuity.baselineAt})`;}
 
     const gMcap = g ? num(g.market_cap) : null;
     const cmcMcap = quote ? num(quote.market_cap) : null;
@@ -619,7 +630,7 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
     const cap = marketQuote([cmcMcap, "CoinMarketCap"], [gMcap, "CoinGecko"], [dlMcap, "DefiLlama"]);
     const price = marketQuote([num(quote?.price), "CoinMarketCap"], [num(g?.current_price), "CoinGecko"]);
     const fdv = marketQuote([num(quote?.fully_diluted_market_cap), "CoinMarketCap"], [num(g?.fully_diluted_valuation), "CoinGecko"]);
-    const cmcId = cmcRow ? num(cmcRow.id) : memberCmcIds.size === 1 ? [...memberCmcIds][0] : null;
+    const cmcId = cmcRow ? num(cmcRow.id) : memberCmcIds.size === 1 ? [...memberCmcIds][0] : continuity?.cmcId??null;
 
     const cmcListedAt = cmcRow ? Date.parse(str(cmcRow.date_added) ?? "") : NaN;
     if (Number.isFinite(cmcListedAt)) listedAt = cmcListedAt / 1000;
@@ -629,25 +640,25 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
     const feesChange =
       fees && fees.prev30 !== null && fees.prev30 > 0 && fees.d30 !== null ? ((fees.d30 - fees.prev30) / fees.prev30) * 100 : null;
 
-    const sourceSlugs = [...new Set([k, ...members.map(m => String(m.slug))])];
     const requestedCmcIds = [...new Set([...memberCmcIds,...(cmcId !== null ? [cmcId] : []),...sourceSlugs.flatMap(slug=>priorCmcBySource.get(slug) ?? [])])].sort((a,b)=>a-b);
     coins.push({
       fundamentals: combineFundamentals(revenueDefinitions.get(k) as MetricDefinition<RevenueKind> | undefined, feeDefinitions.get(k) as MetricDefinition<FeeKind> | undefined, hrL.filter(h => typeof h.slug === "string" && h.doublecounted !== true && groupKey(h.slug) === k)),
       slug: k,
       sourceSlugs,
       name,
-      symbol: (cmcRow ? str(cmcRow.symbol) : g ? str(g.symbol)?.toUpperCase() : null) ?? symbol,
+      symbol: (cmcRow ? str(cmcRow.symbol) : g ? str(g.symbol)?.toUpperCase() : null) ?? symbol??continuity?.symbol??null,
       category: str(rep.category),
       chains: [...new Set(members.flatMap(m => Array.isArray(m.chains) ? m.chains.filter((v): v is string => typeof v === "string") : []))],
       geckoId,
       cmcId,
-      cmcSlug: cmcRow ? str(cmcRow.slug) : identityStatus === "verified" ? CMC_SLUG_OVERRIDES[k] ?? null : null,
+      cmcSlug: cmcRow ? str(cmcRow.slug) : continuity?.cmcSlug??(identityStatus === "verified" ? CMC_SLUG_OVERRIDES[k] ?? null : null),
       logo: str(parent?.logo) ?? str(rep.logo),
       listedAt,
       isParent,
       identityStatus,
       identityReason,
-      capitalExclusionReason: capitalExclusion(geckoId ?? (cmcRow ? str(cmcRow.slug) : null), (cmcRow ? str(cmcRow.symbol) : g ? str(g.symbol) : null) ?? symbol, inputs.stablecoins),
+      ...(continuity?{identityContinuity:{provider:"CoinMarketCap" as const,id:continuity.cmcId,baselineAt:continuity.baselineAt,baselineSlug:continuity.slug}}:{}),
+      capitalExclusionReason: capitalExclusion(geckoId ?? (cmcRow ? str(cmcRow.slug) : continuity?.cmcSlug??null), (cmcRow ? str(cmcRow.symbol) : g ? str(g.symbol) : null) ?? symbol, inputs.stablecoins),
       description: str(parent?.description) ?? str(rep.description),
       descriptionKo: koreanDescription(str(parent?.description) ?? str(rep.description)),
       descriptionSource: `https://defillama.com/protocol/${encodeURIComponent(String(rep.slug))}`,

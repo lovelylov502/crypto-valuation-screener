@@ -135,7 +135,7 @@ async function collect() {
     startedAt: current.attempt.startedAt, completedAt: new Date().toISOString(), stage,
     comparisonCompleted: !!assessment || !!bootstrapReceipt,
     baseline: current.published, dataAt: data?.updatedAt ?? null, freshness:data?.freshness,requestStats,sources: data?.sources ?? sources, collection: data?.collection, pipeline: data?.pipeline,
-    errors: [...new Set(errors)], changes: assessment?.changes ?? [], reviewedChanges: assessment?.reviewedChanges ?? [], unreviewedChanges: assessment?.unreviewedChanges ?? [], affected: assessment?.affected ?? [], bootstrapReceipt,
+    errors: [...new Set(errors)], changes: assessment?.changes ?? [], reviewedChanges: assessment?.reviewedChanges ?? [], unreviewedChanges: assessment?.unreviewedChanges ?? [], affected: assessment?.affected ?? [], marketReadiness:assessment?.marketReadiness,bootstrapReceipt,
     artifacts: await Promise.all((await readdir(output)).filter(n => n.endsWith(".gz")).map(async name => { const bytes = await readFile(join(output, name)); return { name, bytes: bytes.length, sha256: sha256(bytes) }; })) };
   await save("report.json", json(report));
   if (errors.length) throw new Error(`Candidate blocked: ${errors.length} validation errors; diagnostic report retained`);

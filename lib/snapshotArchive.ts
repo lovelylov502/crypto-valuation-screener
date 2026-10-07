@@ -48,6 +48,13 @@ export function parseJournal(value: unknown): PublicationJournal {
     || (s.settled && (a.outcome !== "published" || (a.partial === true && a.failureClass === "transient") || s.successfulPublicationId !== j.published?.id))
     || (s.nextRetryAt !== null && (!Number.isFinite(Date.parse(s.nextRetryAt)) || s.settled)))) throw new Error("Invalid collection slot state");
   if (j.previousStateUrl) checkArchiveUrl(j.previousStateUrl);
+  if(j.correction) {
+    const c=j.correction;
+    for(const url of [c.parentJournalUrl,c.originalJournalUrl,c.targetJournalUrl]){checkArchiveUrl(url);if(!url.endsWith("/state.json"))throw new Error("Invalid correction evidence");}
+    if(c.schema!==1||c.reason!=="systemic-market-acquisition"||!/^data-[a-zA-Z0-9-]+-correction$/.test(c.journalId)||!Number.isFinite(Date.parse(c.observedAt))||!c.from||!c.to||
+      !Array.isArray(c.readiness?.errors)||!c.readiness.errors.some(e=>e.startsWith("market_acquisition_failed:"))||!Array.isArray(c.readiness.coverage)||
+      j.id===c.journalId&&(c.parentJournalUrl!==j.previousStateUrl||JSON.stringify(j.published)!==JSON.stringify(c.to)||!["published","blocked"].includes(j.attempt.outcome)||!j.incident))throw new Error("Invalid publication correction");
+  }
   if (j.schema===2) validateRecovery(j);
   return j;
 }

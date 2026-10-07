@@ -16,6 +16,7 @@ export interface SourceReceipt {
 export interface SourceBundle {
   schema: 1;
   pipelineSchema?: 2;
+  acquisitionRevision?: 2;
   asOf: string;
   baseline: ScreenerResponse | null;
   receipts: SourceReceipt[];
@@ -43,6 +44,7 @@ export const objectHash = (value: unknown) => contentHash(JSON.stringify(canonic
 export const sourceSessionActive = () => !!sessions.getStore();
 export const sourceReplayActive = () => sessions.getStore()?.replay === true;
 export const sourcePipelineSchema = (): 1 | 2 => sessions.getStore()?.bundle.pipelineSchema ?? 1;
+export const sourceAcquisitionRevision = () => sessions.getStore()?.bundle.acquisitionRevision ?? 1;
 export const sourceNow = () => sessions.getStore() ? Date.parse(sessions.getStore()!.bundle.asOf) : Date.now();
 export const sourceObservedAt = (url: string) => sessions.getStore()?.latest.get(url)?.observedAt ?? new Date(sourceNow()).toISOString();
 export const sourceRequestDeferred = (url:string) => sessions.getStore()?.latest.get(url)?.error==="Recorded source request deferred by provider cooldown";
@@ -68,7 +70,7 @@ function responseOf(receipt: SourceReceipt): Response {
 }
 
 /** Explicit transport injection; no global fetch patch and no network fallback during replay. */
-export async function sourceFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
+export async function sourceFetch(input: string | URL | Request, init?: RequestInit, transport?: { timeout:number; deadline:number }): Promise<Response> {
   const session = sessions.getStore();
   if (!session) return fetch(input, init);
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -101,13 +103,15 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
             const host=new URL(url).hostname,requestSignal=init?.signal??(input instanceof Request?input.signal:undefined);
             while ((session.cooldowns?.get(host)??0)>Date.now()) {
               const until=session.cooldowns!.get(host)!;
-              if (until >= (session.deadlineAt??Infinity)||session.signal?.aborted||requestSignal?.aborted) throw new Error("provider cooldown deferred");
+              if (until >= Math.min(session.deadlineAt??Infinity,transport?.deadline??Infinity)||session.signal?.aborted||requestSignal?.aborted) throw new Error("provider cooldown deferred");
               await sourceDelay(until-Date.now(),requestSignal??undefined);
               if(session.signal?.aborted||requestSignal?.aborted)throw new Error("provider cooldown deferred");
             }
             requestedAt=new Date().toISOString();
           }
-          const signals = [session.signal, init?.signal ?? (input instanceof Request ? input.signal : null)].filter((s): s is AbortSignal => !!s);
+          const remaining=Math.min(session.deadlineAt??Infinity,transport?.deadline??Infinity)-Date.now();
+          if(transport&&remaining<=0)throw new Error("provider cooldown deferred");
+          const signals = [session.signal, init?.signal ?? (input instanceof Request ? input.signal : null),transport?AbortSignal.timeout(Math.max(1,Math.min(transport.timeout,remaining))):null].filter((s): s is AbortSignal => !!s);
           const signal = signals.length ? AbortSignal.any(signals) : undefined;
           const response = await fetch(input, { ...init, signal });
           const body = await response.text();
@@ -137,7 +141,7 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
 }
 
 export function validateSourceBundle(bundle: SourceBundle): void {
-  if (bundle?.schema !== 1 || (bundle.pipelineSchema !== undefined && bundle.pipelineSchema !== 2) || !Number.isFinite(Date.parse(bundle.asOf)) || !Array.isArray(bundle.receipts) || !bundle.receipts.length) throw new Error("Invalid source bundle");
+  if (bundle?.schema !== 1 || (bundle.pipelineSchema !== undefined && bundle.pipelineSchema !== 2) || (bundle.acquisitionRevision!==undefined&&(bundle.pipelineSchema!==2||bundle.acquisitionRevision!==2)) || !Number.isFinite(Date.parse(bundle.asOf)) || !Array.isArray(bundle.receipts) || !bundle.receipts.length) throw new Error("Invalid source bundle");
   for (const receipt of bundle.receipts) {
     validateUrl(receipt.url);
     if (typeof receipt.body !== "string" || contentHash(receipt.body) !== receipt.sha256 || !Number.isFinite(Date.parse(receipt.requestedAt))
@@ -146,8 +150,8 @@ export function validateSourceBundle(bundle: SourceBundle): void {
   }
 }
 
-export async function captureSourceBundle<T>(asOf: string, baseline: ScreenerResponse | null, task: () => Promise<T>, signal = AbortSignal.timeout(9 * 60_000), pipelineSchema: 1 | 2 = 1) {
-  const bundle: SourceBundle = { schema: 1, ...(pipelineSchema === 2 ? { pipelineSchema } : {}), asOf, baseline, receipts: [] };
+export async function captureSourceBundle<T>(asOf: string, baseline: ScreenerResponse | null, task: () => Promise<T>, signal = AbortSignal.timeout(9 * 60_000), pipelineSchema: 1 | 2 = 1, acquisitionRevision?:2) {
+  const bundle: SourceBundle = { schema: 1, ...(pipelineSchema === 2 ? { pipelineSchema } : {}), ...(acquisitionRevision?{acquisitionRevision}:{}), asOf, baseline, receipts: [] };
   const started=Date.now();
   const session: Session = { bundle, replay: false, cursors: new Map(), latest: new Map(), successful: new Map(), pending: new Map(), signal, cooldowns:new Map(),deadlineAt:started+9*60_000 };
   let value: T | undefined, error: unknown;

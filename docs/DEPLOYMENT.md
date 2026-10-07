@@ -83,6 +83,8 @@ The homepage is now a static shell with no snapshot payload or upstream collecti
 
 After every production deployment, also retain the Vercel deployment ID and unique URL from CLI output or `vercel inspect`. A successful payload upload alone is not a completed deployment until the canonical alias passes the readback gate.
 
+A reader repair may deploy while the existing archive fails candidate acquisition readiness: `safeReaderDeploymentPassed` remains an integrity gate, while acquisition and recovery verdicts stay separate. Market-provider containment then uses the reviewed maintenance dispatch under the collector's shared writer lock, with exact canonical revision and expected-parent checks. Compatible paused readers must retain both acquisition replay revisions. See [MARKET_ACQUISITION_RECOVERY_2026-10-08.md](./MARKET_ACQUISITION_RECOVERY_2026-10-08.md); production deployment still uses this canonical wrapper only.
+
 The gate also checks separate sales evidence identity and amount, P/HR arithmetic and complete 30-day coverage, reviewed protocol/service-receipt P/R, and stablecoin capital exclusions. Pagination must retain the full universe count while returning at most the requested page size.
 
 V9 moves column controls into display settings and details below the selected row. Holder eligibility continues to include reviewed conditional distributions and native burns. Exact methodology, token identity, complete daily windows and numerator guards remain mandatory; see [SCREENER_V9.md](./SCREENER_V9.md) and the underlying [SCREENER_V8.md](./SCREENER_V8.md) rules. After the automated gate, check AERO search, inline details, the CMC link and the 24-hour columns in the live browser.

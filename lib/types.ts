@@ -24,6 +24,7 @@ export interface CoinRaw {
   isParent: boolean;
   identityStatus: IdentityStatus;
   identityReason: string;
+  identityContinuity?: {provider:"CoinMarketCap";id:number;baselineAt:string;baselineSlug:string};
   capitalExclusionReason?: string | null;
   description?: string | null;
   descriptionKo?: string | null;
