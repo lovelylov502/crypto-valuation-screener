@@ -10,7 +10,7 @@
 
 ## Current product and data engine
 
-- The checked-in release contract is Phase A: compatible pipeline/journal 1/2 readers, schema-1 writing and two legacy daily slots. Phase B activates four slots at 05:00/11:00/17:00/23:00 KST plus two bounded catch-up stages after exact canonical reader/deployment proof. [PUBLICATION.md](./docs/PUBLICATION.md) owns scheduling; [freshness acceptance](./docs/FRESHNESS_IMPLEMENTATION_ACCEPTANCE_2026-10-08.md) records local evidence and the activation boundary.
+- The checked-in release contract is active Phase B: compatible pipeline/journal 1/2 readers, schema-2 writing and four regular slots at 05:00/11:00/17:00/23:00 KST, with two bounded catch-up stages. Activation used verified canonical and pinned Phase-A deployment proof. [PUBLICATION.md](./docs/PUBLICATION.md) owns scheduling; [freshness acceptance](./docs/FRESHNESS_IMPLEMENTATION_ACCEPTANCE_2026-10-08.md) records local and rollout evidence separately from the required 72-hour operational observation.
 
 - Every new candidate retains original HTTP responses and must reproduce its normalization and complete output in an offline replay. Accounted local failures withhold affected metrics while valid current rows can publish. Required census, identity, financial and source-integrity failures still block publication. [ARCHITECTURE.md](./docs/ARCHITECTURE.md) defines the active contract.
 

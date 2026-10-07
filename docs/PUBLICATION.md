@@ -2,7 +2,7 @@
 
 ## Four-slot release contract
 
-The checked-in configuration is the inactive Phase A reader release. The older two-slot behavior described below continues until the explicit Phase B preparation and canonical deployment in [DEPLOYMENT.md](./DEPLOYMENT.md).
+The checked-in configuration is active Phase B, following verified Phase-A readers and the explicit preparation and canonical deployment in [DEPLOYMENT.md](./DEPLOYMENT.md). The older two-slot behavior documented below is retained for legacy schema-1 interpretation; the four-slot contract in this section governs new collection.
 
 Phase B regular UTC slots are 02/08/14/20 (KST 11/17/23/05). Primary `[slot,+2h)` allows three automatic captures; catch-up 1 `[+2h,+4h)` and catch-up 2 `[+4h,next slot)` allow one each. Five automatic full captures per slot, twenty per UTC day is the ceiling. Two manual repairs per slot have a separate reported allowance. Actual Vercel daily entries exist for every stage, and GitHub has primary/+30/+60/catch-up fallback wakes. `queue: max` retains pending writer jobs while cancellation stays disabled.
 

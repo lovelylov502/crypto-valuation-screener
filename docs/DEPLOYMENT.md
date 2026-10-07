@@ -2,7 +2,7 @@
 
 ## Reader-first activation and compatible pause
 
-Phase A is the checked-in contract: pipeline/journal 1/2 readers, writer 1, legacy two-slot schedules. Integrate and deploy this reviewed reader release through the canonical production procedure below. Verify `/api/status` advertises exact reader contracts `[1,2]`, production environment, deployment ID/unique URL and the expected Phase-A code commit. Verify real legacy snapshot reading and preserved source replay. A legacy freshness-accounting verdict remains unavailable; this does not invalidate a safe reader deployment.
+The initial rollout starts with Phase A: pipeline/journal 1/2 readers, writer 1, legacy two-slot schedules. Integrate and deploy that reviewed reader release through the canonical production procedure below. Verify `/api/status` advertises exact reader contracts `[1,2]`, production environment, deployment ID/unique URL and the expected Phase-A code commit. Verify real legacy snapshot reading and preserved source replay. A legacy freshness-accounting verdict remains unavailable; this does not invalidate a safe reader deployment. The current checked-in contract has completed this ordering and selects Phase B; retain its pinned Phase-A proof during subsequent fixes.
 
 Only after that deployment is verified, prepare Phase B in the canonical checkout:
 
