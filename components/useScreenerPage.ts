@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ScreenerPage } from "@/lib/screenerQuery";
 import type { WorkspacePreferences } from "@/lib/workspacePreferences";
 import { fundamentalErrors } from "@/lib/fundamentalContract";
@@ -8,12 +8,25 @@ import type { PublicationJournal } from "@/lib/publicationTypes";
 import { STATUS_POLL_MS } from "@/lib/collectionSchedule";
 import { parseCollectionRelease } from "@/lib/pipelineRelease";
 
+export interface PublicationResponseState {
+  publication?:PublicationJournal; nextRequest:number; lastRequest:number; statusVersion:number;
+}
+export interface PublicationRequest { source:"data"|"status"; sequence:number; statusVersion:number }
+/** A fresh data response supplies live mode; later accepted status and request ordering fence stale responses. */
+export function mergePublicationResponse(current:PublicationResponseState,incoming:PublicationJournal|undefined,request:PublicationRequest):PublicationResponseState {
+  const release=incoming?.collectionRelease===undefined?undefined:parseCollectionRelease(incoming.collectionRelease);
+  if(!incoming||request.sequence<current.lastRequest||request.source==="data"&&request.statusVersion<current.statusVersion)return current;
+  const publication={...incoming,...(release?{collectionRelease:release}:current.publication?.collectionRelease?{collectionRelease:current.publication.collectionRelease}:{})};
+  return {...current,publication,lastRequest:request.sequence,statusVersion:current.statusVersion+Number(request.source==="status")};
+}
+
 export function pageUrl(prefs: WorkspacePreferences, favorites: Set<string>, page: number, size: number) {
   return "/api/screener?" + new URLSearchParams({ prefs: JSON.stringify(prefs), favorites: [...favorites].join(","), page: String(page), size: String(size) });
 }
 export function useScreenerPage(initial: ScreenerPage | null, prefs: WorkspacePreferences, favorites: Set<string>, page: number, size: number, ready: boolean) {
   const [data, setData] = useState(initial);
   const [publication, setPublication] = useState<PublicationJournal | undefined>(initial?.publication);
+  const publicationState=useRef<PublicationResponseState>({publication:initial?.publication,nextRequest:0,lastRequest:0,statusVersion:0});
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
@@ -22,6 +35,7 @@ export function useScreenerPage(initial: ScreenerPage | null, prefs: WorkspacePr
   useEffect(() => {
     if (!ready) return;
     const controller = new AbortController();
+    const request:PublicationRequest={source:"data",sequence:++publicationState.current.nextRequest,statusVersion:publicationState.current.statusVersion};
     setRefreshing(true);
     const deadline = setTimeout(() => controller.abort("timeout"), 30000);
     const timer = setTimeout(async () => {
@@ -30,7 +44,11 @@ export function useScreenerPage(initial: ScreenerPage | null, prefs: WorkspacePr
         if (!response.ok) throw new Error("검증본을 불러오지 못했습니다. 수집 상태를 확인해 주세요.");
         const next = await response.json() as ScreenerPage;
         if (next.scoreVersion !== RULE_VERSION || !next.pagination || !Number.isFinite(Date.parse(next.updatedAt)) || Date.parse(next.updatedAt) > Date.now() + 300000 || !Array.isArray(next.coins) || next.coins.some(c => fundamentalErrors(c).length)) throw new Error("자료 형식을 확인하지 못했습니다.");
-        if (!controller.signal.aborted) { setData(next); setPublication(previous=>next.publication?{...next.publication,...(previous?.collectionRelease?{collectionRelease:previous.collectionRelease}:{})}:previous); setCheckedAt(new Date().toISOString()); setError(""); }
+        if (!controller.signal.aborted) {
+          const merged=mergePublicationResponse(publicationState.current,next.publication,request);
+          publicationState.current=merged;
+          setData(next);setPublication(merged.publication);setCheckedAt(new Date().toISOString());setError("");
+        }
       } catch (e) {
         if (!controller.signal.aborted || controller.signal.reason === "timeout") setError(controller.signal.aborted ? "조회가 지연되고 있습니다. 다시 시도해 주세요." : e instanceof Error ? e.message : "조회 실패");
       } finally {
@@ -46,13 +64,19 @@ export function useScreenerPage(initial: ScreenerPage | null, prefs: WorkspacePr
     const check = async () => {
       if (busy || document.visibilityState !== "visible" || Date.now() - last < STATUS_POLL_MS) return;
       busy = true; last = Date.now();
+      const request:PublicationRequest={source:"status",sequence:++publicationState.current.nextRequest,statusVersion:publicationState.current.statusVersion};
       try {
         const response = await fetch("/api/status", { cache: "no-store", signal: AbortSignal.timeout(10_000) });
         if (!response.ok) throw new Error("수집 상태 확인에 실패했습니다.");
         const next = await response.json() as PublicationJournal;
         if (![1,2].includes(next.schema) || !next.attempt) throw new Error("수집 기록 형식을 확인하지 못했습니다.");
-        if(next.collectionRelease!==undefined)next.collectionRelease=parseCollectionRelease(next.collectionRelease);
-        if (active) { setPublication(next); if (next.published?.id && next.published.id !== data?.publication?.published?.id) setRefreshCount(n => n + 1); }
+        if (active) {
+          const previous=publicationState.current,merged=mergePublicationResponse(previous,next,request);
+          if(merged!==previous) {
+            publicationState.current=merged;setPublication(merged.publication);
+            if (next.published?.id && next.published.id !== data?.publication?.published?.id) setRefreshCount(n => n + 1);
+          }
+        }
       } catch (e) { if (active) setError(e instanceof Error ? e.message : "수집 상태 조회 실패"); }
       finally { busy = false; }
     };
