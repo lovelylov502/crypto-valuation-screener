@@ -55,6 +55,7 @@ async function due() {
 }
 async function recordWake(previous: PublicationJournal,decision: ReturnType<typeof recoveryDecision>) {
   const id=`${runId}-wake`;
+  if(previous.schema===1&&decision.recovery.migration)decision.recovery.migration.firstJournalId=id;
   const journal={...previous,schema:2 as const,id,createdAt:new Date().toISOString(),previousId:previous.id,previousStateUrl:`${JOURNAL_DOWNLOAD}${previous.id}/state.json`,recovery:decision.recovery,schedule:undefined};
   await publishJournal(journal,{"trigger.json":json(decision.trigger),"decision.json":json({collect:false,reason:decision.reason,action:{slotAt:decision.slotAt,stage:decision.stage},at:journal.createdAt})});
 }

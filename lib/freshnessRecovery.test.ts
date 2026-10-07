@@ -21,7 +21,7 @@ import type { ScreenerResponse } from "./types";
 
 afterEach(()=>{vi.unstubAllGlobals();vi.useRealTimers();});
 const iso=(s:string)=>new Date(s).toISOString();
-function prior():PublicationJournal { const at=iso("2026-10-07T01:00Z");return {schema:1,id:"data-prior",collectionRelease:{writerSchema:2,schedule:"four-daily",phaseADeploymentId:"dpl_fixture"},createdAt:at,trackingStartedAt:at,previousId:null,previousStateUrl:null,published:null,incident:null,recoveredAt:null,
+function prior():PublicationJournal { const at=iso("2026-10-07T01:00Z");return {schema:2,id:"data-prior",recovery:{...initialRecovery(),legacyAttemptId:"data-prior",migration:{startedAt:at,firstJournalId:"data-prior",legacyJournalId:"data-seed",legacyPublished:null}},collectionRelease:{writerSchema:2,schedule:"four-daily",phaseADeploymentId:"dpl_fixture"},createdAt:at,trackingStartedAt:at,previousId:null,previousStateUrl:null,published:null,incident:null,recoveredAt:null,
   attempt:{id:"data-prior",startedAt:at,completedAt:at,outcome:"published",errors:[],sourceFailures:[],affected:[],affectedProjects:0,changeCount:0,runUrl:"",reportUrl:""}}; }
 function trigger(at:string,stage:"primary"|"catchup1"|"catchup2"="primary",id=at):CollectionTrigger { return {source:"vercel-cron",schedule:null,scheduledFor:iso("2026-10-07T02:00Z"),stage,requestedAt:iso(at),requestId:id,occurrenceKnown:true,authentication:"hmac-sha256-verified"}; }
 function claim(previous:PublicationJournal,at:string,t=trigger(at),manual=false) {
@@ -173,7 +173,7 @@ it("new slots do not reset 24-hour obligation age, definition changes leave supe
   const j=finish(claim(prior(),"2026-10-07T03:35Z",trigger("2026-10-07T03:35Z")),late,"2026-10-07T03:40Z");expect(j.recovery!.slots[0].deadlineMissed).toBe(true);
   const next=reconcileRecovery(j,Date.parse("2026-10-07T06:02Z"));expect(next.slots[0].catchup1.missed).toBe(true);
   const done={...j,recovery:{...next,obligations:r.obligations}};
-  expect(recoveryVerdicts(done,Date.parse("2026-10-07T06:02Z"))).toEqual({collectionDeadlinePassed:false,catchupExecutionPassed:false});
+  expect(recoveryVerdicts(done,Date.parse("2026-10-07T06:02Z"))).toEqual({collectionDeadlinePassed:false,collectionDeadlineUnverified:false,catchupExecutionPassed:false});
   expect(()=>recoveryDecision(null,Date.now(),trigger("2026-10-07T02:01Z"))).toThrow();
   expect(()=>parseJournal({...done,recovery:{...done.recovery,slots:[{...next.slots[0],catchup1:{...next.slots[0].catchup1,claims:2}}]}})).toThrow("stage allowance");
 });

@@ -4,7 +4,7 @@ import type { ScreenerResponse } from "./types";
 import type { PublicationJournal, PublishedSnapshot } from "./publicationTypes";
 import { JOURNAL_DOWNLOAD, JOURNAL_LATEST, snapshotErrors } from "./publication";
 import { pipelineIntegrityErrors } from "./pipelineIntegrity";
-import { validateRecovery } from "./freshnessRecovery";
+import { validateRecovery,withMigrationEvidence } from "./freshnessRecovery";
 
 export const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 export function checkArchiveUrl(url: string) {
@@ -54,6 +54,13 @@ export function parseJournal(value: unknown): PublicationJournal {
 export async function readJournal(): Promise<PublicationJournal> {
   const response = await fetch(JOURNAL_LATEST, { cache: "no-store", signal: AbortSignal.timeout(5000) });
   if (!response.ok) throw new Error(`Publication store HTTP ${response.status}`);
+  return withMigrationEvidence(parseJournal(await response.json()),readArchivedJournal);
+}
+export async function readArchivedJournal(url:string):Promise<PublicationJournal> {
+  checkArchiveUrl(url);
+  if(!url.endsWith("/state.json"))throw new Error("Invalid journal state reference");
+  const response=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(5000)});
+  if(!response.ok)throw new Error(`Journal archive HTTP ${response.status}`);
   return parseJournal(await response.json());
 }
 export async function readSnapshot(ref: PublishedSnapshot): Promise<ScreenerResponse> {

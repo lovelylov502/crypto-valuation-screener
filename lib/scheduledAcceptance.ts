@@ -19,10 +19,10 @@ export function scheduledAcceptance(w:AcceptanceWindow,j:PublicationJournal,reti
   const start=Date.parse(w.startsAt),end=Date.parse(w.endsAt),slots=[];
   for(let at=start;at<end;at+=6*3_600_000) {
     const slotAt=new Date(at).toISOString(),s=all.find(s=>s.slotAt===slotAt),deadline=at+90*60_000;
-    const availabilityPassed=!!s?.firstPublicationAt&&!s.deadlineMissed&&Date.parse(s.firstPublicationAt)>=at&&Date.parse(s.firstPublicationAt)<=deadline;
+    const availabilityPassed=!!s?.firstPublicationAt&&!s.deadlineMissed&&!s.deadlineUnverified&&Date.parse(s.firstPublicationAt)>=at&&Date.parse(s.firstPublicationAt)<=deadline;
     const cyclePassed=availabilityPassed&&!!s?.naturalPrimary&&!!s.signedPrimaryAnchor&&!!s.cyclePublication&&s.cyclePublication.codeCommit===w.codeCommit&&Date.parse(s.cyclePublication.confirmedAt)<=deadline;
-    const catchupPassed=!!s&&(["catchup1","catchup2"] as const).every(stage=>!s[stage].needed||!s[stage].missed&&!s[stage].interrupted&&s[stage].claims===s[stage].completed&&now>=stageWindow(at,stage).end);
-    slots.push({slotAt,status:now<deadline?"pending":!s?"unverified":"observed",availabilityPassed,cyclePassed,catchupPassed});
+    const catchupPassed=!!s&&(["catchup1","catchup2"] as const).every(stage=>!s[stage].unverified&&(!s[stage].needed||!s[stage].missed&&!s[stage].interrupted&&s[stage].claims===s[stage].completed&&now>=stageWindow(at,stage).end));
+    slots.push({slotAt,status:now<deadline?"pending":!s||s.deadlineUnverified?"unverified":"observed",availabilityPassed,cyclePassed,catchupPassed});
   }
   const transitions=Math.floor((end-1)/86_400_000)-Math.floor(start/86_400_000);
   return {window:w,checkedAt:new Date(now).toISOString(),elapsedHours:Math.max(0,now-start)/3_600_000,utcTransitions:transitions,

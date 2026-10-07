@@ -84,7 +84,8 @@ export function collectionHealth(data: HealthData | null, now: number, requestEr
     || (c && c.displayedRevenue30d < c.sourceRevenue30d)) return result("error", "검증 오류", "자료의 버전·시각·원천 금액 검사에서 문제가 발견됐습니다.");
   if (scheduledRunMissing) return result("stale", "예약 실행 미확인", "예정 시각에서 90분이 지났지만 새 수집 시작 기록이 없습니다. 마지막 검증본을 표시합니다.");
   if (stale) return result("stale", "갱신 지연", "예정 시각에서 90분이 지났지만 새 검증본을 확인하지 못했습니다. 마지막 검증본을 표시합니다.");
-  if(!schedule.paused&&p?.recovery&&!recoveryVerdicts(p,now).collectionDeadlinePassed&&now>=Date.parse(p.recovery.slots[0]?.slotAt??"")+90*60_000)return result("stale","기한 내 공개 미확인","최근 정기 수집의 기한 내 공개 기록을 확인하지 못했습니다. 이후 회복 기록과 원천의 일별 도착 상태를 함께 확인해 주세요.");
+  const deadlines=p?.recovery?recoveryVerdicts(p,now):undefined;
+  if(!schedule.paused&&p?.recovery&&!deadlines!.collectionDeadlinePassed&&!deadlines!.collectionDeadlineUnverified&&now>=Date.parse(p.recovery.slots[0]?.slotAt??"")+90*60_000)return result("stale","기한 내 공개 미확인","최근 정기 수집의 기한 내 공개 기록을 확인하지 못했습니다. 이후 회복 기록과 원천의 일별 도착 상태를 함께 확인해 주세요.");
   if (p?.attempt.outcome === "running") return result("checking", "수집 중", "새 자료를 수집·검사하는 동안 직전 검증본을 표시합니다.");
   if (p && data.publication?.published?.id !== p.published?.id) return result("checking", "자료 적용 중", "새 검증본을 불러오고 있습니다.");
   const counts = c && [c.projects, c.sourceSlugs, c.errors, c.sourceRevenue30d, c.displayedRevenue30d,
@@ -97,6 +98,7 @@ export function collectionHealth(data: HealthData | null, now: number, requestEr
   if (quotes.some(q => q.requested > 0 && q.received === 0)) return result("warning", "검토 필요", "시세 제공처의 응답에 요청한 자산이 하나도 없습니다. 원천 확인이 필요합니다.");
   if (refreshing) return result("checking", "확인 중", "기존 자료를 표시하며 서버 응답을 확인하고 있습니다.");
   if(schedule.paused)return result("warning","자동 수집 일시 중지","호환 가능한 읽기 기능과 마지막 검증본을 유지합니다. 자동 수집 재개에는 활성화 확인이 필요합니다.");
+  if(deadlines?.collectionDeadlineUnverified)return result("warning","전환 전 기한 미확인","하루 4회 수집 기록을 시작하기 전에 지난 회차가 기한 안에 공개됐는지는 확인되지 않았습니다. 이전 검증본 기록과 보완 수집 결과를 함께 표시합니다.");
   if (freshness?.unassessed) return result("warning","새 완료일 확인 대기",`현재 목표일은 ${freshness.targetDate} UTC입니다. 이 수집본은 새 완료일을 아직 확인하지 않았습니다.`);
   if (freshness?.pending) return result("warning","원천 도착 대기",`전체 자료 중 ${freshness.pending.toLocaleString()}개 일별 항목에 최신 완료일이 없습니다. 재확인 가능 시각과 남은 시도, 24시간 이상 대기는 수집 상태 상세에 표시합니다.`);
   if(freshness?.insufficient)return result("warning","최신 일별 이력 부족",`전체 자료 중 ${freshness.insufficient.toLocaleString()}개 일별 항목에 목표 완료일과 직전일의 완전한 관측이 없습니다. 오래된 기간 이력의 빈 날짜만으로 보완 수집을 반복하지 않습니다.`);

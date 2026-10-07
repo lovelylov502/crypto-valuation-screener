@@ -1,7 +1,7 @@
 import type { PublicationJournal } from "../lib/publicationTypes";
 import { JOURNAL_REPOSITORY } from "../lib/publication";
-import { parseJournal, sha256 } from "../lib/snapshotArchive";
-import { compactRecoveryJournal } from "../lib/freshnessRecovery";
+import { parseJournal, sha256,readArchivedJournal } from "../lib/snapshotArchive";
+import { compactRecoveryJournal,withMigrationEvidence } from "../lib/freshnessRecovery";
 import {verifyWriterActivation} from "../lib/pipelineRelease";
 
 const api = `https://api.github.com/repos/${JOURNAL_REPOSITORY}`;
@@ -25,7 +25,7 @@ async function request(path: string, method = "GET", body?: unknown) {
 }
 export async function latestJournal(): Promise<PublicationJournal | null> {
   const release = await request("/releases/latest");
-  return release ? parseJournal(JSON.parse(release.body)) : null;
+  return release ? withMigrationEvidence(parseJournal(JSON.parse(release.body)),readArchivedJournal) : null;
 }
 export async function publishJournal(journal: PublicationJournal, files: Record<string, Uint8Array>) {
   headers();

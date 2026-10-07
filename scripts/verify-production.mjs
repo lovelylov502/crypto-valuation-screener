@@ -61,13 +61,28 @@ export function inspectPipelineProof(data) {
   const errors = [];
   const hashes = [proof.rawBundleSha256, proof.normalizedSha256, proof.outputSha256];
   const prefix = DEPLOY_CONTRACT.githubRemote.replace(/\.git$/, "") + "/releases/download/";
-  if (proof.schema !== 1 || proof.replayVerified !== true || proof.asOf !== data.updatedAt ||
+  if (![1,2].includes(proof.schema) || proof.replayVerified !== true || proof.asOf !== data.updatedAt ||
     !hashes.every(h => typeof h === "string" && /^[a-f0-9]{64}$/.test(h)) ||
     !Number.isInteger(proof.quality?.affectedProjects) || proof.quality.affectedProjects < 0 ||
     !Number.isInteger(proof.quality?.issueCount) || proof.quality.issueCount < proof.quality.affectedProjects) errors.push("invalid pipeline source proof");
   if (!p || p.dataAt !== data.updatedAt || p.rawBundleSha256 !== proof.rawBundleSha256 ||
     p.normalizedSha256 !== proof.normalizedSha256 || p.replayVerified !== true ||
     p.rawBundleUrl !== `${prefix}${p.id}/source-bundle.json.gz`) errors.push("pipeline proof differs from published artifact");
+  if(proof.schema===2) {
+    // Global summary belongs to the captured universe; rows are only this page. Replay audit checks full semantics.
+    const capture=Date.parse(data.updatedAt),target=Number.isFinite(capture)?new Date(Math.floor(capture/86400_000)*86400_000-86400_000).toISOString().slice(0,10):null;
+    const states=["current","pending","insufficient","unknown","unsupported","conflict"],summary=data.freshness;
+    if(!summary||summary.targetDate!==target||summary.assessedTargetDate!==target||summary.unassessed!==false||summary.projects!==data.pagination?.total||summary.projects!==data.universe?.projects||
+      !states.every(key=>Number.isInteger(summary[key])&&summary[key]>=0)||states.reduce((n,key)=>n+summary[key],0)!==2*summary.projects)errors.push("invalid v2 global freshness summary");
+    const date=value=>typeof value==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value&&value<=target;
+    for(const coin of data.coins??[])for(const metric of ["revenue","holders"]) {
+      const f=coin.freshness?.[metric];
+      if(!f||!states.includes(f.state)||f.targetDate!==target||typeof f.scope!=="string"||!f.scope||typeof f.definition!=="string"||!f.definition||
+        f.latestCompleteDate!==null&&!date(f.latestCompleteDate)||!Array.isArray(f.components)||f.components.some(c=>!c||typeof c.id!=="string"||!c.id||typeof c.targetPresent!=="boolean"||c.latestDate!==null&&!date(c.latestDate))||
+        new Set(f.components.map(c=>c.id)).size!==f.components.length||!Array.isArray(f.missingRecentDates)||f.missingRecentDates.some(d=>!date(d))||!Array.isArray(f.sources)||f.sources.some(s=>typeof s!=="string")||!Number.isFinite(Date.parse(f.observedAt))||
+        f.coverage!==null&&(!f.coverage||!date(f.coverage.start)||f.coverage.end!==target||Date.parse(f.coverage.end)-Date.parse(f.coverage.start)!==729*86400_000||!/^[a-f0-9]{183}$/.test(f.coverage.bits)))errors.push(`invalid v2 row freshness: ${coin.slug}:${metric}`);
+    }
+  }
   return errors;
 }
 

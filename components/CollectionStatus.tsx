@@ -60,6 +60,7 @@ export function CollectionStatus({ data, publication, error, refreshing, checked
         {p && <div className="collection-counts">
           <h3>공개·장애 기록</h3>
           <p>이력 기록 시작: {time(p.trackingStartedAt)}</p>
+          {recovery?.migration && <><p>하루 4회 수집 기록 시작: {time(recovery.migration.startedAt)} · 전환 전에 끝난 단계의 실행과 기한 내 공개 여부는 미확인으로 남깁니다.</p><p><a href={`https://github.com/lovelylov502/crypto-valuation-screener/releases/tag/${recovery.migration.legacyJournalId}`} target="_blank" rel="noreferrer">전환 직전 이력</a>{recovery.migration.legacyPublished && ` · 이전 검증본 수집 ${time(recovery.migration.legacyPublished.dataAt)}`}{recovery.migration.correction && <> · <a href={recovery.migration.correction.journalUrl} target="_blank" rel="noreferrer">전환 기록 정정 전 원본</a></>}</p></>}
           <p>사용 중인 검증본 수집: {p.published ? time(data?.updatedAt ?? p.published.dataAt) : "검증본 없음"}</p>
           <p>최근 수집 시작: {time(p.attempt.startedAt)} · 완료: {p.attempt.completedAt ? time(p.attempt.completedAt) : "수집 중"}</p>
           {p.incident && <><p className="negative">기록 시작 이후 첫 실패 관측: {time(p.incident.firstFailureObservedAt)}</p><p>마지막 정상 자료: {time(p.incident.lastGoodDataAt)}</p><p>최근 실패 관측: {time(p.incident.lastFailureObservedAt)}</p></>}

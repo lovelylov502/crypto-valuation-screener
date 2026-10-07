@@ -16,10 +16,12 @@ export interface DateObligation {
 }
 export interface StageLedger {
   claims: number; completed: number; needed: boolean; missed: boolean; interrupted: boolean;
+  unverified?: boolean;
 }
 export interface SlotLedger {
   slotAt: string; primary: StageLedger; catchup1: StageLedger; catchup2: StageLedger;
   manualClaims: number; firstPublicationAt: string | null; deadlineMissed: boolean; naturalPrimary: boolean;
+  deadlineUnverified?: boolean;
   signedPrimaryAnchor?: { receiptKey:string; attemptId:string; claimedAt:string };
   cyclePublication?: { publicationId:string; codeCommit:string; attemptId:string; confirmedAt:string };
 }
@@ -28,6 +30,8 @@ export interface RecoveryState {
   latestTargetDate: string | null; summary?: FreshnessSummary; transient: boolean; retryAt: string | null;
   history?: { slots:number; naturalSlots:number; deadlineMisses:number; missedCatchups:number; interruptedCatchups:number; resolvedDates:number; supersededDates:number; archiveUrl:string };
   legacyAttemptId?: string;
+  migration?: { startedAt:string; firstJournalId:string; legacyJournalId:string; legacyPublished:PublishedSnapshot|null;
+    correction?: { rule:"pre-tracking-expiry"; journalId:string; journalUrl:string; observedAt:string; originalSlot:SlotLedger } };
   projectionDiagnostics?: {deadlineMisses:number;missedCatchups:number;interruptedCatchups:number};
 }
 export const stageWindow = (slot: number, stage: CollectionStage) => ({ start: slot + ({primary:0,catchup1:2,catchup2:4}[stage]) * 3_600_000,
@@ -41,6 +45,36 @@ const freshStage = (): StageLedger => ({ claims:0, completed:0, needed:false, mi
 const freshSlot = (slotAt: string): SlotLedger => ({ slotAt, primary:freshStage(), catchup1:freshStage(), catchup2:freshStage(), manualClaims:0, firstPublicationAt:null, deadlineMissed:false, naturalPrimary:false });
 export const initialRecovery = (): RecoveryState => ({ schema:1, slots:[], obligations:[], receipts:[], latestTargetDate:null, transient:false, retryAt:null });
 const finiteTime = (t: unknown) => typeof t === "string" && Number.isFinite(Date.parse(t));
+const journalUrl=(id:string)=>`https://github.com/lovelylov502/crypto-valuation-screener/releases/download/${id}/state.json`;
+function reconcileMigrationSlot(s:SlotLedger,migration:RecoveryState["migration"]) {
+  if(!migration)return;
+  const slot=Date.parse(s.slotAt),boundary=Date.parse(migration.startedAt);
+  if(slot+90*60_000<=boundary&&!s.naturalPrimary&&!s.cyclePublication&&(!s.signedPrimaryAnchor||Date.parse(s.signedPrimaryAnchor.claimedAt)>=boundary)) {s.deadlineMissed=false;s.deadlineUnverified=true;}
+  for(const stage of ["primary","catchup1","catchup2"] as const) {
+    const l=s[stage];
+    if(stageWindow(slot,stage).end<=boundary&&!l.claims&&!l.completed&&!l.interrupted) {l.missed=false;l.unverified=true;}
+  }
+}
+/** Only immutable first-v2 -> legacy lineage permits correction of an already-written migration slot. */
+export async function withMigrationEvidence(j:PublicationJournal,read:(url:string)=>Promise<PublicationJournal>):Promise<PublicationJournal> {
+  if(j.schema!==2||!j.recovery?.legacyAttemptId||j.recovery.migration||!j.attempt.action)return j;
+  const startId=`${j.attempt.id}-start`;
+  let start:PublicationJournal,parent:PublicationJournal;
+  try {
+    start=j.id===startId?j:await read(journalUrl(startId));
+    if(start.schema!==2||start.id!==startId||start.attempt.outcome!=="running"||start.attempt.completedAt!==null||start.createdAt!==start.attempt.startedAt||start.attempt.id!==j.attempt.id||start.attempt.startedAt!==j.attempt.startedAt||
+      !start.attempt.action||(["slotAt","stage","receiptKey","natural"] as const).some(key=>start.attempt.action![key]!==j.attempt.action![key])||
+      !start.previousId||start.previousStateUrl!==journalUrl(start.previousId))return j;
+    parent=await read(start.previousStateUrl);
+  } catch { return j; }
+  const r=start.recovery,a=start.attempt;
+  if(parent.schema!==1||parent.id!==start.previousId||!r||r.legacyAttemptId!==parent.attempt.id||j.recovery.legacyAttemptId!==r.legacyAttemptId||
+    r.slots.length!==1||r.slots[0].slotAt!==a.action!.slotAt||r.receipts.length!==1||r.receipts[0]!==a.action!.receiptKey||
+    r.slots[0].manualClaims!==Number(a.manualRepair===true)||(["primary","catchup1","catchup2"] as const).some(stage=>r.slots[0][stage].claims!==(stage===a.action!.stage&&!a.manualRepair?1:0)||r.slots[0][stage].completed))return j;
+  const originalSlot=j.recovery.slots.find(s=>s.slotAt===a.action!.slotAt);if(!originalSlot)return j;
+  return {...j,recovery:{...j.recovery,migration:{startedAt:a.startedAt,firstJournalId:start.id,legacyJournalId:parent.id,legacyPublished:parent.published,
+    correction:{rule:"pre-tracking-expiry",journalId:j.id,journalUrl:journalUrl(j.id),observedAt:new Date().toISOString(),originalSlot:structuredClone(originalSlot)}}}};
+}
 export function validateRecovery(j: PublicationJournal, now = Infinity) {
   if (!finiteTime(j.attempt?.startedAt) || Date.parse(j.attempt.startedAt) > now || !finiteTime(j.createdAt) || Date.parse(j.createdAt)>now) throw new Error("Invalid or future collection journal");
   if (j.schema === 1) return;
@@ -49,17 +83,23 @@ export function validateRecovery(j: PublicationJournal, now = Infinity) {
     new Set(r.receipts).size !== r.receipts.length || typeof r.transient !== "boolean" || (r.retryAt !== null && !finiteTime(r.retryAt)) ||
     (r.latestTargetDate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(r.latestTargetDate))) throw new Error("Invalid recovery journal");
   if (new Set(r.slots.map(s => s.slotAt)).size !== r.slots.length || new Set(r.obligations.map(o => o.key)).size !== r.obligations.length) throw new Error("Duplicate recovery state");
+  const migration=r.migration;
+  if(migration&&(!finiteTime(migration.startedAt)||Date.parse(migration.startedAt)>now||!/^data-[a-zA-Z0-9-]+$/.test(migration.firstJournalId)||!/^data-[a-zA-Z0-9-]+$/.test(migration.legacyJournalId)||
+    migration.correction&&(migration.correction.rule!=="pre-tracking-expiry"||migration.correction.journalUrl!==journalUrl(migration.correction.journalId)||!finiteTime(migration.correction.observedAt)||!r.slots.some(s=>s.slotAt===migration.correction!.originalSlot.slotAt)&&!r.history)))throw new Error("Invalid migration boundary");
   if(r.history&&(!Object.entries(r.history).filter(([key])=>key!=="archiveUrl").every(([,v])=>typeof v==="number"&&Number.isInteger(v)&&v>=0)||!/^https:\/\/github\.com\/lovelylov502\/crypto-valuation-screener\/releases\/download\/data-[a-zA-Z0-9-]+\/recovery-history\.json$/.test(r.history.archiveUrl)))throw new Error("Invalid recovery history summary");
   for (const s of r.slots) {
     if (!finiteTime(s.slotAt) || Date.parse(s.slotAt)>now || fourDailySlot(Date.parse(s.slotAt)) !== Date.parse(s.slotAt) || !Number.isInteger(s.manualClaims) || s.manualClaims < 0 || s.manualClaims > 2 ||
-      typeof s.deadlineMissed !== "boolean" || typeof s.naturalPrimary !== "boolean" || (s.firstPublicationAt !== null && (!finiteTime(s.firstPublicationAt)||Date.parse(s.firstPublicationAt)<Date.parse(s.slotAt)||Date.parse(s.firstPublicationAt)>now))) throw new Error("Invalid recovery slot");
+      typeof s.deadlineMissed !== "boolean" || typeof s.naturalPrimary !== "boolean" || s.deadlineUnverified!==undefined&&typeof s.deadlineUnverified!=="boolean" || (s.firstPublicationAt !== null && (!finiteTime(s.firstPublicationAt)||Date.parse(s.firstPublicationAt)<Date.parse(s.slotAt)||Date.parse(s.firstPublicationAt)>now))) throw new Error("Invalid recovery slot");
     if(s.signedPrimaryAnchor&&(!s.signedPrimaryAnchor.receiptKey.startsWith("vercel-cron:")||!s.signedPrimaryAnchor.attemptId||!finiteTime(s.signedPrimaryAnchor.claimedAt)||Date.parse(s.signedPrimaryAnchor.claimedAt)<Date.parse(s.slotAt)||Date.parse(s.signedPrimaryAnchor.claimedAt)>=stageWindow(Date.parse(s.slotAt),"primary").end||s.primary.claims<1))throw new Error("Invalid signed primary anchor");
     if(s.cyclePublication&&(!s.signedPrimaryAnchor||!s.naturalPrimary||!s.cyclePublication.publicationId||!s.cyclePublication.codeCommit||!s.cyclePublication.attemptId||!finiteTime(s.cyclePublication.confirmedAt)||Date.parse(s.cyclePublication.confirmedAt)<Date.parse(s.signedPrimaryAnchor.claimedAt)||Date.parse(s.cyclePublication.confirmedAt)>Date.parse(s.slotAt)+90*60_000))throw new Error("Invalid automatic cycle proof");
     for (const stage of ["primary","catchup1","catchup2"] as const) {
       const l = s[stage];
       if (!l || !Number.isInteger(l.claims) || l.claims < 0 || l.claims > (stage === "primary" ? 3 : 1) || !Number.isInteger(l.completed) || l.completed < 0 || l.completed > l.claims ||
-        [l.needed,l.missed,l.interrupted].some(v => typeof v !== "boolean")) throw new Error("Invalid stage allowance");
+        [l.needed,l.missed,l.interrupted].some(v => typeof v !== "boolean")||l.unverified!==undefined&&typeof l.unverified!=="boolean") throw new Error("Invalid stage allowance");
+      // Compatible older writers can reassert missed=true; only proved, expired zero-claim stages may project that flag away.
+      if(l.unverified&&(!migration||stageWindow(Date.parse(s.slotAt),stage).end>Date.parse(migration.startedAt)||l.claims||l.completed||l.interrupted))throw new Error("Invalid pre-migration stage");
     }
+    if(s.deadlineUnverified&&(!migration||Date.parse(s.slotAt)+90*60_000>Date.parse(migration.startedAt)||s.naturalPrimary||s.cyclePublication))throw new Error("Invalid pre-migration deadline");
   }
   for (const o of r.obligations) if (!o || !o.key || !o.slug || !["revenue","holders"].includes(o.metric) || !o.identity || !/^\d{4}-\d{2}-\d{2}$/.test(o.date) || !Number.isFinite(Date.parse(o.date)) ||
     o.key!==JSON.stringify([o.slug,o.metric,o.identity,o.date]) || !o.lastAttemptId ||
@@ -109,7 +149,8 @@ export function updateObligations(r: RecoveryState, data: ScreenerResponse, atte
 /** Expired required stages and first-publication failures are sticky across later recovery. */
 export function reconcileRecovery(previous: PublicationJournal, now: number): RecoveryState {
   validateRecovery(previous,now);
-  const r = structuredClone(previous.recovery ?? {...initialRecovery(),legacyAttemptId:previous.attempt.id});
+  const r = structuredClone(previous.recovery ?? {...initialRecovery(),legacyAttemptId:previous.attempt.id,
+    migration:{startedAt:new Date(now).toISOString(),firstJournalId:previous.id,legacyJournalId:previous.id,legacyPublished:previous.published}});
   for (const o of r.obligations) if (o.disposition === "pending" && now-Date.parse(o.firstMissingAt) >= UTC_DAY_MS) o.disposition="overdue";
   // Include intervening due slots even if every scheduler failed to wake.
   const last = r.slots.at(-1)?.slotAt;
@@ -117,6 +158,7 @@ export function reconcileRecovery(previous: PublicationJournal, now: number): Re
   if (!r.slots.length) r.slots.push(freshSlot(new Date(fourDailySlot(now)).toISOString()));
   for (const s of r.slots) {
     const slot=Date.parse(s.slotAt);
+    reconcileMigrationSlot(s,r.migration);
     for (const stage of ["primary","catchup1","catchup2"] as const) {
       const window=stageWindow(slot,stage), l=s[stage];
       if (window.start > now) continue;
@@ -126,8 +168,8 @@ export function reconcileRecovery(previous: PublicationJournal, now: number): Re
       const rollover = r.latestTargetDate !== null && r.latestTargetDate < completedUtcDate(observationTime);
       const transientKnown=r.transient&&Date.parse(previous.attempt.completedAt??previous.attempt.startedAt)<window.end;
       l.needed ||= stage === "primary" ? !s.firstPublicationAt : obligationWork || rollover || transientKnown || r.latestTargetDate===null;
-      if (now >= window.end && l.needed && l.claims === 0) l.missed=true;
-      if (now >= slot+90*60_000 && (!s.firstPublicationAt || Date.parse(s.firstPublicationAt)>slot+90*60_000)) s.deadlineMissed=true;
+      if (now >= window.end && l.needed && l.claims === 0&&!l.unverified) l.missed=true;
+      if (!s.deadlineUnverified&&now >= slot+90*60_000 && (!s.firstPublicationAt || Date.parse(s.firstPublicationAt)>slot+90*60_000)) s.deadlineMissed=true;
     }
   }
   const a=previous.attempt;
@@ -141,7 +183,10 @@ export function reconcileRecovery(previous: PublicationJournal, now: number): Re
 export function publicRecovery(previous:PublicationJournal,now:number,paused=false):RecoveryState|undefined {
   if(!previous.recovery)return undefined;
   const r=paused?structuredClone(previous.recovery):reconcileRecovery(previous,now);
-  if(paused)for(const o of r.obligations)if(o.disposition==="pending"&&now-Date.parse(o.firstMissingAt)>=UTC_DAY_MS)o.disposition="overdue";
+  if(paused) {
+    for(const s of r.slots)reconcileMigrationSlot(s,r.migration);
+    for(const o of r.obligations)if(o.disposition==="pending"&&now-Date.parse(o.firstMissingAt)>=UTC_DAY_MS)o.disposition="overdue";
+  }
   const projectionDiagnostics={deadlineMisses:(r.history?.deadlineMisses??0)+r.slots.filter(s=>s.deadlineMissed).length,
     missedCatchups:(r.history?.missedCatchups??0)+r.slots.reduce((n,s)=>n+Number(s.catchup1.missed)+Number(s.catchup2.missed),0),
     interruptedCatchups:(r.history?.interruptedCatchups??0)+r.slots.reduce((n,s)=>n+Number(s.catchup1.interrupted)+Number(s.catchup2.interrupted),0)};
@@ -175,6 +220,7 @@ export function recoveryDecision(previous: PublicationJournal | null, now: numbe
 export function startRecoveryJournal(previous: PublicationJournal, attempt: CollectionAttempt, id: string, decision: ReturnType<typeof recoveryDecision>): PublicationJournal {
   if (!decision.collect || !attempt.action || Date.parse(attempt.startedAt)<stageWindow(Date.parse(decision.slotAt),decision.stage).start || Date.parse(attempt.startedAt)>=stageWindow(Date.parse(decision.slotAt),decision.stage).end) throw new Error("Collection stage expired before claim");
   const r=structuredClone(decision.recovery),s=r.slots.find(s=>s.slotAt===decision.slotAt)!;
+  if(previous.schema===1&&r.migration)r.migration.firstJournalId=id;
   if(attempt.action.natural!==decision.naturalCycle)throw new Error("Invalid automatic cycle claim");
   if (attempt.manualRepair) s.manualClaims++; else {
     s[decision.stage].claims++;
@@ -205,7 +251,7 @@ export function finishRecoveryJournal(current: PublicationJournal, attempt: Coll
     }
   }
   // s remains in r's cloned ledger after metadata-only obligation update.
-  if (!s.firstPublicationAt && Date.parse(attempt.completedAt)>=Date.parse(s.slotAt)+90*60_000 || s.firstPublicationAt && Date.parse(s.firstPublicationAt)>Date.parse(s.slotAt)+90*60_000) s.deadlineMissed=true;
+  if (!s.deadlineUnverified&&(!s.firstPublicationAt && Date.parse(attempt.completedAt)>=Date.parse(s.slotAt)+90*60_000 || s.firstPublicationAt && Date.parse(s.firstPublicationAt)>Date.parse(s.slotAt)+90*60_000)) s.deadlineMissed=true;
   r.transient=attempt.failureClass==="transient";
   r.retryAt=r.transient?new Date(Date.parse(attempt.completedAt)+5*60_000).toISOString():null;
   return {...current,id,createdAt:attempt.completedAt,previousId:current.id,previousStateUrl:`https://github.com/lovelylov502/crypto-valuation-screener/releases/download/${current.id}/state.json`,published:accepted?published:current.published,attempt:{...attempt,action:a.action,trigger:a.trigger},recovery:r,
@@ -216,18 +262,19 @@ export function confirmPublicationAvailability(current:PublicationJournal,confir
   if(!current.published||current.attempt.outcome!=="published"||!current.attempt.action||!finiteTime(confirmedAt)||Date.parse(confirmedAt)<Date.parse(current.attempt.completedAt??""))throw new Error("Invalid publication availability confirmation");
   const r=structuredClone(current.recovery!),a=current.attempt,s=r.slots.find(s=>s.slotAt===a.action!.slotAt)!;
   s.firstPublicationAt??=confirmedAt;
-  if(Date.parse(s.firstPublicationAt)>Date.parse(s.slotAt)+90*60_000)s.deadlineMissed=true;
+  if(!s.deadlineUnverified&&Date.parse(s.firstPublicationAt)>Date.parse(s.slotAt)+90*60_000)s.deadlineMissed=true;
   if(a.action!.natural&&s.signedPrimaryAnchor&&!a.manualRepair&&a.action!.stage==="primary"&&Date.parse(confirmedAt)<=Date.parse(s.slotAt)+90*60_000){s.naturalPrimary=true;s.cyclePublication??={publicationId:current.published.id,codeCommit:current.published.codeCommit,attemptId:a.id,confirmedAt};}
   return {...current,id,createdAt:confirmedAt,previousId:current.id,previousStateUrl:`https://github.com/lovelylov502/crypto-valuation-screener/releases/download/${current.id}/state.json`,published:{...current.published,availabilityConfirmedAt:confirmedAt},recovery:r};
 }
 export function recoveryVerdicts(j: PublicationJournal | undefined, now: number) {
-  if (!j?.recovery) return {collectionDeadlinePassed:false,catchupExecutionPassed:false};
+  if (!j?.recovery) return {collectionDeadlinePassed:false,collectionDeadlineUnverified:false,catchupExecutionPassed:false};
   const r=reconcileRecovery(j,now);
   const due=r.slots.filter(s=>now>=Date.parse(s.slotAt)+90*60_000).at(-1);
   // Current health is independent of historical diagnostics and cycle provenance.
   const dueStages=(["catchup1","catchup2"] as const).map(stage=>r.slots.filter(s=>now>=stageWindow(Date.parse(s.slotAt),stage).end).at(-1)?.[stage]);
-  return { collectionDeadlinePassed:!!due&&!!due.firstPublicationAt&&!due.deadlineMissed&&Date.parse(due.firstPublicationAt)<=Date.parse(due.slotAt)+90*60_000,
-    catchupExecutionPassed:dueStages.every(l=>!l?.needed||!l.missed&&!l.interrupted&&l.claims===l.completed) };
+  return { collectionDeadlinePassed:!!due&&!!due.firstPublicationAt&&!due.deadlineMissed&&!due.deadlineUnverified&&Date.parse(due.firstPublicationAt)<=Date.parse(due.slotAt)+90*60_000,
+    collectionDeadlineUnverified:!!due?.deadlineUnverified,
+    catchupExecutionPassed:dueStages.every(l=>!l?.unverified&&(!l?.needed||!l.missed&&!l.interrupted&&l.claims===l.completed)) };
 }
 /** Publish bounded current state together with the full immutable retired metadata. */
 export function compactRecoveryJournal(j:PublicationJournal): {journal:PublicationJournal; history?:Uint8Array} {
