@@ -1,7 +1,16 @@
 {
   "readerRelease": "four-daily-freshness-v2",
-  "readerSchemas": [1, 2],
-  "writerSchema": 1,
-  "schedule": "legacy",
-  "phaseA": null
+  "readerSchemas": [
+    1,
+    2
+  ],
+  "writerSchema": 2,
+  "schedule": "four-daily",
+  "phaseA": {
+    "base": "https://crypto-valuation-screener.vercel.app",
+    "readerRelease": "four-daily-freshness-v2",
+    "codeCommit": "2ee9b7f932aa8380ab1583bf2f6670214c02b06c",
+    "deploymentId": "dpl_9ytRpXsNY5WHE311xmjsmiRG1Poh",
+    "deploymentUrl": "https://crypto-valuation-screener-jx7xr1h40-bodycation.vercel.app"
+  }
 }

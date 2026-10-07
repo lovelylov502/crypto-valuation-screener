@@ -2,10 +2,12 @@ name: Verified screener publication
 
 on:
   schedule:
-    # Two collection slots. Backup wakes at +30/+60m can retry an eligible failed attempt.
-    - cron: "0 2,14 * * *"
-    - cron: "30 2,14 * * *"
-    - cron: "0 3,15 * * *"
+    # Native occurrences are recovery wakes; only authenticated receipts prove regular slots.
+    - cron: "0 2,8,14,20 * * *"
+    - cron: "30 2,8,14,20 * * *"
+    - cron: "0 3,9,15,21 * * *"
+    - cron: "0 4,10,16,22 * * *"
+    - cron: "0 0,6,12,18 * * *"
   workflow_dispatch:
     inputs:
       scheduler_receipt:
