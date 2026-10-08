@@ -2,7 +2,7 @@ import { eligibleCapital } from "./capitalEligibility";
 import type { CoinRaw, ScoreGates } from "./types";
 import { revenueAmount, historyMatches } from "./revenueHistory";
 import { datedHolderValue, holderHistoryMatches } from "./valuationMetrics";
-import { businessRevenue, businessFees, revenueLabel, feeLabel, definitionIssue, sourceDefinitionsChanged } from "./fundamentals";
+import { businessRevenue, businessFees, revenueLabel, feeLabel, definitionIssue, sourceDefinitionsChanged, metricDecisionHeld, metricComparisonAllowed } from "./fundamentals";
 
 export type FlowState =
   "growing" | "declining" | "flat" | "from_zero" | "to_zero" | "unknown";
@@ -72,12 +72,12 @@ export function deriveOpportunities(
   coin: CoinRaw,
   gates: ScoreGates,
 ): OpportunitySignals {
-  const revenue = historyMatches(coin) ? compareFlow(revenueAmount(coin, 30), coin.revenueHistory ? coin.revenueHistory.previous30.total : coin.revenuePrev30d) : compareFlow(null, null);
-  const fees = compareFlow(coin.fees30d, coin.feesPrev30d);
+  const revenue = metricComparisonAllowed(coin,"Revenue") && historyMatches(coin) ? compareFlow(revenueAmount(coin, 30), coin.revenueHistory ? coin.revenueHistory.previous30.total : coin.revenuePrev30d) : compareFlow(null, null);
+  const fees = !metricComparisonAllowed(coin,"Fees") ? compareFlow(null,null) : compareFlow(coin.fees30d, coin.feesPrev30d);
   const datedHolder = datedHolderValue(coin);
   const eligibleHolder = compareFlow(datedHolder.eligibleCurrent30d, datedHolder.eligiblePrevious30d);
   const conditional = coin.holderValue.components.filter(
-    (c) => c.economicType === "ve_voter_locker_distribution",
+    (c) => c.economicType === "ve_voter_locker_distribution" && (!coin.fundamentals.economicPolicy || !metricDecisionHeld(coin,"HoldersRevenue")),
   );
   const sum = (key: "current30d" | "previous30d") =>
     conditional.length > 0 && conditional.every((c) => c[key] !== null)
@@ -92,7 +92,7 @@ export function deriveOpportunities(
     f.state === "growing" || f.state === "from_zero";
   // Discovery signals are observations, independent of experimental score and investment-risk gates.
   // Identity still fails closed: uncertain token joins cannot become an opportunity.
-  const verified = eligibleCapital(coin) && !sourceDefinitionsChanged(coin);
+  const verified = eligibleCapital(coin) && (coin.fundamentals.economicPolicy ? true : !sourceDefinitionsChanged(coin));
   const business = verified && ((businessRevenue(coin) && improving(revenue)) || (businessFees(coin) && improving(fees)));
   const holder =
     verified &&
@@ -153,7 +153,7 @@ export function deriveOpportunities(
     risks,
     reasons: verified
       ? reasons
-      : [coin.capitalExclusionReason ?? (sourceDefinitionsChanged(coin) ? "원천 정의 변경 · 재검토 필요" : "토큰 매칭 미확인 · 금액의 귀속 대상을 먼저 확인해 주세요")],
+      : [coin.capitalExclusionReason ?? (!coin.fundamentals.economicPolicy&&sourceDefinitionsChanged(coin) ? "원천 정의 변경 · 재검토 필요" : "토큰 매칭 미확인 · 금액의 귀속 대상을 먼저 확인해 주세요")],
     marketAhead:
       (coin.priceChange30d ?? 0) > 20 || (coin.priceChange60d ?? 0) > 30,
   };

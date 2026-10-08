@@ -7,6 +7,7 @@ import { RULE_VERSION } from "@/lib/fundamentals";
 import type { PublicationJournal } from "@/lib/publicationTypes";
 import { STATUS_POLL_MS } from "@/lib/collectionSchedule";
 import { parseCollectionRelease } from "@/lib/pipelineRelease";
+import { readJsonText } from "@/lib/jsonTransport.mjs";
 
 export interface PublicationResponseState {
   publication?:PublicationJournal; nextRequest:number; lastRequest:number; statusVersion:number;
@@ -42,7 +43,7 @@ export function useScreenerPage(initial: ScreenerPage | null, prefs: WorkspacePr
       try {
         const response = await fetch(url, { cache: "no-store", signal: controller.signal });
         if (!response.ok) throw new Error("검증본을 불러오지 못했습니다. 수집 상태를 확인해 주세요.");
-        const next = await response.json() as ScreenerPage;
+        const next = JSON.parse(await readJsonText(response)) as ScreenerPage;
         if (next.scoreVersion !== RULE_VERSION || !next.pagination || !Number.isFinite(Date.parse(next.updatedAt)) || Date.parse(next.updatedAt) > Date.now() + 300000 || !Array.isArray(next.coins) || next.coins.some(c => fundamentalErrors(c).length)) throw new Error("자료 형식을 확인하지 못했습니다.");
         if (!controller.signal.aborted) {
           const merged=mergePublicationResponse(publicationState.current,next.publication,request);

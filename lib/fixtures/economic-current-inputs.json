@@ -1,0 +1,125 @@
+{
+  "source": {
+    "asOf": "2026-10-07T22:37:50.909Z",
+    "rawBundleSha256": "50d89d1384d5c1f41dd57d938e3431e8ad38ec71e35e3f57062445611724cd8b",
+    "url": "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true",
+    "receiptSha256": "2765fa237c36100117d850fb92202f18f77ba500264f6c752389bbf49a06179f"
+  },
+  "rows": [
+    {
+      "slug": "fake-world-assets-v1",
+      "name": "Fake World Assets V1",
+      "defillamaId": "8292",
+      "module": "fwa",
+      "parentProtocol": "parent#fake-world-assets",
+      "methodology": {
+        "Volume": "Gross ETH paid by purchasers for acquisitions (pulls), net of refunded, expired, or slippage-cancelled requests.",
+        "Fees": "Net Acquisition fees paid by NFT purchasers, plus settlement fees taken from listing backings.",
+        "Revenue": "Team share of the protocol's cut of acquisition and settlement fees, plus any fees diverted to FWA-token buybacks.",
+        "ProtocolRevenue": "Team share of the protocol's fee cut, per the Splitter contract's live split, minus the FWA-token buybacks counted under HoldersRevenue.",
+        "HoldersRevenue": "FWA-token buybacks funded from protocol fees, plus retroactive scheduled buybacks funded from previously earned team fees.",
+        "SupplySideRevenue": "Share of net acquisition fees distributed to NFT depositors (equal split across active listings plus the top-listing pot), plus the snapshot soulbound-NFT holders' share of protocol fees via the Splitter."
+      },
+      "total24h": 140,
+      "total7d": 4204,
+      "total30d": 97282,
+      "total60dto30d": 906589,
+      "total1y": 3480992
+    },
+    {
+      "slug": "lido",
+      "name": "Lido",
+      "defillamaId": "182",
+      "module": "lido",
+      "methodology": {
+        "UserFees": "Lido takes no fees from users.",
+        "Fees": "Staking rewards earned by all staked ETH",
+        "Revenue": "Lido takes a 10% fee on staking rewards; Revenue is only the DAO-treasury portion of that fee (net of the node-operator share, which is a cost of production booked as SupplySideRevenue). From Lido V2 (2023-05-15) the treasury/operator split is the validator-share-weighted aggregate read live from the StakingRouter; before V2 the split was a fixed 5%/5%, so half the fee is treasury.",
+        "ProtocolRevenue": "DAO-treasury portion of the 10% fee, minus the LDO bought back under the LDO Accumulation Program; excludes the node-operator share.",
+        "SupplySideRevenue": "Staking rewards earned by stETH holders plus the node-operator share of the 10% fee (paid to operators for running validators).",
+        "HoldersRevenue": "Tracks LIDO bought back by the DAO as part of the LDO Accumulation Program"
+      },
+      "total24h": 112805,
+      "total7d": 772649,
+      "total30d": 3225756,
+      "total60dto30d": 2678447,
+      "total1y": 35659655
+    },
+    {
+      "slug": "ssv-network",
+      "name": "SSV Network",
+      "defillamaId": "6359",
+      "module": "ssv-network",
+      "methodology": {
+        "Fees": "Total validator fees on ssv.network: network fee (set by the DAO) plus operator fees (set by each operator in a free market). Denominated in SSV before the April 2026 SSV Staking / cSSV migration and in ETH after it.",
+        "UserFees": "Pre-migration metric: fees paid by stakers running validators (operator + network fees), equal to total Fees. SSV-denominated.",
+        "Revenue": "Network fees, the protocol's share of validator fees. Pre-migration these accrued to the DAO treasury, post-migration they are distributed to cSSV stakers.",
+        "ProtocolRevenue": "Pre-migration metric: network fees allocated to the SSV DAO treasury minus SSV burned from the treasury, so it is negative on burn days. Not applicable after the migration, when network fees go to cSSV stakers instead.",
+        "SupplySideRevenue": "Operator fees earned by node operators running the distributed validator infrastructure (SSV-denominated pre-migration, ETH after).",
+        "HoldersRevenue": "Value accruing to holders: SSV token burns pre-migration; ETH network fees distributed to cSSV stakers post-migration."
+      },
+      "total24h": 10505,
+      "total7d": 72861,
+      "total30d": 304367,
+      "total60dto30d": 253862,
+      "total1y": 2419245.1
+    },
+    {
+      "slug": "lighter-perps",
+      "name": "Lighter Perps",
+      "defillamaId": "6751",
+      "module": "lighterv2",
+      "parentProtocol": "parent#lighter",
+      "methodology": {
+        "UserFees": "Fees paid by users",
+        "Fees": "Maker and taker fees paid by traders on the Lighter DEX",
+        "Revenue": "Protocol revenue from maker fees, taker fees, transfer fees, and withdraw fees. Liquidation fees are excluded as they go directly to LLP.",
+        "ProtocolRevenue": "Revenue kept by the treasury after LIT buybacks. Negative on days when buybacks exceed that day's revenue.",
+        "HoldersRevenue": "LIT token buybacks from treasury. The protocol uses fees to buy back LIT tokens from the market.",
+        "SupplySideRevenue": "Liquidation fees paid to the LLP (Lighter Liquidity Pool / insurance fund)."
+      },
+      "total24h": 83119,
+      "total7d": 517694,
+      "total30d": 2535054,
+      "total60dto30d": 2837480,
+      "total1y": 59218219
+    },
+    {
+      "slug": "euler-v2",
+      "name": "Euler V2",
+      "defillamaId": "5044",
+      "module": "euler",
+      "parentProtocol": "parent#euler",
+      "methodology": {
+        "UserFees": "Interest paid by borrowers",
+        "Fees": "Includes interest that is paid by the borrowers, protocol and curators fees.",
+        "Revenue": "Fees collected by Euler protocol.",
+        "ProtocolRevenue": "Fees collected by Euler protocol, minus the amount used to buy back EUL tokens (negative on buy back days).",
+        "SupplySideRevenue": "Fees distributed to vaults lenders and curators.",
+        "HoldersRevenue": "Revenue used for buy back EUL tokens."
+      },
+      "total24h": 2549,
+      "total7d": 17831,
+      "total30d": 73686,
+      "total60dto30d": 44884,
+      "total1y": 2521160
+    },
+    {
+      "slug": "geodnet",
+      "name": "Geodnet",
+      "defillamaId": "4304",
+      "module": "geodnet",
+      "methodology": {
+        "Fees": "GEODNET receives fees for station access to their RTK network.",
+        "Revenue": "When GEODNET receives fees for station access, 80% of the fees are used to repurchase GEOD tokens from the open market and remove them from circulation. The remaining 20% supports the foundation's organizational costs.",
+        "ProtocolRevenue": "The remaining 20% of station access fees, kept by the foundation to cover its organizational costs.",
+        "HoldersRevenue": "80% of the fees are used to repurchase GEOD tokens from the open market and remove them from circulation."
+      },
+      "total24h": 28051,
+      "total7d": 234344,
+      "total30d": 930169,
+      "total60dto30d": 934668,
+      "total1y": 9376264
+    }
+  ]
+}

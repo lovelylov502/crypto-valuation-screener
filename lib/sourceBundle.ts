@@ -1,6 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import type { ScreenerResponse } from "./types";
+import { validateEconomicPolicy } from "./economicPolicy";
+import type { EconomicPolicyIdentity, EconomicProvenance } from "./economicTypes";
+import {validateEconomicReview} from "./economicReview";
+import {validateEconomicReviewRef} from "./economicReviewArchive";
 
 /** Original public HTTP responses, before any interpretation or aggregation. */
 export interface SourceReceipt {
@@ -14,9 +18,13 @@ export interface SourceReceipt {
   error?: string;
 }
 export interface SourceBundle {
+  economicReviewBaselineRef?:import("./economicReviewArchive").EconomicReviewRef;
   schema: 1;
   pipelineSchema?: 2;
   acquisitionRevision?: 2;
+  economicPolicy?: EconomicPolicyIdentity;
+  economicProvenance?: EconomicProvenance;
+  economicReviewBaseline?: import("./economicReview").EconomicReviewState;
   asOf: string;
   baseline: ScreenerResponse | null;
   receipts: SourceReceipt[];
@@ -32,6 +40,7 @@ interface Session {
   signal?: AbortSignal;
   cooldowns?: Map<string, number>;
   deadlineAt?: number;
+  provenanceRequests?: number;
 }
 const sessions = new AsyncLocalStorage<Session>();
 export const contentHash = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
@@ -45,8 +54,12 @@ export const sourceSessionActive = () => !!sessions.getStore();
 export const sourceReplayActive = () => sessions.getStore()?.replay === true;
 export const sourcePipelineSchema = (): 1 | 2 => sessions.getStore()?.bundle.pipelineSchema ?? 1;
 export const sourceAcquisitionRevision = () => sessions.getStore()?.bundle.acquisitionRevision ?? 1;
+export const sourceEconomicPolicy = () => sessions.getStore()?.bundle.economicPolicy;
+export const sourceEconomicProvenance = () => sessions.getStore()?.bundle.economicProvenance;
+export function recordEconomicProvenance(value: EconomicProvenance) { const s=sessions.getStore(); if(s&&!s.replay)s.bundle.economicProvenance=value; }
 export const sourceNow = () => sessions.getStore() ? Date.parse(sessions.getStore()!.bundle.asOf) : Date.now();
 export const sourceObservedAt = (url: string) => sessions.getStore()?.latest.get(url)?.observedAt ?? new Date(sourceNow()).toISOString();
+export const sourceReceipt = (url: string) => sessions.getStore()?.latest.get(url);
 export const sourceRequestDeferred = (url:string) => sessions.getStore()?.latest.get(url)?.error==="Recorded source request deferred by provider cooldown";
 export function sourceDelay(ms: number,signal?:AbortSignal): Promise<void> {
   const session = sessions.getStore();
@@ -59,9 +72,10 @@ export function sourceDelay(ms: number,signal?:AbortSignal): Promise<void> {
   });
 }
 
-function validateUrl(url: string) {
+function validateUrl(url: string, economic = false) {
   const u = new URL(url);
-  if (u.protocol !== "https:" || !["api.llama.fi", "stablecoins.llama.fi", "api.coingecko.com", "pro-api.coinmarketcap.com"].includes(u.hostname)
+  const provenance = economic && u.hostname === "api.github.com" && (u.pathname === "/repos/DefiLlama/dimension-adapters/commits/HEAD" && !u.search || /^\/repos\/DefiLlama\/dimension-adapters\/git\/trees\/[a-f0-9]{40}$/.test(u.pathname) && u.search === "?recursive=1");
+  if (u.protocol !== "https:" || !provenance && !["api.llama.fi", "stablecoins.llama.fi", "api.coingecko.com", "pro-api.coinmarketcap.com"].includes(u.hostname)
     || u.username || u.password || [...u.searchParams.keys()].some(k => /token|secret|api.?key|authorization/i.test(k))) throw new Error("Unapproved source URL");
 }
 function responseOf(receipt: SourceReceipt): Response {
@@ -74,7 +88,7 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
   const session = sessions.getStore();
   if (!session) return fetch(input, init);
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-  validateUrl(url);
+  validateUrl(url, !!session.bundle.economicPolicy);
   if ((init?.method ?? (input instanceof Request ? input.method : "GET")) !== "GET") throw new Error("Source capture is read-only");
   const reused = session.successful.get(url);
   if (reused) { session.latest.set(url, reused); return responseOf(reused); }
@@ -95,6 +109,7 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
   } else {
     let pending = session.pending.get(url);
     if (!pending) {
+      if(new URL(url).hostname==="api.github.com" && (session.provenanceRequests=(session.provenanceRequests??0)+1)>2)throw new Error("Economic provenance request budget exceeded");
       pending = (async () => {
         let requestedAt = new Date().toISOString();
         let result: SourceReceipt;
@@ -142,16 +157,25 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
 
 export function validateSourceBundle(bundle: SourceBundle): void {
   if (bundle?.schema !== 1 || (bundle.pipelineSchema !== undefined && bundle.pipelineSchema !== 2) || (bundle.acquisitionRevision!==undefined&&(bundle.pipelineSchema!==2||bundle.acquisitionRevision!==2)) || !Number.isFinite(Date.parse(bundle.asOf)) || !Array.isArray(bundle.receipts) || !bundle.receipts.length) throw new Error("Invalid source bundle");
+  if(bundle.economicPolicy) { validateEconomicPolicy(bundle.economicPolicy); if(bundle.pipelineSchema!==2)throw new Error("Economic policy requires pipeline schema 2"); }
+  else if(bundle.economicProvenance)throw new Error("Economic provenance has no bound policy");
+  if(bundle.economicReviewBaseline||bundle.economicReviewBaselineRef) {
+    if(!bundle.economicPolicy||!bundle.economicReviewBaseline||!bundle.economicReviewBaselineRef)throw Error("Incomplete economic review baseline");
+    validateEconomicReview(bundle.economicReviewBaseline);validateEconomicReviewRef(bundle.economicReviewBaselineRef);
+    if(objectHash(bundle.economicReviewBaseline)!==bundle.economicReviewBaselineRef.stateSha256||contentHash(JSON.stringify(bundle.economicReviewBaseline))!==bundle.economicReviewBaselineRef.sha256||Buffer.byteLength(JSON.stringify(bundle.economicReviewBaseline))!==bundle.economicReviewBaselineRef.bytes)throw Error("Economic review baseline reference mismatch");
+  }
+  if(bundle.receipts.filter(r=>new URL(r.url).hostname==="api.github.com").length>2)throw new Error("Economic provenance request budget exceeded");
   for (const receipt of bundle.receipts) {
-    validateUrl(receipt.url);
+    validateUrl(receipt.url, !!bundle.economicPolicy);
     if (typeof receipt.body !== "string" || contentHash(receipt.body) !== receipt.sha256 || !Number.isFinite(Date.parse(receipt.requestedAt))
       || !Number.isFinite(Date.parse(receipt.observedAt)) || Date.parse(receipt.observedAt) < Date.parse(receipt.requestedAt)
       || (receipt.status !== null && (!Number.isInteger(receipt.status) || receipt.status < 200 || receipt.status > 599))) throw new Error("Invalid source receipt integrity");
   }
 }
 
-export async function captureSourceBundle<T>(asOf: string, baseline: ScreenerResponse | null, task: () => Promise<T>, signal = AbortSignal.timeout(9 * 60_000), pipelineSchema: 1 | 2 = 1, acquisitionRevision?:2) {
-  const bundle: SourceBundle = { schema: 1, ...(pipelineSchema === 2 ? { pipelineSchema } : {}), ...(acquisitionRevision?{acquisitionRevision}:{}), asOf, baseline, receipts: [] };
+export async function captureSourceBundle<T>(asOf: string, baseline: ScreenerResponse | null, task: () => Promise<T>, signal = AbortSignal.timeout(9 * 60_000), pipelineSchema: 1 | 2 = 1, acquisitionRevision?:2, economicPolicy?: EconomicPolicyIdentity,economicReviewBaseline?:import("./economicReview").EconomicReviewState,economicReviewBaselineRef?:import("./economicReviewArchive").EconomicReviewRef) {
+  if(economicPolicy)validateEconomicPolicy(economicPolicy);
+  const bundle: SourceBundle = { schema: 1, ...(pipelineSchema === 2 ? { pipelineSchema } : {}), ...(acquisitionRevision?{acquisitionRevision}:{}), ...(economicPolicy?{economicPolicy,...(economicReviewBaseline?{economicReviewBaseline}:{}),...(economicReviewBaselineRef?{economicReviewBaselineRef}:{})}:{}), asOf, baseline, receipts: [] };
   const started=Date.now();
   const session: Session = { bundle, replay: false, cursors: new Map(), latest: new Map(), successful: new Map(), pending: new Map(), signal, cooldowns:new Map(),deadlineAt:started+9*60_000 };
   let value: T | undefined, error: unknown;

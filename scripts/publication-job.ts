@@ -16,6 +16,7 @@ import { recoveryDecision, startRecoveryJournal, finishRecoveryJournal, confirmP
 import { fourDailyActive, verifyWriterActivation, writerPaused } from "../lib/pipelineRelease";
 import { classifyAttemptFailure } from "../lib/scheduledCollection";
 import { publicationVerdicts } from "../lib/publicationVerdicts";
+import {buildEconomicReview,summarizeEconomicReview} from "../lib/economicReview";
 
 const output = resolve("snapshot-output/publication");
 const json = (value: unknown) => Buffer.from(JSON.stringify(value));
@@ -117,7 +118,7 @@ async function collect() {
       const result = await captureDataPipeline(baseline, new Date().toISOString(), async bundle => {
         await save("source-bundle.json.gz", encodeSourceBundle(bundle));
         progress("offline-replay");
-      }, sources);
+      }, sources,undefined,current.economicReview,current.economicReviewRef);
       data = result.data; witness = result.witness;
       requestStats=result.bundle.requestStats;
       await save("inputs.json.gz", gzipSync(json(data.coins.map(normalizedCoin))));
@@ -171,6 +172,8 @@ async function finish() {
       const baseline = archivedBaseline && current.schema===2?{...archivedBaseline,publication:current}:archivedBaseline;
       const replayed = await replayDataPipeline(bundle, sha256(files["source-bundle.json.gz"]));
       errors.push(...assessPipelineCandidate(candidate, bundle, baseline, current.attempt.startedAt, new Date().toISOString(), replayed, files["source-bundle.json.gz"]).errors);
+      if(bundle.economicPolicy&&objectHash(bundle.economicReviewBaseline??null)!==objectHash(current.economicReview??null))errors.push("economic_review_baseline_mismatch");
+      if(bundle.economicPolicy&&objectHash(bundle.economicReviewBaselineRef??null)!==objectHash(current.economicReviewRef??null))errors.push("economic_review_reference_mismatch");
     } catch (error) { errors.push(error instanceof Error ? error.message : "Offline replay failed"); }
   }
   // The permanent report must describe the final promotion decision, including
@@ -196,6 +199,12 @@ async function finish() {
   if (published) { const { decodeSnapshot } = await import("../lib/snapshotArchive"); decodeSnapshot(files["data.json.gz"], published); }
   const acceptedData=accepted?JSON.parse(gunzipSync(files["data.json.gz"]).toString()) as ScreenerResponse:undefined;
   const journal = current.schema===2?finishRecoveryJournal(current,attempt,published,id,acceptedData):finishJournal(current, attempt, published, id);
+  if(acceptedData?.economicReview) {
+    const bundle=JSON.parse(gunzipSync(files["source-bundle.json.gz"]).toString()) as SourceBundle;
+    journal.economicReview=buildEconomicReview(acceptedData.coins,acceptedData.updatedAt,acceptedData.pipeline!.rawBundleSha256,bundle.economicReviewBaseline,bundle.baseline,objectHash);
+    if(!journal.economicReview||objectHash(summarizeEconomicReview(journal.economicReview,objectHash))!==objectHash(acceptedData.economicReview))throw new Error("Economic review ledger differs from candidate");
+    files["economic-review.json"]=json(journal.economicReview);
+  }
   if(acceptedData) {
     report.verdicts=publicationVerdicts({...acceptedData,publication:journal},Date.now(),errors);
     files["report.json"]=json(report);await writeFile(join(output,"report.json"),files["report.json"]);

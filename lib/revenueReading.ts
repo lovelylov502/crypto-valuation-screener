@@ -1,6 +1,6 @@
 import type { CoinRaw } from "./types";
 import { historyMatches, type RevenueWindowDays } from "./revenueHistory";
-import { revenueLabel, sourceDefinitionsChanged } from "./fundamentals";
+import { revenueLabel, metricDecisionHeld,metricDecisionIssue } from "./fundamentals";
 
 export const REVENUE_OVERVIEW_URL = "https://api.llama.fi/overview/fees?dataType=dailyRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true";
 
@@ -17,7 +17,7 @@ export function revenueReading(c: CoinRaw, days: RevenueWindowDays) {
   const basisLabel = dated ? `${period!.end} UTC까지` : amount !== null
     ? partial ? `부분 집계 · ${sourcePeriod!.reported}/${sourcePeriod!.expected}개 구성요소` : days === 365 ? "원천 1년 집계 · 365일 미확인" : "제공처 기간 집계"
     : "기간 자료 미확보";
-  const kindLabel = sourceDefinitionsChanged(c) ? "정의 변경 · 검토 필요" : revenueLabel(c);
+  const kindLabel = metricDecisionHeld(c,"Revenue") ? c.fundamentals.economicPolicy?metricDecisionIssue(c,"Revenue")!:"정의 변경 · 검토 필요" : revenueLabel(c);
   return { amount, basis, basisLabel, kindLabel,
     source: dated ? history!.source : c.revenueSource?.url ?? REVENUE_OVERVIEW_URL,
     observedAt: dated ? history!.observedAt : c.revenueSource?.observedAt ?? null,

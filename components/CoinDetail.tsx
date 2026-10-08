@@ -5,7 +5,7 @@ import { ExternalLink, X } from "lucide-react";
 import type { CoinScored } from "@/lib/types";
 import { fmtKstMinute, fmtMult, fmtUsd, fmtPrice, fmtPct } from "@/lib/format";
 import { compareFlow, flowLabel } from "@/lib/signals";
-import { holderEconomicTypeLabel } from "@/lib/holderValue";
+import { holderEconomicTypeLabel } from "@/lib/holderLabels";
 import { MECHANISM_EVIDENCE } from "@/lib/mechanismEvidence";
 import { protocolResearch } from "@/lib/protocolResearch";
 import { researchReasons } from "@/lib/research";

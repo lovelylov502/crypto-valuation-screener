@@ -1,7 +1,7 @@
 import { eligibleCapital } from "./capitalEligibility";
 import type { CoinRaw } from "./types";
 import { revenueAmount, historyMatches, annualizedMultiple, type RevenueWindowDays } from "./revenueHistory";
-import { sourceDefinitionsChanged, revenueKind } from "./fundamentals";
+import { metricDecisionHeld, metricDecisionIssue, revenueKind } from "./fundamentals";
 import { hasDataQualityConflict } from "./dataQuality";
 
 export type CapitalBasis = "mcap" | "fdv";
@@ -39,7 +39,7 @@ export function salesReason(c: CoinRaw, basis: CapitalBasis = "mcap"): string {
 }
 
 export function protocolMultiple(c: CoinRaw, days: RevenueWindowDays = 30, basis: CapitalBasis = "mcap"): number | null {
-  if (!eligibleCapital(c) || sourceDefinitionsChanged(c) || !["protocol_revenue", "service_sales"].includes(revenueKind(c)) || !historyMatches(c)) return null;
+  if (!eligibleCapital(c) || metricDecisionHeld(c,"Revenue") || !["protocol_revenue", "service_sales"].includes(revenueKind(c)) || !historyMatches(c)) return null;
   return annualizedMultiple(c[basis], revenueAmount(c, days), days);
 }
 
@@ -48,7 +48,7 @@ export function protocolReason(c: CoinRaw, days: RevenueWindowDays, basis: Capit
   if (c.identityStatus !== "verified") return "토큰 연결 확인 필요";
   if (!(c[basis]! > 0)) return basis === "fdv" ? "FDV 미확인" : "유통 시총 미확인";
   if (hasDataQualityConflict(c, "revenue")) return "원천 금액 충돌 · 계산 보류";
-  if (sourceDefinitionsChanged(c)) return "원천 정의 변경 · 재검토 필요";
+  if (metricDecisionHeld(c,"Revenue")) return metricDecisionIssue(c,"Revenue")!;
   if (revenueKind(c) === "holder_return") return "환원으로 분류";
   if (!c.fundamentals.revenue.components.length) return "수익 원천 미연결";
   if (!["protocol_revenue", "service_sales"].includes(revenueKind(c))) return "수익 정의 확인 필요";
@@ -68,7 +68,7 @@ export function holderHistoryMatches(c: CoinRaw): boolean {
   return !!c.holderHistory && c.holderHistory.definitionFingerprint === holderScope(c);
 }
 export function holderAmount(c: CoinRaw, days: RevenueWindowDays): number | null {
-  if (sourceDefinitionsChanged(c) || !holderHistoryMatches(c) || hasDataQualityConflict(c, "holders")) return null;
+  if (metricDecisionHeld(c,"HoldersRevenue") || !holderHistoryMatches(c) || hasDataQualityConflict(c, "holders")) return null;
   return c.holderHistory!.periods[days]?.total ?? null;
 }
 export function holderMultiple(c: CoinRaw, days: RevenueWindowDays = 30, basis: CapitalBasis = "mcap"): number | null {
@@ -77,7 +77,7 @@ export function holderMultiple(c: CoinRaw, days: RevenueWindowDays = 30, basis: 
 }
 export function datedHolderValue(c: CoinRaw): CoinRaw["holderValue"] {
   const current = holderAmount(c, 30);
-  const previous = !sourceDefinitionsChanged(c) && holderHistoryMatches(c) ? c.holderHistory!.previous30.total : null;
+  const previous = !metricDecisionHeld(c,"HoldersRevenue") && holderHistoryMatches(c) ? c.holderHistory!.previous30.total : null;
   const yearly = holderAmount(c, 365);
   return { ...c.holderValue, eligibleCurrent30d: current, eligiblePrevious30d: previous,
     eligibleRunRate: current !== null && current > 0 ? current * 365 / 30 : null,
@@ -88,7 +88,7 @@ export function holderReason(c: CoinRaw, days: RevenueWindowDays, basis: Capital
   if (!eligibleCapital(c)) return "토큰 연결 확인 필요";
   if (!(c[basis]! > 0)) return basis === "fdv" ? "FDV 미확인" : "유통 시총 미확인";
   if (hasDataQualityConflict(c, "holders")) return "원천 금액 충돌 · 계산 보류";
-  if (sourceDefinitionsChanged(c)) return "원천 정의 변경 · 재검토 필요";
+  if (metricDecisionHeld(c,"HoldersRevenue")) return metricDecisionIssue(c,"HoldersRevenue")!;
   if (!c.holderValue.components.length) return "환원 원천 미연결";
   if (!c.holderValue.components.some(p => p.eligible)) return c.holderValue.phrUnavailableReason ?? "적격 환원 자료 없음";
   if (!c.holderHistory) return "일별 환원 이력 없음";

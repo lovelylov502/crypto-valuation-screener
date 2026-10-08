@@ -3,7 +3,7 @@ import type { SortKey } from "./screenerColumns";
 import { researchMultiple } from "./research";
 import { revenueReading } from "./revenueReading";
 import { protocolResearch } from "./protocolResearch";
-import { holderEconomicTypeLabel } from "./holderValue";
+import { holderEconomicTypeLabel } from "./holderLabels";
 import { knownRevenue } from "./fundamentals";
 import { salesMultiple, protocolMultiple, holderMultiple, datedHolderValue, type CapitalBasis } from "./valuationMetrics";
 import { METRIC_COLUMN_DAYS as METRIC_DAYS } from "./metricCoverage";

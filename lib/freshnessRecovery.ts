@@ -10,6 +10,8 @@ export interface CollectionTrigger {
   workflowCreatedAt?: string; workflowStartedAt?: string;
 }
 export interface DateObligation {
+  failedEvidence?:{manifestUrl:string;manifestSha256:string}[];
+  identityMigration?: {from:string;at:string;rawBundleSha256:string;basis:"identical-captured-legacy-metadata"};
   key: string; slug: string; metric: "revenue" | "holders"; identity: string; date: string;
   firstMissingAt: string; lastCheckedAt: string; lastAttemptId: string; checks: number;
   disposition: "pending" | "overdue" | "resolved" | "superseded"; sources: string[];
@@ -104,7 +106,9 @@ export function validateRecovery(j: PublicationJournal, now = Infinity) {
   for (const o of r.obligations) if (!o || !o.key || !o.slug || !["revenue","holders"].includes(o.metric) || !o.identity || !/^\d{4}-\d{2}-\d{2}$/.test(o.date) || !Number.isFinite(Date.parse(o.date)) ||
     o.key!==JSON.stringify([o.slug,o.metric,o.identity,o.date]) || !o.lastAttemptId ||
     !finiteTime(o.firstMissingAt) || !finiteTime(o.lastCheckedAt) || Date.parse(o.firstMissingAt) > Date.parse(o.lastCheckedAt) || Date.parse(o.lastCheckedAt)>now ||
-    !Number.isInteger(o.checks) || o.checks < 1 || !["pending","overdue","resolved","superseded"].includes(o.disposition) || !Array.isArray(o.sources)) throw new Error("Invalid date obligation");
+    !Number.isInteger(o.checks) || o.checks < 1 || !["pending","overdue","resolved","superseded"].includes(o.disposition) || !Array.isArray(o.sources)||
+    o.identityMigration&&(o.identityMigration.basis!=="identical-captured-legacy-metadata"||!o.identityMigration.from||!finiteTime(o.identityMigration.at)||Date.parse(o.identityMigration.at)>Date.parse(o.lastCheckedAt)||!/^[a-f0-9]{64}$/.test(o.identityMigration.rawBundleSha256))||
+    o.failedEvidence&&(!Array.isArray(o.failedEvidence)||!o.failedEvidence.length||new Set(o.failedEvidence.map(m=>m.manifestUrl)).size!==o.failedEvidence.length||o.failedEvidence.some(m=>!/^https:\/\/github\.com\/lovelylov502\/crypto-valuation-screener\/releases\/download\/data-[a-zA-Z0-9-]+-failed-observation\/failed-evidence\.json$/.test(m.manifestUrl)||!/^[a-f0-9]{64}$/.test(m.manifestSha256)))) throw new Error("Invalid date obligation");
   const a=j.attempt;
   if(a.action) {
     const s=r.slots.find(s=>s.slotAt===a.action!.slotAt),stage=a.action.stage;
@@ -133,14 +137,19 @@ export function updateObligations(r: RecoveryState, data: ScreenerResponse, atte
     const identity = freshnessIdentity(f); scopes.set(`${c.slug}:${metric}`,f);
     if (f.state === "pending") {
       const key = JSON.stringify([c.slug,metric,identity,f.targetDate]);
-      if (!old.has(key)) old.set(key,{key,slug:c.slug,metric,identity,date:f.targetDate,firstMissingAt:data.updatedAt,lastCheckedAt:data.updatedAt,lastAttemptId:attemptId,checks:0,disposition:"pending",sources:f.sources});
+      const alias=!!data.pipeline&&!!c.fundamentals?.economicPolicy&&f.legacyIdentityAlias?.basis==="identical-captured-legacy-metadata"?f.legacyIdentityAlias.identity:null;
+      if (!old.has(key)&&![...old.values()].some(o=>o.slug===c.slug&&o.metric===metric&&o.date===f.targetDate&&o.identity===alias)) old.set(key,{key,slug:c.slug,metric,identity,date:f.targetDate,firstMissingAt:data.updatedAt,lastCheckedAt:data.updatedAt,lastAttemptId:attemptId,checks:0,disposition:"pending",sources:f.sources});
     }
   }
   for (const o of old.values()) {
     if (["resolved","superseded"].includes(o.disposition)) continue;
     const f = scopes.get(`${o.slug}:${o.metric}`);
     o.lastCheckedAt=data.updatedAt; o.lastAttemptId=attemptId; o.checks++;
-    if (!f || freshnessIdentity(f) !== o.identity) o.disposition="superseded";
+    if(f&&freshnessIdentity(f)!==o.identity&&data.pipeline&&data.coins.find(c=>c.slug===o.slug)?.fundamentals?.economicPolicy&&f.legacyIdentityAlias?.identity===o.identity) {
+      o.identityMigration={from:o.identity,at:data.updatedAt,rawBundleSha256:data.pipeline.rawBundleSha256,basis:"identical-captured-legacy-metadata"};
+      o.identity=freshnessIdentity(f);o.key=JSON.stringify([o.slug,o.metric,o.identity,o.date]);
+    }
+    if (!f || freshnessIdentity(f) !== o.identity) o.disposition=data.coins.some(c=>c.fundamentals?.economicPolicy)?now-Date.parse(o.firstMissingAt)>=UTC_DAY_MS?"overdue":"pending":"superseded";
     else if (f.state !== "conflict" && dateIsComplete(f,o.date)) o.disposition="resolved";
     else o.disposition=now-Date.parse(o.firstMissingAt) >= UTC_DAY_MS ? "overdue" : "pending";
   }

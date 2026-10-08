@@ -21,6 +21,9 @@ import { objectHash, witnessFromBundle, type SourceBundle } from "../lib/sourceB
 import { scopedSourceErrors } from "../lib/dataQuality";
 import { publicationVerdicts } from "../lib/publicationVerdicts";
 import {marketAcquisitionReadiness} from "../lib/marketReadiness";
+import {readJsonText} from "../lib/jsonTransport.mjs";
+import {readFailedEvidence} from "../lib/failedObservation";
+import type {PublicationJournal} from "../lib/publicationTypes";
 
 const base = process.env.SCREENER_BASE_URL ?? DEPLOY_CONTRACT.liveBaseUrl;
 const output = process.env.SCREENER_AUDIT_DIR;
@@ -43,8 +46,7 @@ async function read(url: string): Promise<any> {
       continue;
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
-    const body = await response.text();
-    if (url.startsWith(base + "/api/") && Buffer.byteLength(body) >= 4_500_000) throw new Error("API payload exceeds 4.5 MB");
+    const body = url.startsWith(base + "/api/")?await readJsonText(response):await response.text();
     return JSON.parse(body);
   }
 }
@@ -97,6 +99,36 @@ export async function auditArchivedPipeline(archived: ScreenerResponse, publishe
     normalizedSha256: replayed.pipeline!.normalizedSha256, outputSha256: replayed.pipeline!.outputSha256 };
 }
 
+/** Collection execution does not change whether retained immutable bytes are safe to read. */
+export function attemptExecutionVerdict(j:PublicationJournal,now:number) {
+ const overdueStart=j.attempt.outcome==="running"&&now-Date.parse(j.attempt.startedAt)>COLLECTION_DEADLINE_MS;
+ return {attemptExecutionPassed:j.attempt.outcome==="running"?overdueStart?false:null:j.attempt.outcome==="published",overdueStart,
+  operationalErrors:overdueStart?["collector did not complete within budget"]:j.attempt.outcome==="blocked"?j.attempt.errors:[]};
+}
+export function auditCompletionVerdicts(report:Record<string,unknown>,errors:string[]) {
+ const integrityPassed=errors.length===0;
+ return {safeReaderDeploymentPassed:integrityPassed,integrityPassed,currentRecoveryPassed:integrityPassed&&report.captureReplayPassed!==false&&report.attemptExecutionPassed!==false&&report.acquisitionReadinessPassed!==false&&report.economicAccountingPassed!==false&&report.collectionDeadlinePassed===true&&report.freshnessAccountingPassed===true&&report.allApplicableDataCurrent===true&&report.catchupExecutionPassed===true};
+}
+export async function auditStorageFailure(j:PublicationJournal,archived:ScreenerResponse,fetcher=fetch) {
+ if(!j.published||!j.publicationFailure||j.attempt.id!==j.publicationFailure.attemptId||j.attempt.outcome!=="blocked"||!j.attempt.errors.includes("publication_storage_failed")||!j.incident)throw Error("Blocked storage failure metadata unavailable");
+ const evidence=await readFailedEvidence(j.publicationFailure,j.published,fetcher);
+ if(objectHash({...archived,publication:evidence.start})!==objectHash(evidence.bundle.baseline))throw Error("Storage failure retained baseline differs from original capture");
+ for(const observation of evidence.observations.filter(o=>["pending","overdue"].includes(o.disposition))) {
+  const current=j.recovery?.obligations.find(o=>o.key===observation.key);
+  if(!current||Date.parse(current.firstMissingAt)>Date.parse(observation.firstMissingAt)||!current.failedEvidence?.some(m=>m.manifestUrl===j.publicationFailure!.manifestUrl&&m.manifestSha256===j.publicationFailure!.manifestSha256))throw Error("Storage failure missing-date continuity evidence unavailable");
+ }
+ return {failedAt:j.publicationFailure.failedAt,archivedAt:j.publicationFailure.archivedAt,manifestUrl:j.publicationFailure.manifestUrl,observations:evidence.observations.length,retainedPublication:j.published.id};
+}
+export async function auditAttemptRetention(j:PublicationJournal,archived:ScreenerResponse,readReport:typeof read=read,fetcher=fetch) {
+ if(j.attempt.outcome!=="blocked")return {};
+ if(j.publicationFailure?.attemptId===j.attempt.id)return {publicationFailure:await auditStorageFailure(j,archived,fetcher)};
+ checkArchiveUrl(j.attempt.reportUrl);
+ const failure=await readReport(j.attempt.reportUrl);
+ if(!failure.errors?.length||failure.baseline?.id!==j.published?.id||failure.baseline?.sha256!==j.published?.sha256)throw Error("blocked candidate does not prove retention of this verified baseline");
+ if(!j.incident||!j.attempt.errors.length)throw Error("blocked candidate missing incident evidence");
+ return {};
+}
+
 async function main() {
   const { first, coins } = await allPages();
   report.updatedAt = first.updatedAt;
@@ -139,6 +171,7 @@ async function main() {
   }
   report.publication = { id:p.published.id, journal:p.id, outcome:p.attempt.outcome, dataAt:p.published.dataAt, sha256:p.published.sha256, stale, verifiedArchiveRows:archived.coins.length };
   Object.assign(report,publicationVerdicts({...archived,publication:p},checkedAt,errors));
+  Object.assign(report,attemptExecutionVerdict(p,checkedAt));
   if(p.correction&&p.published.id===p.correction.to.id) {
     const correction=await read(`${JOURNAL_DOWNLOAD}${p.correction.journalId}/correction.json`);
     if(objectHash(correction)!==objectHash(p.correction)||!p.incident)errors.push("publication correction evidence mismatch");
@@ -147,14 +180,7 @@ async function main() {
     return;
   }
   if (p.attempt.outcome !== "published") {
-    if (p.attempt.outcome === "running") {
-      if (Date.now() - Date.parse(p.attempt.startedAt) > COLLECTION_DEADLINE_MS) errors.push("collector did not complete within budget");
-    } else {
-      checkArchiveUrl(p.attempt.reportUrl);
-      const failure = await read(p.attempt.reportUrl);
-      if (!failure.errors?.length || failure.baseline?.id !== p.published.id || failure.baseline?.sha256 !== p.published.sha256) errors.push("blocked candidate does not prove retention of this verified baseline");
-      if (!p.incident || !p.attempt.errors.length) errors.push("blocked candidate missing incident evidence");
-    }
+    Object.assign(report,await auditAttemptRetention(p,archived));
     report.mode = "protected-last-verified";
     report.captureReplayPassed = false;
     if (output) { await mkdir(output,{recursive:true}); await writeFile(join(output,"all-coins.json"),JSON.stringify({...first,coins})); }
@@ -250,9 +276,7 @@ async function main() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch(error => errors.push(error instanceof Error ? error.message : String(error))).finally(async () => {
   report.completedAt = new Date().toISOString(); report.errors = errors;
-  report.safeReaderDeploymentPassed=errors.length===0;
-  report.integrityPassed=errors.length===0;
-  report.currentRecoveryPassed=report.integrityPassed===true&&report.captureReplayPassed!==false&&report.acquisitionReadinessPassed!==false&&report.collectionDeadlinePassed===true&&report.freshnessAccountingPassed===true&&report.allApplicableDataCurrent===true&&report.catchupExecutionPassed===true;
+  Object.assign(report,auditCompletionVerdicts(report,errors));
   if (output) { await mkdir(output, { recursive: true }); await writeFile(join(output, "coverage-audit.json"), JSON.stringify(report, null, 2)); }
   console.log(JSON.stringify(report, null, 2));
   if (errors.length) process.exitCode = 1;

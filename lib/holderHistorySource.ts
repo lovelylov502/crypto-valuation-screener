@@ -1,11 +1,11 @@
 import { summarizeRevenueHistory, type RevenueHistory } from "./revenueHistory";
 import { aggregateHolderValueByGroup } from "./holderValue";
-import { combineFundamentals, definitionReviewed } from "./fundamentalSource";
+import { combineFundamentals, definitionReviewed, physicalSeriesFingerprint } from "./fundamentalSource";
 import { holderScope } from "./valuationMetrics";
 import type { SourceObservation } from "./types";
 import { completeHistorySource } from "./completeHistorySource";
 import { fetchParentHistorySources, mergeParentHistories } from "./parentHistorySource";
-import { sourceFetch, sourceNow, sourceObservedAt, sourceSessionActive, sourcePipelineSchema, objectHash } from "./sourceBundle";
+import { sourceFetch, sourceNow, sourceObservedAt, sourceSessionActive, sourcePipelineSchema, sourceEconomicPolicy, objectHash } from "./sourceBundle";
 import { validateHistoryBreakdown, validateProtocolFinancialRows } from "./sourceValidation";
 
 export const HOLDER_HISTORY_URL = "https://api.llama.fi/overview/fees?dataType=dailyHoldersRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=false";
@@ -18,7 +18,7 @@ export function summarizeHolderHistory(protocols: Row[], chart: unknown[], now: 
   const fingerprints = new Map([...summaries].map(([key, holderValue]) => [key, { fingerprint: holderScope({ holderValue, fundamentals: combineFundamentals(undefined, undefined, protocols.filter(p => p.doublecounted !== true && group(String(p.slug)) === key)) }) }]));
   const result = summarizeRevenueHistory(eligible, chart, now, HOLDER_HISTORY_URL, fingerprints, protocols, sourcePipelineSchema());
   if (sourcePipelineSchema() === 2) {
-    const raw = summarizeRevenueHistory(protocols, chart, now, HOLDER_HISTORY_URL, new Map([...summaries].map(([key]) => [key,{ fingerprint: objectHash(protocols.filter(p=>group(String(p.slug))===key).map(p=>[p.slug,p.defillamaId,p.methodology,p.parentProtocol]).sort()) }])), protocols, 2);
+    const raw = summarizeRevenueHistory(protocols, chart, now, HOLDER_HISTORY_URL, new Map([...summaries].map(([key]) => [key,{ fingerprint: sourceEconomicPolicy()?physicalSeriesFingerprint(protocols.filter(p=>group(String(p.slug))===key),"HoldersRevenue"):objectHash(protocols.filter(p=>group(String(p.slug))===key).map(p=>[p.slug,p.defillamaId,p.methodology,p.parentProtocol]).sort()) }])), protocols, 2);
     for (const [key,h] of Object.entries(raw)) {
       if (!result[key]) result[key] = { ...h, definitionFingerprint: fingerprints.get(key)?.fingerprint, periods: Object.fromEntries(Object.entries(h.periods).map(([d,p]) => [d,{...p,total:null,reportedDays:0}])) as RevenueHistory["periods"], previous30: {...h.previous30,total:null,reportedDays:0}, previous: undefined, weeks: [] };
       result[key].rawFreshness = h.freshness;

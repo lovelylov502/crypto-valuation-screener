@@ -1,0 +1,1098 @@
+{
+  "id": "economic-policy-2026-10-08",
+  "algorithm": "metric-decisions-v1",
+  "legacyRegistry": "b519d55",
+  "legacyTreatment": "exact-six-fields-definition-only",
+  "contracts": [
+    {
+      "provider": "DefiLlama",
+      "providerId": "8292",
+      "slug": "fake-world-assets-v1",
+      "upstreamRepo": "https://github.com/DefiLlama/dimension-adapters",
+      "inspectedRevision": "2ceb4009288d560956690f9cb93bd569c3eef62f",
+      "providerExecutionRevision": "unattested",
+      "sourceClosure": [
+        {
+          "commit": "2ceb4009288d560956690f9cb93bd569c3eef62f",
+          "path": "fees/fwa/index.ts",
+          "blobSha1": "5654db81d84307225e5256a262cdc583ec448a1f",
+          "sha256": "6360ce8486ea47dd25ce7e7db8f6fd52b487142eeb06c52f9b380d568f1bcba8",
+          "url": "https://github.com/DefiLlama/dimension-adapters/blob/2ceb4009288d560956690f9cb93bd569c3eef62f/fees/fwa/index.ts"
+        },
+        {
+          "commit": "2ceb4009288d560956690f9cb93bd569c3eef62f",
+          "path": "adapters/types.ts",
+          "blobSha1": "f0aa666b3c1369842935e384adef3c01836549f2",
+          "sha256": "f01780ee3fab6feb163779ec82a1eca66a001a6b34bc1e878d64f7c55759ccaf",
+          "url": "https://github.com/DefiLlama/dimension-adapters/blob/2ceb4009288d560956690f9cb93bd569c3eef62f/adapters/types.ts"
+        },
+        {
+          "commit": "2ceb4009288d560956690f9cb93bd569c3eef62f",
+          "path": "helpers/chains.ts",
+          "blobSha1": "72f9e2c95e376ede7b109dfb344cd3972b29c951",
+          "sha256": "10b1628dcc0d74014b82704985f3137afd969e15245ba7ee8d575651a44f4c21",
+          "url": "https://github.com/DefiLlama/dimension-adapters/blob/2ceb4009288d560956690f9cb93bd569c3eef62f/helpers/chains.ts"
+        },
+        {
+          "commit": "2ceb4009288d560956690f9cb93bd569c3eef62f",
+          "path": "package.json",
+          "blobSha1": "14350214bbed1aa0a51e57f657019edb81784279",
+          "sha256": "19f7f85139f87e074e2e08ae2f27b294df0846059edaa637937a9c039443e21b",
+          "url": "https://github.com/DefiLlama/dimension-adapters/blob/2ceb4009288d560956690f9cb93bd569c3eef62f/package.json"
+        },
+        {
+          "commit": "2ceb4009288d560956690f9cb93bd569c3eef62f",
+          "path": "pnpm-lock.yaml",
+          "blobSha1": "fd5f221d98a7514b6cf4ba88ef4ad098572b604e",
+          "sha256": "8ed67ce96b450d30a63565047bf4697fbdb2ae4b3c6bc4de3ca650e59087e36f"
+        }
+      ],
+      "sdk": {
+        "package": "@defillama/sdk",
+        "version": "5.0.236",
+        "integrity": "sha512-mKSzmrAf0rWg6U1hS9lNi4wZ5olESmQQTgq5/5GRInS2YOZFOJXFLlF2AP9RvgYwbEdbSnDWfpsoElWH3NAzXw==",
+        "lockMatchesRegistry": true,
+        "balancesJsSha256": "5bcfa82368dcdc29c7c3fea642d1fba002bbc9f6220d8219f2ea10fe0dce6ba7"
+      },
+      "decisionBasis": "New independent present-code economic classification. No inheritance from historical methodology match.",
+      "decisions": [
+        {
+          "metric": "Revenue",
+          "decision": "approve_current_economic_kind",
+          "kind": "protocol_revenue",
+          "recipient": "Team and governance-token buyback allocation; excludes depositor and snapshot-NFT-holder supply shares",
+          "funding": "Net acquisition, settlement and retained penalty protocol fee cut",
+          "temporal": "Window fee accrual plus capped contemporaneously attributed buyback diversion; historical buyback spend excluded from Revenue",
+          "requiredDefinitionFields": [
+            "Revenue",
+            "Fees",
+            "HoldersRevenue",
+            "SupplySideRevenue"
+          ],
+          "notDependentOnDefinitionFields": [
+            "ProtocolRevenue",
+            "UserFees"
+          ],
+          "affectedOutputs": [
+            "Revenue economic kind",
+            "P/R denominator eligibility",
+            "revenue ranking eligibility"
+          ],
+          "limits": [
+            "Individual window completeness and positive denominator still mandatory",
+            "ProtocolFeesToToken can fall later than fee accrual; do not infer same-period holderShare"
+          ]
+        },
+        {
+          "metric": "Fees",
+          "decision": "approve_current_economic_kind",
+          "kind": "user_fees",
+          "recipient": "Protocol plus NFT depositor and snapshot-NFT supply recipients",
+          "funding": "Purchaser acquisition charges net of quick-sell payouts, settlement fees and retained penalties",
+          "temporal": "Observed event window with live contract fee/split parameters as adapter requests them",
+          "requiredDefinitionFields": [
+            "Fees"
+          ],
+          "notDependentOnDefinitionFields": [
+            "ProtocolRevenue"
+          ],
+          "affectedOutputs": [
+            "Fees economic kind",
+            "P/F denominator eligibility"
+          ],
+          "limits": [
+            "Net fees can be negative; positive multiple requirement unchanged",
+            "Not an independently audited chain reconciliation"
+          ]
+        },
+        {
+          "metric": "HoldersRevenue",
+          "decision": "review_needed_for_executed_buyback_eligibility",
+          "candidateKind": "market_buyback",
+          "recipient": "FWA governance-token market buyback mechanism; not snapshot NFT holders",
+          "funding": "Protocol fee allocation plus previously earned team fees",
+          "temporal": "ProtocolFeesToToken payout event and Bought execution event, different accrual windows permitted",
+          "requiredDefinitionFields": [
+            "HoldersRevenue",
+            "Revenue",
+            "SupplySideRevenue"
+          ],
+          "notDependentOnDefinitionFields": [
+            "ProtocolRevenue"
+          ],
+          "affectedOutputs": [
+            "Holder economic eligibility",
+            "Eligible holders history component inclusion",
+            "P/HR"
+          ],
+          "limits": [
+            "Bought.ethSpent explicitly execution-labelled; ProtocolFeesToToken.amount requires contract/event mechanism evidence to call all of it executed buyback",
+            "Preserve this raw amount; no fabricated zero or blanket exclusion at project level",
+            "holderShareReviewed remains false"
+          ]
+        }
+      ],
+      "reviewedAt": "2026-10-07",
+      "expectedDefinitions": {
+        "Revenue": "Team share of the protocol's cut of acquisition and settlement fees, plus any fees diverted to FWA-token buybacks.",
+        "Fees": "Net Acquisition fees paid by NFT purchasers, plus settlement fees taken from listing backings.",
+        "HoldersRevenue": "FWA-token buybacks funded from protocol fees, plus retroactive scheduled buybacks funded from previously earned team fees.",
+        "ProtocolRevenue": "Team share of the protocol's fee cut, per the Splitter contract's live split, minus the FWA-token buybacks counted under HoldersRevenue.",
+        "SupplySideRevenue": "Share of net acquisition fees distributed to NFT depositors (equal split across active listings plus the top-listing pot), plus the snapshot soulbound-NFT holders' share of protocol fees via the Splitter.",
+        "UserFees": null
+      },
+      "expectedName": "Fake World Assets V1",
+      "expectedParent": "parent#fake-world-assets",
+      "expectedModule": "fwa"
+    },
+    {
+      "provider": "DefiLlama",
+      "providerId": "182",
+      "slug": "lido",
+      "upstreamRepo": "https://github.com/DefiLlama/dimension-adapters",
+      "inspectedRevision": "09be05b55ea87a7d2f41b2e83527fd9c22f2b10b",
+      "providerExecutionRevision": "unattested",
+      "reviewedAt": "2026-10-08",
+      "reviewArtifactSha256": "274be73e908fb13b46fabb48c29380abccc09df1f2fa06a8e4cb5d63a9a8df1b",
+      "sourceClosure": [
+        {
+          "path": "adapters/types.ts",
+          "blobSha1": "f0aa666b3c1369842935e384adef3c01836549f2",
+          "sha256": "f01780ee3fab6feb163779ec82a1eca66a001a6b34bc1e878d64f7c55759ccaf",
+          "imports": []
+        },
+        {
+          "path": "fees/lido.ts",
+          "blobSha1": "86f90ecb858dfd303fbf95fa3fdf582ce7d9c595",
+          "sha256": "90bbe362735196bc1842f3539aeb61214ee2661a9d0b2b7fd0f2c352bc367403",
+          "imports": [
+            "adapters/types.ts",
+            "helpers/chains.ts",
+            "helpers/coreAssets.json",
+            "helpers/metrics.ts",
+            "helpers/token.ts",
+            "utils/date.ts"
+          ]
+        },
+        {
+          "path": "helpers/allium.ts",
+          "blobSha1": "19f105749e25078c928f4d1de085124149e04fe6",
+          "sha256": "7fb96c7e633b0d9c1ff99d9a02380e6817fe7b84601d7f575ba2612f06d3e36b",
+          "imports": [
+            "adapters/types.ts",
+            "helpers/chains.ts",
+            "helpers/env.ts",
+            "utils/fetchURL.ts"
+          ]
+        },
+        {
+          "path": "helpers/cache.ts",
+          "blobSha1": "bb2b1aef6a6dcf559602035d45ad501d1defd9b1",
+          "sha256": "362d7114d14baf759040e0c8a7d74421b959bd37670747dbef4f1f0134407500",
+          "imports": []
+        },
+        {
+          "path": "helpers/chains.ts",
+          "blobSha1": "72f9e2c95e376ede7b109dfb344cd3972b29c951",
+          "sha256": "10b1628dcc0d74014b82704985f3137afd969e15245ba7ee8d575651a44f4c21",
+          "imports": []
+        },
+        {
+          "path": "helpers/coreAssets.json",
+          "blobSha1": "17f9e1e863883c2abf98441df488db04b05f6638",
+          "sha256": "9465325e6a52c8e53574aa750b27ff51e824798a504272c5b3ef31dba6bed7a8",
+          "imports": []
+        },
+        {
+          "path": "helpers/dune.ts",
+          "blobSha1": "6b77357167dc6c97ca8b19aade0be7d03e8cee62",
+          "sha256": "c37dc3f6ae0b993b61e551f00725225885ff3c6c9907fbbe5eb8f42c3d8e98ca",
+          "imports": [
+            "adapters/types.ts",
+            "helpers/chains.ts",
+            "helpers/env.ts"
+          ]
+        },
+        {
+          "path": "helpers/env.ts",
+          "blobSha1": "3d0ddaf692c4667d9565c32e16c263ec25408c1f",
+          "sha256": "5b42eca2d1b2f040755f1f9b2e946ce419ffd48d4a540a25ad9fbd97d690bf59",
+          "imports": []
+        },
+        {
+          "path": "helpers/metrics.ts",
+          "blobSha1": "68ec2addebed57f082030a21bd8c9bce23a67ddc",
+          "sha256": "0e7a0b4e2a36e4a3032a9154bae84082b2e13ddd229d1c1aa9259f8d70a8563d",
+          "imports": []
+        },
+        {
+          "path": "helpers/token.ts",
+          "blobSha1": "b2c20c016728363d7162f0b87446f2a6fd1c8c46",
+          "sha256": "0a6cead3aa33276d56034adae52c39f055cc41968d53bbf584dca0b3f726142e",
+          "imports": [
+            "adapters/types.ts",
+            "helpers/allium.ts",
+            "helpers/cache.ts",
+            "helpers/chains.ts",
+            "helpers/coreAssets.json",
+            "helpers/dune.ts",
+            "helpers/env.ts",
+            "utils/utils.ts"
+          ]
+        },
+        {
+          "path": "package.json",
+          "blobSha1": "14350214bbed1aa0a51e57f657019edb81784279",
+          "sha256": "19f7f85139f87e074e2e08ae2f27b294df0846059edaa637937a9c039443e21b",
+          "imports": []
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "blobSha1": "fd5f221d98a7514b6cf4ba88ef4ad098572b604e",
+          "sha256": "8ed67ce96b450d30a63565047bf4697fbdb2ae4b3c6bc4de3ca650e59087e36f",
+          "imports": []
+        },
+        {
+          "path": "utils/date.ts",
+          "blobSha1": "4fb8b6d73396a188d74c31cdedf4e862c4768e01",
+          "sha256": "db7429b7b7b473b78eb27890b95aacbd98c5bfa47ccfa7d2a5b5ed3ac1c174f8",
+          "imports": []
+        },
+        {
+          "path": "utils/fetchURL.ts",
+          "blobSha1": "0ca80becce25211277a44e6a3bca9acc1c0fac48",
+          "sha256": "bb03185e9d5064d928a946b99db6bcf890e0438c0c55e5805e85f6d2ff80f655",
+          "imports": [
+            "helpers/env.ts",
+            "utils/utils.ts"
+          ]
+        },
+        {
+          "path": "utils/utils.ts",
+          "blobSha1": "86bdfded4d1b834342d94f1ce217c138097a4b8d",
+          "sha256": "6a4af76321295219adad8834b645dba758746c300c676c1e1957fd87b36ccccd",
+          "imports": []
+        }
+      ],
+      "sdk": {
+        "sdk": "@defillama/sdk@5.0.236",
+        "sdkIntegrity": "sha512-mKSzmrAf0rWg6U1hS9lNi4wZ5olESmQQTgq5/5GRInS2YOZFOJXFLlF2AP9RvgYwbEdbSnDWfpsoElWH3NAzXw==",
+        "packageAndLock": "Both package.json and complete pnpm-lock.yaml are in declaredDependencies; all external package versions/integrities pin through lock.",
+        "verifiedRuntimeHelper": "sdk/package/build/Balances.js",
+        "limits": "SDK archive integrity checked; every external npm package implementation was not individually audited. Network data sources/prices remain external."
+      },
+      "expectedName": "Lido",
+      "expectedParent": null,
+      "expectedDefinitions": {
+        "UserFees": "Lido takes no fees from users.",
+        "Fees": "Staking rewards earned by all staked ETH",
+        "Revenue": "Lido takes a 10% fee on staking rewards; Revenue is only the DAO-treasury portion of that fee (net of the node-operator share, which is a cost of production booked as SupplySideRevenue). From Lido V2 (2023-05-15) the treasury/operator split is the validator-share-weighted aggregate read live from the StakingRouter; before V2 the split was a fixed 5%/5%, so half the fee is treasury.",
+        "ProtocolRevenue": "DAO-treasury portion of the 10% fee, minus the LDO bought back under the LDO Accumulation Program; excludes the node-operator share.",
+        "SupplySideRevenue": "Staking rewards earned by stETH holders plus the node-operator share of the 10% fee (paid to operators for running validators).",
+        "HoldersRevenue": "Tracks LIDO bought back by the DAO as part of the LDO Accumulation Program"
+      },
+      "decisions": [
+        {
+          "metric": "Revenue",
+          "decision": "approve_current_economic_kind",
+          "kind": "protocol_revenue",
+          "recipient": "DAO treasury",
+          "funding": "staking and MEV reward fee",
+          "temporal": "reward accounting window",
+          "requiredDefinitionFields": [
+            "Revenue",
+            "Fees",
+            "SupplySideRevenue"
+          ],
+          "affectedOutputs": [
+            "revenue classification",
+            "P/R eligibility"
+          ],
+          "limits": [
+            "Graph dailyTotalRevenueUSD and SDK price/indexer data remain external observations.",
+            "Historical fee share is queried at window-end block; intra-window share changes are not integrated."
+          ],
+          "reviewReason": "Current adapter allocates only DAO-treasury share of the 10 percent staking/MEV take to Revenue. Node-operator share and stETH rewards go to SupplySideRevenue. Code implements treasuryFee/(modulesFee+treasuryFee) after V2, 0.5 before. Approval is economic type, not cash audit or profit.",
+          "missingProof": null
+        },
+        {
+          "metric": "Fees",
+          "decision": "approve_current_economic_kind",
+          "kind": "asset_yield",
+          "recipient": "stETH holders/operators/DAO",
+          "funding": "validator staking rewards",
+          "temporal": "reward accounting window",
+          "requiredDefinitionFields": [
+            "Fees",
+            "UserFees",
+            "SupplySideRevenue"
+          ],
+          "affectedOutputs": [
+            "fee classification",
+            "P/F eligibility"
+          ],
+          "limits": [
+            "Economic approval does not authorize user-fee P/F or P/S."
+          ],
+          "reviewReason": "Both staking and MEV gross reward balances sum back to dailyTotalRevenueUSD. These are asset yields, not Lido customer-service charges.",
+          "missingProof": null
+        },
+        {
+          "metric": "HoldersRevenue",
+          "decision": "review_needed",
+          "kind": "unknown",
+          "recipient": "DAO accumulation mechanism",
+          "funding": "DAO treasury",
+          "temporal": "executed buyback window; may use prior revenue",
+          "requiredDefinitionFields": [
+            "HoldersRevenue",
+            "Revenue"
+          ],
+          "affectedOutputs": [
+            "holder component eligibility",
+            "eligible-history scope",
+            "P/HR"
+          ],
+          "limits": [
+            "Retain raw LDO transfer-based amount and source label. No P/HR new approval or holderShare."
+          ],
+          "reviewReason": "Current code counts LDO transferred from BUYBACKS_SAFE to LIDO_AGENT using addTokensReceived. It proves the adapter tracks a designated transfer leg; it does not by itself distinguish newly executed purchases from inventory movement or establish complete buyback-program funding.",
+          "missingProof": "Bounded official program/contract evidence linking this exact from/to/token transfer leg to executed LDO buybacks, including treasury inventory treatment and valuation basis. No transaction-by-transaction audit requested."
+        }
+      ],
+      "expectedModule": "lido"
+    },
+    {
+      "provider": "DefiLlama",
+      "providerId": "6359",
+      "slug": "ssv-network",
+      "upstreamRepo": "https://github.com/DefiLlama/dimension-adapters",
+      "inspectedRevision": "2ceb4009288d560956690f9cb93bd569c3eef62f",
+      "providerExecutionRevision": "unattested",
+      "reviewedAt": "2026-10-08",
+      "reviewArtifactSha256": "0e73165a9156f7cd757184b624dcee7c371f2ef99927a556779e07d1e95cb640",
+      "sourceClosure": [
+        {
+          "path": "adapters/types.ts",
+          "blobSha1": "f0aa666b3c1369842935e384adef3c01836549f2",
+          "sha256": "f01780ee3fab6feb163779ec82a1eca66a001a6b34bc1e878d64f7c55759ccaf",
+          "imports": []
+        },
+        {
+          "path": "fees/ssv-network.ts",
+          "blobSha1": "b6c93ba3e18b7f04aca79b65e29ea9f6a10f2cd8",
+          "sha256": "204c1719cd2058c0e01daddeb741f25e15c0ecb3bf904508648da7095f64ab05",
+          "imports": [
+            "adapters/types.ts",
+            "helpers/chains.ts",
+            "helpers/coreAssets.json",
+            "helpers/metrics.ts"
+          ]
+        },
+        {
+          "path": "helpers/chains.ts",
+          "blobSha1": "72f9e2c95e376ede7b109dfb344cd3972b29c951",
+          "sha256": "10b1628dcc0d74014b82704985f3137afd969e15245ba7ee8d575651a44f4c21",
+          "imports": []
+        },
+        {
+          "path": "helpers/coreAssets.json",
+          "blobSha1": "17f9e1e863883c2abf98441df488db04b05f6638",
+          "sha256": "9465325e6a52c8e53574aa750b27ff51e824798a504272c5b3ef31dba6bed7a8",
+          "imports": []
+        },
+        {
+          "path": "helpers/metrics.ts",
+          "blobSha1": "68ec2addebed57f082030a21bd8c9bce23a67ddc",
+          "sha256": "0e7a0b4e2a36e4a3032a9154bae84082b2e13ddd229d1c1aa9259f8d70a8563d",
+          "imports": []
+        },
+        {
+          "path": "package.json",
+          "blobSha1": "14350214bbed1aa0a51e57f657019edb81784279",
+          "sha256": "19f7f85139f87e074e2e08ae2f27b294df0846059edaa637937a9c039443e21b",
+          "imports": []
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "blobSha1": "fd5f221d98a7514b6cf4ba88ef4ad098572b604e",
+          "sha256": "8ed67ce96b450d30a63565047bf4697fbdb2ae4b3c6bc4de3ca650e59087e36f",
+          "imports": []
+        }
+      ],
+      "sdk": {
+        "sdk": "@defillama/sdk@5.0.236",
+        "sdkIntegrity": "sha512-mKSzmrAf0rWg6U1hS9lNi4wZ5olESmQQTgq5/5GRInS2YOZFOJXFLlF2AP9RvgYwbEdbSnDWfpsoElWH3NAzXw==",
+        "packageAndLock": "Both package.json and complete pnpm-lock.yaml are in declaredDependencies; all external package versions/integrities pin through lock.",
+        "verifiedRuntimeHelper": "sdk/package/build/Balances.js",
+        "limits": "SDK archive integrity checked; every external npm package implementation was not individually audited. Network data sources/prices remain external."
+      },
+      "expectedName": "SSV Network",
+      "expectedParent": null,
+      "expectedDefinitions": {
+        "Fees": "Total validator fees on ssv.network: network fee (set by the DAO) plus operator fees (set by each operator in a free market). Denominated in SSV before the April 2026 SSV Staking / cSSV migration and in ETH after it.",
+        "UserFees": "Pre-migration metric: fees paid by stakers running validators (operator + network fees), equal to total Fees. SSV-denominated.",
+        "Revenue": "Network fees, the protocol's share of validator fees. Pre-migration these accrued to the DAO treasury, post-migration they are distributed to cSSV stakers.",
+        "ProtocolRevenue": "Pre-migration metric: network fees allocated to the SSV DAO treasury minus SSV burned from the treasury, so it is negative on burn days. Not applicable after the migration, when network fees go to cSSV stakers instead.",
+        "SupplySideRevenue": "Operator fees earned by node operators running the distributed validator infrastructure (SSV-denominated pre-migration, ETH after).",
+        "HoldersRevenue": "Value accruing to holders: SSV token burns pre-migration; ETH network fees distributed to cSSV stakers post-migration."
+      },
+      "decisions": [
+        {
+          "metric": "Revenue",
+          "decision": "approve_current_economic_kind",
+          "kind": "protocol_revenue",
+          "recipient": "DAO pre-migration; cSSV stakers post-migration",
+          "funding": "validator network fees",
+          "temporal": "era-dependent fees",
+          "requiredDefinitionFields": [
+            "Revenue",
+            "Fees",
+            "SupplySideRevenue"
+          ],
+          "affectedOutputs": [
+            "revenue classification",
+            "P/R eligibility"
+          ],
+          "limits": [
+            "Meaning includes the stated 2026-04-22 era switch; do not label current Revenue as cash retained by DAO.",
+            "FeesSynced is accrual to staking pool at synchronization, not proof of individual holder withdrawals."
+          ],
+          "reviewReason": "Revenue is network fee portion of validator-service payments; pre-migration protocol earnings from graph, post-migration sum of FeesSynced.newFeesWei. Operator remuneration is separately supply-side. Post-migration recipient is cSSV stakers, not DAO treasury; both retain the protocol fee economic base.",
+          "missingProof": null,
+          "comparabilityBoundary": {
+            "at": "2026-04-22",
+            "before": "DAO treasury / SSV-denominated fee era",
+            "after": "cSSV stakers / ETH-denominated fee era"
+          }
+        },
+        {
+          "metric": "Fees",
+          "decision": "approve_current_economic_kind",
+          "kind": "user_fees",
+          "recipient": "operators plus network",
+          "funding": "validator payments",
+          "temporal": "operator estimate and synced network fees",
+          "requiredDefinitionFields": [
+            "Fees",
+            "UserFees",
+            "SupplySideRevenue"
+          ],
+          "affectedOutputs": [
+            "fee classification",
+            "P/F eligibility"
+          ],
+          "limits": [
+            "Operator amount is an estimate; changing rate/count within window can change accuracy.",
+            "Null/failed operator calls are skipped, fallback maximum operator ID is 5000. No independent completeness attestation of upstream arithmetic."
+          ],
+          "reviewReason": "Validator users pay network plus operator charges. Current operator amount is fee-per-block times validator count from end-block state times period blocks. This estimator remains user-fee economics.",
+          "missingProof": null,
+          "comparabilityBoundary": {
+            "at": "2026-04-22",
+            "before": "DAO treasury / SSV-denominated fee era",
+            "after": "cSSV stakers / ETH-denominated fee era"
+          }
+        },
+        {
+          "metric": "HoldersRevenue",
+          "decision": "review_needed",
+          "kind": "unknown",
+          "recipient": "SSV burn pre-migration; cSSV stakers post-migration",
+          "funding": "treasury balances pre-migration; ETH network fees post-migration",
+          "temporal": "burn event or synced network-fee window",
+          "requiredDefinitionFields": [
+            "HoldersRevenue",
+            "Revenue",
+            "SupplySideRevenue"
+          ],
+          "affectedOutputs": [
+            "holder component eligibility",
+            "eligible-history scope",
+            "P/HR"
+          ],
+          "limits": [
+            "Preserve both raw mechanisms and migration date; no inference from Revenue==HoldersRevenue.",
+            "No same-period holderShare approval."
+          ],
+          "reviewReason": "Two mechanisms share one series: pre-migration all SSV transfers to zero address (without sender treasury filter), post-migration ETH fees synchronized to cSSV pool. Blanket market_buyback or cash_distribution approval would misstate at least one era.",
+          "missingProof": "Explicit era-scoped mechanism decision: bound legacy burns to eligible funding/recipient scope and confirm current cSSV fee-accrual entitlement under an accepted staking_distribution policy.",
+          "comparabilityBoundary": {
+            "at": "2026-04-22",
+            "before": "DAO treasury / SSV-denominated fee era",
+            "after": "cSSV stakers / ETH-denominated fee era"
+          }
+        }
+      ],
+      "expectedModule": "ssv-network"
+    },
+    {
+      "provider": "DefiLlama",
+      "providerId": "6751",
+      "slug": "lighter-perps",
+      "upstreamRepo": "https://github.com/DefiLlama/dimension-adapters",
+      "inspectedRevision": "2ceb4009288d560956690f9cb93bd569c3eef62f",
+      "providerExecutionRevision": "unattested",
+      "reviewedAt": "2026-10-08",
+      "reviewArtifactSha256": "ab90f09668893a336dee2c6c8af3bad13f30515bf7798d9c752945ff06f4d9b2",
+      "sourceClosure": [
+        {
+          "path": "adapters/types.ts",
+          "blobSha1": "f0aa666b3c1369842935e384adef3c01836549f2",
+          "sha256": "f01780ee3fab6feb163779ec82a1eca66a001a6b34bc1e878d64f7c55759ccaf",
+          "imports": []
+        },
+        {
+          "path": "fees/lighterv2/index.ts",
+          "blobSha1": "db6ee22e5342f9bee166dc427d06b9c8acb2e616",
+          "sha256": "4f5a16bed8175ae8567268aa4076391187345a6c29a3c7cec6d58484908377dd",
+          "imports": [
+            "adapters/types.ts",
+            "helpers/chains.ts",
+            "helpers/metrics.ts",
+            "utils/fetchURL.ts"
+          ]
+        },
+        {
+          "path": "helpers/chains.ts",
+          "blobSha1": "72f9e2c95e376ede7b109dfb344cd3972b29c951",
+          "sha256": "10b1628dcc0d74014b82704985f3137afd969e15245ba7ee8d575651a44f4c21",
+          "imports": []
+        },
+        {
+          "path": "helpers/env.ts",
+          "blobSha1": "3d0ddaf692c4667d9565c32e16c263ec25408c1f",
+          "sha256": "5b42eca2d1b2f040755f1f9b2e946ce419ffd48d4a540a25ad9fbd97d690bf59",
+          "imports": []
+        },
+        {
+          "path": "helpers/metrics.ts",
+          "blobSha1": "68ec2addebed57f082030a21bd8c9bce23a67ddc",
+          "sha256": "0e7a0b4e2a36e4a3032a9154bae84082b2e13ddd229d1c1aa9259f8d70a8563d",
+          "imports": []
+        },
+        {
+          "path": "package.json",
+          "blobSha1": "14350214bbed1aa0a51e57f657019edb81784279",
+          "sha256": "19f7f85139f87e074e2e08ae2f27b294df0846059edaa637937a9c039443e21b",
+          "imports": []
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "blobSha1": "fd5f221d98a7514b6cf4ba88ef4ad098572b604e",
+          "sha256": "8ed67ce96b450d30a63565047bf4697fbdb2ae4b3c6bc4de3ca650e59087e36f",
+          "imports": []
+        },
+        {
+          "path": "utils/fetchURL.ts",
+          "blobSha1": "0ca80becce25211277a44e6a3bca9acc1c0fac48",
+          "sha256": "bb03185e9d5064d928a946b99db6bcf890e0438c0c55e5805e85f6d2ff80f655",
+          "imports": [
+            "helpers/env.ts",
+            "utils/utils.ts"
+          ]
+        },
+        {
+          "path": "utils/utils.ts",
+          "blobSha1": "86bdfded4d1b834342d94f1ce217c138097a4b8d",
+          "sha256": "6a4af76321295219adad8834b645dba758746c300c676c1e1957fd87b36ccccd",
+          "imports": []
+        }
+      ],
+      "sdk": {
+        "sdk": "@defillama/sdk@5.0.236",
+        "sdkIntegrity": "sha512-mKSzmrAf0rWg6U1hS9lNi4wZ5olESmQQTgq5/5GRInS2YOZFOJXFLlF2AP9RvgYwbEdbSnDWfpsoElWH3NAzXw==",
+        "packageAndLock": "Both package.json and complete pnpm-lock.yaml are in declaredDependencies; all external package versions/integrities pin through lock.",
+        "verifiedRuntimeHelper": "sdk/package/build/Balances.js",
+        "limits": "SDK archive integrity checked; every external npm package implementation was not individually audited. Network data sources/prices remain external."
+      },
+      "expectedName": "Lighter Perps",
+      "expectedParent": "parent#lighter",
+      "expectedDefinitions": {
+        "UserFees": "Fees paid by users",
+        "Fees": "Maker and taker fees paid by traders on the Lighter DEX",
+        "Revenue": "Protocol revenue from maker fees, taker fees, transfer fees, and withdraw fees. Liquidation fees are excluded as they go directly to LLP.",
+        "ProtocolRevenue": "Revenue kept by the treasury after LIT buybacks. Negative on days when buybacks exceed that day's revenue.",
+        "HoldersRevenue": "LIT token buybacks from treasury. The protocol uses fees to buy back LIT tokens from the market.",
+        "SupplySideRevenue": "Liquidation fees paid to the LLP (Lighter Liquidity Pool / insurance fund)."
+      },
+      "decisions": [
+        {
+          "metric": "Revenue",
+          "decision": "approve_current_economic_kind",
+          "kind": "protocol_revenue",
+          "recipient": "Lighter treasury",
+          "funding": "trading/transfer/withdraw charges",
+          "temporal": "daily exchange API",
+          "requiredDefinitionFields": [
+            "Revenue",
+            "SupplySideRevenue"
+          ],
+          "affectedOutputs": [
+            "revenue classification",
+            "P/R eligibility"
+          ],
+          "limits": [
+            "External exchange API observations are not frozen by code SHA.",
+            "Missing metric response/day is converted to zero upstream; economic type approval does not prove zero-vs-missing correctness.",
+            "Module selects active perpetual markets; historical delisted-market completeness is not independently attested."
+          ],
+          "reviewReason": "Revenue sums maker, taker, transfer and withdraw charges kept by protocol, excluding liquidation charges sent to LLP. New treasury residual is separately emitted and does not reduce this fee base.",
+          "missingProof": null
+        },
+        {
+          "metric": "Fees",
+          "decision": "approve_current_economic_kind",
+          "kind": "user_fees",
+          "recipient": "treasury plus LLP liquidation fund",
+          "funding": "user charges plus liquidation fees",
+          "temporal": "daily exchange API",
+          "requiredDefinitionFields": [
+            "Fees",
+            "Revenue",
+            "SupplySideRevenue",
+            "UserFees"
+          ],
+          "affectedOutputs": [
+            "fee classification",
+            "P/F eligibility"
+          ],
+          "limits": [
+            "Display or evidence must not describe Fees as exclusively maker/taker; use full code-derived scope.",
+            "This resolves kind only, not external API completeness."
+          ],
+          "reviewReason": "Full implementation adds liquidation fees to Revenue. Thus Fees includes maker/taker, transfer, withdrawal and liquidation charges, although the short Fees methodology mentions only maker/taker. The broader code-defined set still consists of user charges.",
+          "missingProof": null
+        },
+        {
+          "metric": "HoldersRevenue",
+          "decision": "review_needed",
+          "kind": "unknown",
+          "recipient": "LIT buyback mechanism",
+          "funding": "treasury fees",
+          "temporal": "buyback API interval",
+          "requiredDefinitionFields": [
+            "HoldersRevenue",
+            "Revenue"
+          ],
+          "affectedOutputs": [
+            "holder component eligibility",
+            "eligible-history scope",
+            "P/HR"
+          ],
+          "limits": [
+            "No claim that the proxy is false; execution arithmetic is explicit but identity/coverage proof remains incomplete.",
+            "No holderShare approval."
+          ],
+          "reviewReason": "Adapter selects trades where account 0 buys market 2049 and sums price*size, giving a concrete executed-trade proxy. This pass has no independent official receipt for account 0 treasury ownership and market 2049 LIT/USDC identity, or full history pagination beyond the 60000 offset cap.",
+          "missingProof": "Bind the exact account/market identifiers to treasury and LIT/USDC using official product metadata; document whether capped trade-log traversal covers requested periods."
+        }
+      ],
+      "expectedModule": "lighterv2"
+    },
+    {
+      "provider": "DefiLlama",
+      "providerId": "5044",
+      "slug": "euler-v2",
+      "upstreamRepo": "https://github.com/DefiLlama/dimension-adapters",
+      "inspectedRevision": "2ceb4009288d560956690f9cb93bd569c3eef62f",
+      "providerExecutionRevision": "unattested",
+      "reviewedAt": "2026-10-08",
+      "reviewArtifactSha256": "7777f414b01302b661f3bfc3862158e579ffd0e3279e37ec312641a44b53cda7",
+      "sourceClosure": [
+        {
+          "path": "adapters/types.ts",
+          "blobSha1": "f0aa666b3c1369842935e384adef3c01836549f2",
+          "sha256": "f01780ee3fab6feb163779ec82a1eca66a001a6b34bc1e878d64f7c55759ccaf",
+          "imports": []
+        },
+        {
+          "path": "fees/euler/config.ts",
+          "blobSha1": "1546bf260c1ace568866e2c295777121352a8106",
+          "sha256": "8d43fa8d432aa72c1cb4e97a696c9f78f920fb467f0025ada3c11651267def74",
+          "imports": [
+            "helpers/chains.ts",
+            "helpers/lists.ts"
+          ]
+        },
+        {
+          "path": "fees/euler/index.ts",
+          "blobSha1": "ff96740744c21ad9bb07c9b2bb8774e50ada0810",
+          "sha256": "184be18548da072437d054303ac2cfd90b9c2368b136024bc3f03096c415e76b",
+          "imports": [
+            "adapters/types.ts",
+            "fees/euler/config.ts",
+            "helpers/coreAssets.json",
+            "helpers/metrics.ts"
+          ]
+        },
+        {
+          "path": "helpers/cache.ts",
+          "blobSha1": "bb2b1aef6a6dcf559602035d45ad501d1defd9b1",
+          "sha256": "362d7114d14baf759040e0c8a7d74421b959bd37670747dbef4f1f0134407500",
+          "imports": []
+        },
+        {
+          "path": "helpers/chains.ts",
+          "blobSha1": "72f9e2c95e376ede7b109dfb344cd3972b29c951",
+          "sha256": "10b1628dcc0d74014b82704985f3137afd969e15245ba7ee8d575651a44f4c21",
+          "imports": []
+        },
+        {
+          "path": "helpers/coreAssets.json",
+          "blobSha1": "17f9e1e863883c2abf98441df488db04b05f6638",
+          "sha256": "9465325e6a52c8e53574aa750b27ff51e824798a504272c5b3ef31dba6bed7a8",
+          "imports": []
+        },
+        {
+          "path": "helpers/dune.ts",
+          "blobSha1": "6b77357167dc6c97ca8b19aade0be7d03e8cee62",
+          "sha256": "c37dc3f6ae0b993b61e551f00725225885ff3c6c9907fbbe5eb8f42c3d8e98ca",
+          "imports": [
+            "adapters/types.ts",
+            "helpers/chains.ts",
+            "helpers/env.ts"
+          ]
+        },
+        {
+          "path": "helpers/env.ts",
+          "blobSha1": "3d0ddaf692c4667d9565c32e16c263ec25408c1f",
+          "sha256": "5b42eca2d1b2f040755f1f9b2e946ce419ffd48d4a540a25ad9fbd97d690bf59",
+          "imports": []
+        },
+        {
+          "path": "helpers/lists.ts",
+          "blobSha1": "7955d8b49577bc15be6f7ce5a6d3bf6c008859bb",
+          "sha256": "94cc0798120e57ecd4e0cc04b7b779e5b3c620bbbe701dfac7f263a0c749131b",
+          "imports": [
+            "adapters/types.ts",
+            "helpers/cache.ts",
+            "helpers/chains.ts",
+            "helpers/dune.ts",
+            "utils/utils.ts"
+          ]
+        },
+        {
+          "path": "helpers/metrics.ts",
+          "blobSha1": "68ec2addebed57f082030a21bd8c9bce23a67ddc",
+          "sha256": "0e7a0b4e2a36e4a3032a9154bae84082b2e13ddd229d1c1aa9259f8d70a8563d",
+          "imports": []
+        },
+        {
+          "path": "package.json",
+          "blobSha1": "14350214bbed1aa0a51e57f657019edb81784279",
+          "sha256": "19f7f85139f87e074e2e08ae2f27b294df0846059edaa637937a9c039443e21b",
+          "imports": []
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "blobSha1": "fd5f221d98a7514b6cf4ba88ef4ad098572b604e",
+          "sha256": "8ed67ce96b450d30a63565047bf4697fbdb2ae4b3c6bc4de3ca650e59087e36f",
+          "imports": []
+        },
+        {
+          "path": "utils/utils.ts",
+          "blobSha1": "86bdfded4d1b834342d94f1ce217c138097a4b8d",
+          "sha256": "6a4af76321295219adad8834b645dba758746c300c676c1e1957fd87b36ccccd",
+          "imports": []
+        }
+      ],
+      "sdk": {
+        "sdk": "@defillama/sdk@5.0.236",
+        "sdkIntegrity": "sha512-mKSzmrAf0rWg6U1hS9lNi4wZ5olESmQQTgq5/5GRInS2YOZFOJXFLlF2AP9RvgYwbEdbSnDWfpsoElWH3NAzXw==",
+        "packageAndLock": "Both package.json and complete pnpm-lock.yaml are in declaredDependencies; all external package versions/integrities pin through lock.",
+        "verifiedRuntimeHelper": "sdk/package/build/Balances.js",
+        "limits": "SDK archive integrity checked; every external npm package implementation was not individually audited. Network data sources/prices remain external."
+      },
+      "expectedName": "Euler V2",
+      "expectedParent": "parent#euler",
+      "expectedDefinitions": {
+        "UserFees": "Interest paid by borrowers",
+        "Fees": "Includes interest that is paid by the borrowers, protocol and curators fees.",
+        "Revenue": "Fees collected by Euler protocol.",
+        "ProtocolRevenue": "Fees collected by Euler protocol, minus the amount used to buy back EUL tokens (negative on buy back days).",
+        "SupplySideRevenue": "Fees distributed to vaults lenders and curators.",
+        "HoldersRevenue": "Revenue used for buy back EUL tokens."
+      },
+      "decisions": [
+        {
+          "metric": "Revenue",
+          "decision": "approve_current_economic_kind",
+          "kind": "protocol_revenue",
+          "recipient": "Euler protocol",
+          "funding": "borrower interest protocol share",
+          "temporal": "vault accrual window",
+          "requiredDefinitionFields": [
+            "Revenue",
+            "Fees",
+            "SupplySideRevenue"
+          ],
+          "affectedOutputs": [
+            "revenue classification",
+            "P/R eligibility"
+          ],
+          "limits": [
+            "Live state and vault configuration observations determine figures; code pin is not per-vault execution audit.",
+            "Only positive exchange-rate growth is booked; no automatic equivalence to GAAP cash receipts/net profit."
+          ],
+          "reviewReason": "Adapter derives interest accrual from vault exchange-rate growth, grosses up interestFee, then applies protocolFeeShare. Protocol amount is separately booked to Revenue; curators and lenders remain SupplySideRevenue. All configured factories, controller/token mappings and blacklist imports are pinned.",
+          "missingProof": null
+        },
+        {
+          "metric": "Fees",
+          "decision": "approve_current_economic_kind",
+          "kind": "user_fees",
+          "recipient": "lenders/curators/protocol",
+          "funding": "borrower interest",
+          "temporal": "vault accrual window",
+          "requiredDefinitionFields": [
+            "Fees",
+            "UserFees",
+            "SupplySideRevenue"
+          ],
+          "affectedOutputs": [
+            "fee classification",
+            "P/F eligibility"
+          ],
+          "limits": [
+            "Computed accrual estimator inherits vault filtering/state assumptions; economic classification does not validate every rate or asset price."
+          ],
+          "reviewReason": "Fees contains borrower interest split among lenders, curator and protocol. Governance emission rewards are not added in this implementation.",
+          "missingProof": null
+        },
+        {
+          "metric": "HoldersRevenue",
+          "decision": "review_needed",
+          "kind": "unknown",
+          "recipient": "EUL fee-flow buyback mechanism",
+          "funding": "accumulated protocol fees exchanged for EUL",
+          "temporal": "Buy event paymentAmount window",
+          "requiredDefinitionFields": [
+            "HoldersRevenue",
+            "Revenue"
+          ],
+          "affectedOutputs": [
+            "holder component eligibility",
+            "eligible-history scope",
+            "P/HR"
+          ],
+          "limits": [
+            "Preserve observed raw event-derived amount; do not assume burn or direct holder cash payout.",
+            "No holderShare approval."
+          ],
+          "reviewReason": "Source values FeeFlowController Buy.paymentAmount in each configured tokenEUL, describing buyback of EUL through accumulated protocol fees. Current pass does not trace controller disposition of received EUL or prove accepted holder-benefit mechanism for every configured deployment.",
+          "missingProof": "Bounded official FeeFlow mechanism evidence linking paymentAmount to EUL acquisition/disposition and documented treasury/burn/beneficiary treatment."
+        }
+      ],
+      "expectedModule": "euler"
+    },
+    {
+      "provider": "DefiLlama",
+      "providerId": "4304",
+      "slug": "geodnet",
+      "upstreamRepo": "https://github.com/DefiLlama/dimension-adapters",
+      "inspectedRevision": "09be05b55ea87a7d2f41b2e83527fd9c22f2b10b",
+      "providerExecutionRevision": "unattested",
+      "reviewedAt": "2026-10-08",
+      "reviewArtifactSha256": "87bb4bd3eae5bd79195cffeb119222d62283655bf96ef84fbc3d21b683d5550b",
+      "sourceClosure": [
+        {
+          "path": "adapters/types.ts",
+          "blobSha1": "f0aa666b3c1369842935e384adef3c01836549f2",
+          "sha256": "f01780ee3fab6feb163779ec82a1eca66a001a6b34bc1e878d64f7c55759ccaf",
+          "imports": []
+        },
+        {
+          "path": "fees/geodnet.ts",
+          "blobSha1": "6a119acab1ed4dcbf4ba79dd53ff2c58477e6f4a",
+          "sha256": "e65e6c8f9c84558b773094caa1bef241164a5c19def3a47e4ffaeb23e528b72a",
+          "imports": [
+            "adapters/types.ts",
+            "helpers/chains.ts",
+            "helpers/coreAssets.json",
+            "helpers/metrics.ts",
+            "helpers/token.ts"
+          ]
+        },
+        {
+          "path": "helpers/allium.ts",
+          "blobSha1": "19f105749e25078c928f4d1de085124149e04fe6",
+          "sha256": "7fb96c7e633b0d9c1ff99d9a02380e6817fe7b84601d7f575ba2612f06d3e36b",
+          "imports": [
+            "adapters/types.ts",
+            "helpers/chains.ts",
+            "helpers/env.ts",
+            "utils/fetchURL.ts"
+          ]
+        },
+        {
+          "path": "helpers/cache.ts",
+          "blobSha1": "bb2b1aef6a6dcf559602035d45ad501d1defd9b1",
+          "sha256": "362d7114d14baf759040e0c8a7d74421b959bd37670747dbef4f1f0134407500",
+          "imports": []
+        },
+        {
+          "path": "helpers/chains.ts",
+          "blobSha1": "72f9e2c95e376ede7b109dfb344cd3972b29c951",
+          "sha256": "10b1628dcc0d74014b82704985f3137afd969e15245ba7ee8d575651a44f4c21",
+          "imports": []
+        },
+        {
+          "path": "helpers/coreAssets.json",
+          "blobSha1": "17f9e1e863883c2abf98441df488db04b05f6638",
+          "sha256": "9465325e6a52c8e53574aa750b27ff51e824798a504272c5b3ef31dba6bed7a8",
+          "imports": []
+        },
+        {
+          "path": "helpers/dune.ts",
+          "blobSha1": "6b77357167dc6c97ca8b19aade0be7d03e8cee62",
+          "sha256": "c37dc3f6ae0b993b61e551f00725225885ff3c6c9907fbbe5eb8f42c3d8e98ca",
+          "imports": [
+            "adapters/types.ts",
+            "helpers/chains.ts",
+            "helpers/env.ts"
+          ]
+        },
+        {
+          "path": "helpers/env.ts",
+          "blobSha1": "3d0ddaf692c4667d9565c32e16c263ec25408c1f",
+          "sha256": "5b42eca2d1b2f040755f1f9b2e946ce419ffd48d4a540a25ad9fbd97d690bf59",
+          "imports": []
+        },
+        {
+          "path": "helpers/metrics.ts",
+          "blobSha1": "68ec2addebed57f082030a21bd8c9bce23a67ddc",
+          "sha256": "0e7a0b4e2a36e4a3032a9154bae84082b2e13ddd229d1c1aa9259f8d70a8563d",
+          "imports": []
+        },
+        {
+          "path": "helpers/token.ts",
+          "blobSha1": "b2c20c016728363d7162f0b87446f2a6fd1c8c46",
+          "sha256": "0a6cead3aa33276d56034adae52c39f055cc41968d53bbf584dca0b3f726142e",
+          "imports": [
+            "adapters/types.ts",
+            "helpers/allium.ts",
+            "helpers/cache.ts",
+            "helpers/chains.ts",
+            "helpers/coreAssets.json",
+            "helpers/dune.ts",
+            "helpers/env.ts",
+            "utils/utils.ts"
+          ]
+        },
+        {
+          "path": "package.json",
+          "blobSha1": "14350214bbed1aa0a51e57f657019edb81784279",
+          "sha256": "19f7f85139f87e074e2e08ae2f27b294df0846059edaa637937a9c039443e21b",
+          "imports": []
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "blobSha1": "fd5f221d98a7514b6cf4ba88ef4ad098572b604e",
+          "sha256": "8ed67ce96b450d30a63565047bf4697fbdb2ae4b3c6bc4de3ca650e59087e36f",
+          "imports": []
+        },
+        {
+          "path": "utils/fetchURL.ts",
+          "blobSha1": "0ca80becce25211277a44e6a3bca9acc1c0fac48",
+          "sha256": "bb03185e9d5064d928a946b99db6bcf890e0438c0c55e5805e85f6d2ff80f655",
+          "imports": [
+            "helpers/env.ts",
+            "utils/utils.ts"
+          ]
+        },
+        {
+          "path": "utils/utils.ts",
+          "blobSha1": "86bdfded4d1b834342d94f1ce217c138097a4b8d",
+          "sha256": "6a4af76321295219adad8834b645dba758746c300c676c1e1957fd87b36ccccd",
+          "imports": []
+        }
+      ],
+      "sdk": {
+        "sdk": "@defillama/sdk@5.0.236",
+        "sdkIntegrity": "sha512-mKSzmrAf0rWg6U1hS9lNi4wZ5olESmQQTgq5/5GRInS2YOZFOJXFLlF2AP9RvgYwbEdbSnDWfpsoElWH3NAzXw==",
+        "packageAndLock": "Both package.json and complete pnpm-lock.yaml are in declaredDependencies; all external package versions/integrities pin through lock.",
+        "verifiedRuntimeHelper": "sdk/package/build/Balances.js",
+        "limits": "SDK archive integrity checked; every external npm package implementation was not individually audited. Network data sources/prices remain external."
+      },
+      "expectedName": "Geodnet",
+      "expectedParent": null,
+      "expectedDefinitions": {
+        "Fees": "GEODNET receives fees for station access to their RTK network.",
+        "Revenue": "When GEODNET receives fees for station access, 80% of the fees are used to repurchase GEOD tokens from the open market and remove them from circulation. The remaining 20% supports the foundation's organizational costs.",
+        "ProtocolRevenue": "The remaining 20% of station access fees, kept by the foundation to cover its organizational costs.",
+        "HoldersRevenue": "80% of the fees are used to repurchase GEOD tokens from the open market and remove them from circulation."
+      },
+      "decisions": [
+        {
+          "metric": "Revenue",
+          "decision": "review_needed",
+          "kind": "unknown",
+          "recipient": "foundation plus GEOD burn mechanism",
+          "funding": "station-access sales inferred from burn/0.8",
+          "temporal": "burn valuation window, proxy for sales",
+          "requiredDefinitionFields": [
+            "Revenue",
+            "Fees",
+            "HoldersRevenue"
+          ],
+          "affectedOutputs": [
+            "revenue classification",
+            "P/R eligibility"
+          ],
+          "limits": [
+            "No new protocol_revenue/service_sales approval; no P/R recovery from this evidence alone.",
+            "Do not reinterpret token market value burned as independently observed dollar service sales."
+          ],
+          "reviewReason": "Implementation measures all selected GEOD transfers to dead/incinerator address and divides by 0.8. It does not measure service invoices/receipts or filter burn transfers by protocol funding source. Service revenue economic story is plausible but exact raw series is a burn-based estimate.",
+          "missingProof": "Official reconciled link of included burn flow to RTK station-access receipts, 80 percent coverage and timing basis; otherwise an explicitly accepted proxy-metric policy separate from reviewed Revenue eligibility."
+        },
+        {
+          "metric": "Fees",
+          "decision": "review_needed",
+          "kind": "unknown",
+          "recipient": "foundation/service supply",
+          "funding": "same inferred station sales",
+          "temporal": "burn valuation window",
+          "requiredDefinitionFields": [
+            "Fees",
+            "Revenue",
+            "HoldersRevenue"
+          ],
+          "affectedOutputs": [
+            "fee classification",
+            "P/F eligibility"
+          ],
+          "limits": [
+            "No new user_fees approval/P/F recovery."
+          ],
+          "reviewReason": "Fees and Revenue alias the same burn/0.8 estimate. Same value or station-fee wording cannot establish observed customer charges.",
+          "missingProof": "Same missing flow-to-service linkage as Revenue, or explicit product acceptance of a labelled burn-inferred fee proxy."
+        },
+        {
+          "metric": "HoldersRevenue",
+          "decision": "review_needed",
+          "kind": "unknown",
+          "recipient": "GEOD removal from circulation",
+          "funding": "assumed 80 percent of station-access fees",
+          "temporal": "burn transfer window",
+          "requiredDefinitionFields": [
+            "HoldersRevenue",
+            "Revenue"
+          ],
+          "affectedOutputs": [
+            "holder component eligibility",
+            "eligible-history scope",
+            "P/HR"
+          ],
+          "limits": [
+            "Preserve raw burn amount; no market_buyback/buyback_and_burn approval and no 80 percent holderShare approval."
+          ],
+          "reviewReason": "Burn-destination transfers are directly selected, but Polygon has no sender filter and Solana query filters mint/recipient only. All included amounts cannot be assumed fee-funded market repurchases from the source code alone.",
+          "missingProof": "Establish eligible funding and transfer population or approve a separately defined generic token-removal metric; do not label every included transfer executed fee-funded buyback."
+        }
+      ],
+      "expectedModule": "geodnet"
+    }
+  ]
+}

@@ -5,6 +5,8 @@ import type { PublicationJournal, PublishedSnapshot } from "./publicationTypes";
 import { JOURNAL_DOWNLOAD, JOURNAL_LATEST, snapshotErrors } from "./publication";
 import { pipelineIntegrityErrors } from "./pipelineIntegrity";
 import { validateRecovery,withMigrationEvidence } from "./freshnessRecovery";
+import {validateEconomicReview,validateEconomicSummary} from "./economicReview";
+import {validateEconomicReviewRef} from "./economicReviewArchive";
 
 export const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 export function checkArchiveUrl(url: string) {
@@ -48,6 +50,13 @@ export function parseJournal(value: unknown): PublicationJournal {
     || (s.settled && (a.outcome !== "published" || (a.partial === true && a.failureClass === "transient") || s.successfulPublicationId !== j.published?.id))
     || (s.nextRetryAt !== null && (!Number.isFinite(Date.parse(s.nextRetryAt)) || s.settled)))) throw new Error("Invalid collection slot state");
   if (j.previousStateUrl) checkArchiveUrl(j.previousStateUrl);
+  if(j.publicationFailure) {
+    const p=j.publicationFailure;
+    if(p.schema!==1||!/^data-[a-zA-Z0-9-]+-failed-observation$/.test(p.journalId)||p.attemptId!==`data-${p.runId}-${p.runAttempt}`||!/^\d+$/.test(p.runId)||!Number.isInteger(p.runAttempt)||p.runAttempt<1||
+      ![p.failedAt,p.archivedAt].every(t=>typeof t==="string"&&Number.isFinite(Date.parse(t)))||Date.parse(p.archivedAt)<Date.parse(p.failedAt)||
+      p.manifestUrl!==`${JOURNAL_DOWNLOAD}${p.journalId}/failed-evidence.json`||!/^[a-f0-9]{64}$/.test(p.manifestSha256)||
+      j.id===p.journalId&&(j.previousId!==`${p.attemptId}-start`||j.attempt.id!==p.attemptId||j.attempt.outcome!=="blocked"||j.attempt.completedAt!==p.failedAt||!j.attempt.errors.includes("publication_storage_failed")||!j.incident))throw Error("Invalid failed publication evidence");
+  }
   if(j.correction) {
     const c=j.correction;
     for(const url of [c.parentJournalUrl,c.originalJournalUrl,c.targetJournalUrl]){checkArchiveUrl(url);if(!url.endsWith("/state.json"))throw new Error("Invalid correction evidence");}
@@ -56,6 +65,8 @@ export function parseJournal(value: unknown): PublicationJournal {
       j.id===c.journalId&&(c.parentJournalUrl!==j.previousStateUrl||JSON.stringify(j.published)!==JSON.stringify(c.to)||!["published","blocked"].includes(j.attempt.outcome)||!j.incident))throw new Error("Invalid publication correction");
   }
   if (j.schema===2) validateRecovery(j);
+  if(j.economicReview)validateEconomicReview(j.economicReview);
+  if(j.economicReviewRef) {validateEconomicReviewRef(j.economicReviewRef);validateEconomicSummary(j.publicEconomicReview!);if(j.publicEconomicReview!.stateSha256!==j.economicReviewRef.stateSha256)throw Error("Economic review summary differs from archive reference");}
   return j;
 }
 export async function readJournal(): Promise<PublicationJournal> {

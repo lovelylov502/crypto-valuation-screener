@@ -6,6 +6,7 @@ import { collectionCoverage, collectionErrors, collectionRegressions, collection
 import { dataQualitySummary, scopedSourceErrors } from "./dataQuality";
 import { currentCollectionSlot } from "./collectionSchedule";
 import { classifyAttemptFailure, RETRY_DELAY_MS } from "./scheduledCollection";
+import {economicAccountingErrors} from "./economicContract";
 
 export const COLLECTION_DEADLINE_MS = 15 * 60_000;
 export const JOURNAL_REPOSITORY = "lovelylov502/crypto-valuation-screener";
@@ -35,6 +36,7 @@ export function snapshotErrors(data: ScreenerResponse): string[] {
   for (const metric of ["dailyRevenue", "dailyHoldersRevenue"]) if (!urls.some(u => u.searchParams.get("dataType") === metric)) errors.push(`source_evidence_missing:${metric}`);
   errors.push(...collectionErrors(data.coins));
   for (const c of data.coins) errors.push(...fundamentalErrors(c).map(e => `${c.slug}:${e}`));
+  errors.push(...economicAccountingErrors(data));
   return [...new Set(errors)];
 }
 

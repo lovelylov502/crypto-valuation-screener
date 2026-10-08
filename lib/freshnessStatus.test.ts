@@ -1,6 +1,6 @@
 import {afterEach,expect,it,vi} from "vitest";
 const state=vi.hoisted(()=>({journal:null as any}));
-vi.mock("./serverScreener",()=>({getPublication:async()=>state.journal}));
+vi.mock("./serverScreener",async importOriginal=>({...await importOriginal<typeof import("./serverScreener")>(),getPublication:async()=>state.journal}));
 import {GET} from "../app/api/status/route";
 import {collectionHealth} from "./collectionHealth";
 import {initialRecovery,nextEligibleCheck,recoveryDecision,startRecoveryJournal,updateObligations,type CollectionTrigger} from "./freshnessRecovery";

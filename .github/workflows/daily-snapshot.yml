@@ -34,9 +34,22 @@ on:
         description: "Maintenance only: exact confirmed baseline journal to restore"
         type: string
         required: false
+      failed_observation_parent:
+        description: "Maintenance only: exact interrupted start journal"
+        type: string
+        required: false
+      failed_observation_run:
+        description: "Maintenance only: failed publication workflow run ID"
+        type: string
+        required: false
+      failed_observation_attempt:
+        description: "Maintenance only: exact failed run attempt"
+        type: string
+        required: false
 
 permissions:
   contents: write
+  actions: read
 
 # The sole writer, including manual runs. No deploy/request path may publish data.
 concurrency:
@@ -58,6 +71,7 @@ jobs:
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
       SCREENER_GITHUB_SCHEDULE: ${{ github.event.schedule }}
       SCREENER_POINTER_CORRECTION: ${{ inputs.publication_correction_parent != '' || inputs.publication_correction_target != '' }}
+      SCREENER_FAILED_OBSERVATION: ${{ inputs.failed_observation_parent != '' || inputs.failed_observation_run != '' || inputs.failed_observation_attempt != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,8 +80,13 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci --no-audit --no-fund
+      - name: Validate exclusive maintenance inputs
+        if: env.SCREENER_POINTER_CORRECTION == 'true' || env.SCREENER_FAILED_OBSERVATION == 'true'
+        env:
+          MAINTENANCE_CONFLICT: ${{ (inputs.publication_correction_parent != '' || inputs.publication_correction_target != '') && (inputs.failed_observation_parent != '' || inputs.failed_observation_run != '' || inputs.failed_observation_attempt != '') || inputs.scheduler_receipt != '' || inputs.scheduler_signature != '' || inputs.bootstrap_url != '' || inputs.bootstrap_sha256 != '' }}
+        run: test "$MAINTENANCE_CONFLICT" != true
       - name: Check maintenance correction code
-        if: env.SCREENER_POINTER_CORRECTION == 'true'
+        if: env.SCREENER_POINTER_CORRECTION == 'true' || env.SCREENER_FAILED_OBSERVATION == 'true'
         run: npm test
       - name: Append reviewed publication correction without collection
         if: env.SCREENER_POINTER_CORRECTION == 'true'
@@ -75,8 +94,15 @@ jobs:
           CORRECTION_PARENT: ${{ inputs.publication_correction_parent }}
           CORRECTION_TARGET: ${{ inputs.publication_correction_target }}
         run: npx tsx scripts/correct-publication.ts commit "$CORRECTION_PARENT" "$CORRECTION_TARGET"
+      - name: Preserve verified failed observations without collection
+        if: env.SCREENER_FAILED_OBSERVATION == 'true'
+        env:
+          FAILED_PARENT: ${{ inputs.failed_observation_parent }}
+          FAILED_RUN: ${{ inputs.failed_observation_run }}
+          FAILED_ATTEMPT: ${{ inputs.failed_observation_attempt }}
+        run: npx tsx scripts/preserve-failed-observation.ts commit "$FAILED_PARENT" "$FAILED_RUN" "$FAILED_ATTEMPT"
       - name: Check slot completion, active lease and retry eligibility
-        if: env.SCREENER_POINTER_CORRECTION != 'true'
+        if: env.SCREENER_POINTER_CORRECTION != 'true' && env.SCREENER_FAILED_OBSERVATION != 'true'
         id: due
         env:
           SCREENER_SCHEDULER_RECEIPT: ${{ inputs.scheduler_receipt }}

@@ -6,6 +6,7 @@ import type { SalesEvidence } from "./valuationMetrics";
 
 // 조인된 코인 1건의 원천 데이터 (밸류에이션 계산 전)
 export interface CoinRaw {
+  rawHolderLegacyDefinition?: string;
   freshness?: { revenue: import("./datedFreshness").DatedFreshness; holders: import("./datedFreshness").DatedFreshness };
   rawHolderFreshness?: import("./datedFreshness").DatedFreshness;
   rawHolderDefinition?: string;
@@ -200,9 +201,11 @@ export interface QuoteLookup {
 }
 
 export interface ScreenerResponse {
+  economicReview?: import("./economicReview").EconomicReviewSummary;
   freshness?: import("./datedFreshness").FreshnessSummary;
   publicFreshness?: import("./datedFreshness").FreshnessSummary;
   pipeline?: {
+    economicPolicy?: import("./economicTypes").EconomicPolicyIdentity;
     schema: 1 | 2;
     asOf: string;
     rawBundleSha256: string;

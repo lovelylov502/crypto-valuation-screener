@@ -3,6 +3,9 @@ import type { PublicationJournal } from "./publicationTypes";
 import { readJournal, readSnapshot } from "./snapshotArchive";
 import { publicFreshness } from "./datedFreshness";
 import { collectionReleaseState } from "./pipelineRelease";
+import {summarizeEconomicReview} from "./economicReview";
+import {objectHash} from "./sourceBundle";
+export function publicPublication(p:PublicationJournal):PublicationJournal { const {economicReview,...rest}=p;return {...rest,...(economicReview?{publicEconomicReview:summarizeEconomicReview(economicReview,objectHash)}:{})}; }
 
 // Request handlers only read persisted publications. They never import a collector.
 let journal: PublicationJournal | undefined;
@@ -35,11 +38,11 @@ export async function getScreener(): Promise<ScreenerResponse> {
       snapshot = { id: ref.id, data, publication }; pendingSnapshot = undefined;
     }
     snapshot!.publication = publication;
-    return { ...snapshot!.data, publication, ...(snapshot!.data.freshness?{publicFreshness:publicFreshness(snapshot!.data.freshness,Date.now())}:{}) };
+    return { ...snapshot!.data, publication:publicPublication(publication), ...(snapshot!.data.freshness?{publicFreshness:publicFreshness(snapshot!.data.freshness,Date.now())}:{}) };
   } catch (error) {
     pendingSnapshot = undefined;
     // Never attach a new snapshot identity to old data after a failed/corrupt read.
-    if (snapshot) return { ...snapshot.data, ...(snapshot.data.freshness?{publicFreshness:publicFreshness(snapshot.data.freshness,Date.now())}:{}), publication: { ...snapshot.publication,collectionRelease:publication.collectionRelease, storeError: "새 검증본 읽기 실패 · 직전 검증본 유지" } };
+    if (snapshot) return { ...snapshot.data, ...(snapshot.data.freshness?{publicFreshness:publicFreshness(snapshot.data.freshness,Date.now())}:{}), publication: publicPublication({ ...snapshot.publication,collectionRelease:publication.collectionRelease, storeError: "새 검증본 읽기 실패 · 직전 검증본 유지" }) };
     throw error;
   }
 }

@@ -1,0 +1,2 @@
+# These executable legacy fixtures are exact Git/evidence bytes, including line endings.
+lib/fixtures/legacy-b519-writer/* -text

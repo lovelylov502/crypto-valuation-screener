@@ -10,7 +10,7 @@ import { defiLlamaUrl, marketLink } from "@/lib/coinLinks";
 import { koreanDetailDescription } from "@/lib/protocolDescriptions";
 import { metricStatus } from "@/lib/metricStatus";
 import { protocolResearch } from "@/lib/protocolResearch";
-import { holderEconomicTypeLabel } from "@/lib/holderValue";
+import { holderEconomicTypeLabel } from "@/lib/holderLabels";
 import { REVENUE_WINDOWS, revenueAmount } from "@/lib/revenueHistory";
 import { completedUtcDate,freshnessReason } from "@/lib/datedFreshness";
 import { windowLabel } from "@/lib/metricCoverage";

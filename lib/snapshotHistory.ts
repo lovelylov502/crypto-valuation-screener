@@ -3,10 +3,12 @@ import type { OpportunityTrack } from "./signals";
 import { researchMultiple } from "./research";
 import { revenueAmount, revenueBasis, historyMatches } from "./revenueHistory";
 import { holderAmount, holderHistoryMatches } from "./valuationMetrics";
+import { metricComparisonAllowed } from "./fundamentals";
 
 export const HISTORY_STORAGE_KEY = "crypto-screener-history-v1";
 export const REVIEW_BASELINE_KEY = "crypto-screener-review-baseline-v1";
 export interface SnapshotCoin {
+  metricDefinitions?: {revenue:string;holders:string;score:string};
   definition?: string;
   basis?: string;
   identity: string;
@@ -30,6 +32,12 @@ function identity(coin: CoinScored) {
   return `${coin.identityStatus}:${coin.cmcId ?? ""}:${coin.geckoId ?? ""}:${coin.symbol ?? ""}`;
 }
 const observationBasis = (coin: CoinScored) => `${revenueBasis(coin)}:${coin.revenueHistory?.definitionFingerprint ?? "none"}:holder:${coin.holderHistory?.definitionFingerprint ?? "none"}:sales:${coin.sales?.id ?? "none"}:${coin.sales?.amountUsd ?? "none"}:${coin.sales?.status ?? "none"}`;
+function metricDefinitions(coin:CoinScored):SnapshotCoin["metricDefinitions"] {
+  const f=coin.fundamentals;if(!f.economicPolicy)return;
+  const holders=JSON.stringify([f.holders.map(p=>[p.slug,p.definition,p.decision?.basis,p.decision?.disposition,p.decision?.kind,p.decision?.holderEligible,p.decision?.holderType,p.decision?.requiredFields,p.decision?.recipient,p.decision?.funding,p.decision?.temporal,p.decision?.comparabilityBoundary]),coin.holderHistory?.definitionFingerprint??null]);
+  const revenue=JSON.stringify([f.revenue.fingerprint,revenueBasis(coin),coin.revenueHistory?.definitionFingerprint??null]);
+  return {revenue,holders,score:JSON.stringify([revenue,f.fees.fingerprint,holders,coin.sales?.id??null,coin.sales?.amountUsd??null,coin.sales?.status??null])};
+}
 export function makeSnapshot(data: ScreenerResponse): Snapshot {
   return {
     schema: 2,
@@ -41,6 +49,7 @@ export function makeSnapshot(data: ScreenerResponse): Snapshot {
         {
           identity: identity(c),
           definition: c.fundamentals.fingerprint,
+          ...(metricDefinitions(c)?{metricDefinitions:metricDefinitions(c)}:{}),
           basis: observationBasis(c),
           price: c.price,
           mcap: c.mcap,
@@ -80,6 +89,7 @@ export function parseHistory(raw: string | null): Snapshot[] {
           return (
             typeof c.identity === "string" &&
             (s.schema === 1 || (typeof c.definition === "string" && typeof c.basis === "string")) &&
+            (c.metricDefinitions===undefined||!!c.metricDefinitions&&[c.metricDefinitions.revenue,c.metricDefinitions.holders,c.metricDefinitions.score].every(v=>typeof v==="string"))&&
             [c.price, c.score, c.phr, c.revenue30d, c.holder30d].every(
               (n) =>
                 n === null || (typeof n === "number" && Number.isFinite(n)),
@@ -116,6 +126,7 @@ export function appendSnapshot(
 }
 
 export interface SnapshotChange {
+  revenueComparable?:boolean;
   state: "first" | "new" | "rules_changed" | "identity_changed" | "definition_changed" | "comparable";
   added: OpportunityTrack[];
   scoreDelta: number | null;
@@ -149,32 +160,37 @@ export function compareSnapshot(
   if (!previous) return { ...empty, state: "new", meaningful: true };
   if (previous.identity !== identity(coin))
     return { ...empty, state: "identity_changed" };
-  if (!historyMatches(coin) || (coin.holderHistory && !holderHistoryMatches(coin)) || previous.definition !== coin.fundamentals.fingerprint || previous.basis !== observationBasis(coin))
+  const currentMetrics=metricDefinitions(coin),scoped=!!currentMetrics&&!!previous.metricDefinitions;
+  if (!scoped&&(!historyMatches(coin) || (coin.holderHistory && !holderHistoryMatches(coin)) || previous.definition !== coin.fundamentals.fingerprint || previous.basis !== observationBasis(coin)))
     return { ...empty, state: "definition_changed" };
+  const revenueComparable=!scoped||previous.metricDefinitions!.revenue===currentMetrics!.revenue&&historyMatches(coin)&&metricComparisonAllowed(coin,"Revenue",30);
+  const holderComparable=!scoped||previous.metricDefinitions!.holders===currentMetrics!.holders&&(!coin.holderHistory||holderHistoryMatches(coin));
+  const scoreComparable=!scoped||previous.metricDefinitions!.score===currentMetrics!.score&&revenueComparable&&holderComparable;
   const delta = (a: number | null, b: number | null) =>
     a !== null && b !== null ? a - b : null;
   const added = (["business", "holder", "transition"] as const).filter(
-    (t) => coin.opportunities[t] && !previous.tracks.includes(t),
+    (t) => (t==="holder"?holderComparable:scoreComparable)&&coin.opportunities[t] && !previous.tracks.includes(t),
   );
-  const scoreDelta = delta(coin.valueScore, previous.score);
-  const phrDelta = delta(coin.multiples.phr, previous.phr);
-  const revenueDelta = delta(revenueAmount(coin, 30), previous.revenue30d);
-  const holderDelta = delta(
+  const scoreDelta = scoreComparable?delta(coin.valueScore, previous.score):null;
+  const phrDelta = holderComparable?delta(coin.multiples.phr, previous.phr):null;
+  const revenueDelta = revenueComparable?delta(revenueAmount(coin, 30), previous.revenue30d):null;
+  const holderDelta = holderComparable?delta(
     holderAmount(coin, 30),
     previous.holder30d,
-  );
+  ):null;
   // Change filter suppresses quote noise; all exact deltas remain available in the detail.
   const materialFlow = (d: number | null, prev: number | null) =>
     d !== null &&
     prev !== null &&
     Math.abs(d) >= Math.max(100, Math.abs(prev) * 0.05);
-  const removed = previous.tracks.some((t) => !coin.opportunities[t]);
+  const removed = previous.tracks.some((t) => (t==="holder"?holderComparable:scoreComparable)&&!coin.opportunities[t]);
   return {
     state: "comparable",
+    ...(scoped?{revenueComparable}:{}),
     added,
     scoreDelta,
     phrDelta,
-    multipleDelta: delta(researchMultiple(coin), previous.revenueMultiple ?? null),
+    multipleDelta: revenueComparable?delta(researchMultiple(coin), previous.revenueMultiple ?? null):null,
     revenueDelta,
     holderDelta,
     meaningful:

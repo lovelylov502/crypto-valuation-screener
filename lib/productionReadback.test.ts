@@ -7,6 +7,7 @@ import { queryScreener } from "./screenerQuery";
 import { normalizedHash, pipelineOutputHash } from "./pipelineIntegrity";
 import type { SourceObservation } from "./types";
 import {annotateFreshness,freshnessSummary} from "./datedFreshness";
+import {jsonResponse,readJsonText} from "./jsonTransport.mjs";
 
 it("verifies source amounts while keeping incomplete current FWA windows unavailable", () => {
   const coin = { mcap: 100, revenue30d: 30, fundamentals: { revenue: { kind: "protocol_revenue" } },
@@ -41,6 +42,14 @@ it("keeps scoped partial quote accounting visible without applying the legacy ze
   expect(inspectApi({ status: 200, bytes: Buffer.byteLength(body), body }).errors).toEqual([]);
   const legacy = { ...page, pipeline: undefined, publication: undefined }, legacyBody = JSON.stringify(legacy);
   expect(inspectApi({ status: 200, bytes: Buffer.byteLength(legacyBody), body: legacyBody }).errors).toContain("collection coverage incomplete");
+});
+
+it("production readback validates completion of full streamed evidence instead of waiving the size gate",async()=>{
+  const page={...partialPage(),testEvidence:"x".repeat(4_600_000)},response=jsonResponse(page),body=await readJsonText(response);
+  const readback={status:200,bytes:Buffer.byteLength(body),body,transport:response.headers.get("x-tovenit-json-transport"),declaredBytes:response.headers.get("x-tovenit-json-bytes")};
+  expect(inspectApi(readback).errors).toEqual([]);
+  expect(inspectApi({...readback,transport:null}).errors.some((e:string)=>e.includes("fail-closed limit"))).toBe(true);
+  expect(inspectApi({...readback,declaredBytes:String(readback.bytes+1)}).errors).toContain("JSON transport length mismatch");
 });
 
 it("binds API pipeline proof to the exact published archive and compares hashes even when IDs match", () => {

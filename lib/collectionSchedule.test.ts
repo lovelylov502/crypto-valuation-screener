@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
-import { expect, it } from "vitest";
+import { expect, it,vi } from "vitest";
 import { collectionSchedule, COLLECTION_UTC_HOURS } from "./collectionSchedule";
-import {collectionReleaseState} from "./pipelineRelease";
+import {collectionReleaseState,verifyWriterActivation} from "./pipelineRelease";
 import {FOUR_DAILY_CRONS} from "./schedulerDispatch";
 
 it.each([
@@ -23,11 +23,20 @@ it.each([
 ])("computes four-daily due and next slots at %s without extending a deadline",(now,required,next)=>{
  const actual=collectionSchedule(Date.parse(now),"four-daily");expect(actual.requiredAt).toBe(Date.parse(required));expect(actual.nextAt).toBe(Date.parse(next));
 });
-it("keeps the actual release's browser cadence, Vercel stage entries and fallback wakes consistent", () => {
+it("keeps the actual release's browser cadence, Vercel stage entries and fallback wakes consistent", async () => {
   const workflow = readFileSync(new URL("../.github/workflows/daily-snapshot.yml", import.meta.url), "utf8");
   const crons = [...workflow.matchAll(/cron:\s*"([^"]+)"/g)].map(match => match[1]);
   const vercel = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8")),mode=collectionReleaseState().schedule;
-  if(mode==="paused") {expect(crons).toEqual([]);expect(vercel.crons).toEqual([]);return;}
+  if(mode==="paused") {
+    if(collectionReleaseState().economic) {
+      expect(collectionReleaseState().economic!.active).toBe(false);
+      expect(crons).toEqual(["0 2,8,14,20 * * *","30 2,8,14,20 * * *","0 3,9,15,21 * * *","0 4,10,16,22 * * *","0 0,6,12,18 * * *"]);
+      expect(vercel.crons).toEqual(FOUR_DAILY_CRONS.map(({path,schedule})=>({path,schedule})));
+      const fetcher=vi.fn();await expect(verifyWriterActivation(fetcher)).rejects.toThrow("paused");expect(fetcher).not.toHaveBeenCalled();
+      expect(collectionSchedule(Date.parse("2026-10-08T02:00:00Z"),mode).paused).toBe(true);
+    }else {expect(crons).toEqual([]);expect(vercel.crons).toEqual([]);}
+    return;
+  }
   const hours=mode==="four-daily"?[2,8,14,20]:[2,14];expect(COLLECTION_UTC_HOURS).toEqual(hours);
   expect(crons).toEqual([
     "0 "+hours.join(",")+" * * *",

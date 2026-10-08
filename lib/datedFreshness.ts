@@ -4,6 +4,7 @@ export const UTC_DAY_MS = 86_400_000;
 export const completedUtcDate = (now: number) => new Date(Math.floor(now / UTC_DAY_MS) * UTC_DAY_MS - UTC_DAY_MS).toISOString().slice(0, 10);
 export type FreshnessState = "current" | "pending" | "insufficient" | "unknown" | "unsupported" | "conflict";
 export interface DatedFreshness {
+  legacyIdentityAlias?: {identity:string;basis:"identical-captured-legacy-metadata"};
   state: FreshnessState; targetDate: string; latestCompleteDate: string | null;
   scope: string; definition: string; components: { id: string; latestDate: string | null; targetPresent: boolean }[];
   missingRecentDates: string[];
@@ -47,11 +48,13 @@ export function annotateFreshness(coins: CoinRaw[], asOf: string): CoinRaw[] {
     const f = metric === "revenue" ? c.revenueHistory?.freshness : c.rawHolderFreshness;
     const hasSource = metric === "revenue" ? c.revenueSource?.periods !== undefined : c.holderValue.components.length > 0;
     const base: DatedFreshness = f ?? { state: hasSource ? "unknown" : "unsupported", targetDate: completedUtcDate(Date.parse(asOf)), latestCompleteDate: null,
-      scope: c.slug, definition: metric === "revenue" ? c.fundamentals.revenue.fingerprint : "unknown", components: [], missingRecentDates: [], coverage: null,
+      scope: c.slug, definition: metric === "revenue" ? c.fundamentals.revenue.physicalFingerprint??c.fundamentals.revenue.fingerprint : "unknown", components: [], missingRecentDates: [], coverage: null,
       sources: metric === "revenue" && c.revenueSource ? [c.revenueSource.url] : [], observedAt: asOf };
     const conflict = c.dataQuality?.issues.some(i => i.scope === metric && ["scope_mismatch", "value_conflict", "schema_mismatch"].includes(i.code));
-    const definitionConflict = f && (metric === "revenue" ? f.definition !== c.fundamentals.revenue.fingerprint : c.rawHolderDefinition !== undefined&&f.definition!==c.rawHolderDefinition);
-    return [metric, conflict || definitionConflict ? { ...base, state: "conflict" as const } : base];
+    const definitionConflict = f && (metric === "revenue" ? f.definition !== (c.fundamentals.revenue.physicalFingerprint??c.fundamentals.revenue.fingerprint) : c.rawHolderDefinition !== undefined&&f.definition!==c.rawHolderDefinition);
+    const legacyDefinition=metric==="revenue"?c.fundamentals.revenue.legacyPhysicalFingerprint:c.rawHolderLegacyDefinition;
+    const alias=c.fundamentals.economicPolicy&&f&&legacyDefinition?{legacyIdentityAlias:{identity:JSON.stringify([f.scope,legacyDefinition,f.components.map(p=>p.id)]),basis:"identical-captured-legacy-metadata" as const}}:{};
+    return [metric, conflict || definitionConflict ? { ...base, ...alias,state: "conflict" as const } : {...base,...alias}];
   })) as NonNullable<CoinRaw["freshness"]> }));
 }
 export function freshnessSummary(coins: CoinRaw[], asOf: string): FreshnessSummary {

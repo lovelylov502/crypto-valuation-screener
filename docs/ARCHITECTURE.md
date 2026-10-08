@@ -2,7 +2,7 @@
 
 ## Reader-first dated freshness migration
 
-The checked-in `lib/pipeline-release.json` selects Phase B (`writerSchema=2`, `schedule=four-daily`) after verified Phase-A deployment. Readers validate pipeline and journal schemas 1 and 2. A source bundle still has its independent schema 1; the optional `pipelineSchema=2` selects the new acquisition/normalization contract. An absent selector runs the original behavior, including historical retry receipt order, normalized shape and hashes. Real preserved schema-1 replay is required; accepting a version enum does not establish compatibility.
+The checked-in `lib/pipeline-release.json` selects a compatible paused economic reader (`writerSchema=2`, `schedule=paused`, economic writing inactive), retaining the prior verified Phase-A proof and four-slot scheduler for separate activation. Readers validate pipeline and journal schemas 1 and 2. A source bundle still has its independent schema 1; the optional `pipelineSchema=2` selects the new acquisition/normalization contract. An absent selector runs the original behavior, including historical retry receipt order, normalized shape and hashes. Real preserved schema-1 replay is required; accepting a version enum does not establish compatibility.
 
 Schema-2 histories retain the exact common complete-date set used for their period totals as a 730-day hexadecimal bitmap (183 characters). Current target, latest complete date, recent exact missing dates, component coverage and source identity/definition/provenance are separate. Missing target plus a complete immediately preceding day establishes expected recent reporting. Older holes are insufficient history; missing dates never become zero. Exact-parent aggregate recovery is labeled explicitly and retains its authoritative parent URL and receipt time. Raw holder freshness includes all exact source components independently of economic eligibility; approved holder multiples still use the eligible subset.
 
@@ -77,6 +77,10 @@ Incomplete CMC discovery cannot prove uniqueness for name/symbol matching. Canon
 Local classification requires exact endpoint and row/component or quote-ID accounting. Unrecognized errors cannot be waived. Whole-snapshot quality counts survive pagination. Global, stale, browser and storage errors retain display priority over partial coverage.
 
 ## Responsibilities
+
+Economic decisions are metric-specific and replay-bound. `economicPolicy` selects an immutable artifact and the frozen legacy registry; `economicDecisionSource` acquires at most two official repository receipts and checks only the declared dependency closure. A matching closure attests repository consistency, not the code executed by the provider. `fundamentalSource` supplies one canonical decision to history, multiples, growth, scoring and UI. Legacy bundles retain the exact old six-field behavior. Logical metric identity excludes unrelated review changes and capture receipt times; raw dated-series identity remains separate.
+
+`economicReview` retains stable provider/component/metric lifecycle entries, including absent identities and their original ages/resolutions. `economicReviewArchive` persists the full state as a hash-bound immutable asset and keeps a bounded summary/reference in the wire journal. Internal writers hydrate it; ordinary public readers do not. Wire equality is used for publication idempotency, and both the hydrated baseline and reference are bound in capture/completion. Collection quality, economic review, dated currency and selected valuation coverage remain separate verdicts.
 
 | Modules | Responsibility |
 | --- | --- |

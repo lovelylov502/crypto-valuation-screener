@@ -3,7 +3,7 @@ import { fmtUsd, fmtMult, fmtPct, fmtPrice } from "@/lib/format";
 import { researchMultiple } from "@/lib/research";
 import { revenueAmount } from "@/lib/revenueHistory";
 import { protocolResearch } from "@/lib/protocolResearch";
-import { holderEconomicTypeLabel } from "@/lib/holderValue";
+import { holderEconomicTypeLabel } from "@/lib/holderLabels";
 import { flowLabel } from "@/lib/signals";
 import type { SortKey } from "@/lib/screenerColumns";
 import { ScoreBadge } from "./ScoreBadge";

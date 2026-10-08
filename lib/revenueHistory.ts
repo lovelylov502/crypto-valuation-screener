@@ -49,7 +49,7 @@ export function revenueBasis(c: { revenueHistory?: RevenueHistory | null }): str
 }
 
 export function summarizeRevenueHistory(
-  protocols: Protocol[], chart: unknown[], now: number, source: string, fingerprints: ReadonlyMap<string, { fingerprint: string }> = new Map(), identityUniverse: Protocol[] = protocols, schema: 1 | 2 = 1,
+  protocols: Protocol[], chart: unknown[], now: number, source: string, fingerprints: ReadonlyMap<string, { fingerprint: string; physicalFingerprint?: string }> = new Map(), identityUniverse: Protocol[] = protocols, schema: 1 | 2 = 1,
 ): Record<string, RevenueHistory> {
   const end = Math.floor(now / 1000 / DAY) * DAY - DAY;
   const groups = new Map<string, string[]>();
@@ -96,7 +96,7 @@ export function summarizeRevenueHistory(
       previous30: period(30, 30),
       weeks: Array.from({ length: 13 }, (_, i) => period(7, (12 - i) * 7)),
       source, observedAt: new Date(now).toISOString(),
-      ...(schema === 2 ? { freshness: summarizeDatedFreshness(key, fingerprints.get(key)?.fingerprint ?? "unknown", end, daily,
+      ...(schema === 2 ? { freshness: summarizeDatedFreshness(key, fingerprints.get(key)?.physicalFingerprint ?? fingerprints.get(key)?.fingerprint ?? "unknown", end, daily,
         protocols.filter(p => (p.parentProtocol ?? p.slug) === key && p.doublecounted !== true).map(p => ({ id: `${String(p.slug)}@${String(p.defillamaId ?? "unknown")}`,
           days: new Set([...rows].filter(([,r]) => nameCounts.get(String(p.name)) === 1 && typeof r[String(p.name)] === "number" && Number.isFinite(r[String(p.name)])).map(([t]) => t)) })), source, new Date(now).toISOString()) } : {}),
     };

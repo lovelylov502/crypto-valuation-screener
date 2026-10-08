@@ -6,7 +6,8 @@ import { fmtMult, fmtUsd } from "@/lib/format";
 import { researchMultiple } from "@/lib/research";
 import { revenueAmount, historyMatches, type RevenueWindowDays } from "@/lib/revenueHistory";
 import { compareSnapshot, type Snapshot } from "@/lib/snapshotHistory";
-import { revenueLabel, multipleLabel, knownRevenue, feeLabel, RULE_VERSION } from "@/lib/fundamentals";
+import { revenueLabel, multipleLabel, knownRevenue, feeLabel, RULE_VERSION,metricTemporalLabel,metricComparisonAllowed } from "@/lib/fundamentals";
+import {EconomicEvidence} from "./EconomicEvidence";
 
 export function RevenuePanel({ coin, history, reference }: { coin: CoinScored; history: Snapshot[]; reference: number | null }) {
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
@@ -18,7 +19,8 @@ export function RevenuePanel({ coin, history, reference }: { coin: CoinScored; h
   const selected = weeks[selectedWeek ?? weeks.length - 1];
   const records = history.flatMap(snapshot => {
     const row = snapshot.coins[coin.slug];
-    return compareSnapshot(coin, snapshot, RULE_VERSION).state === "comparable" && row?.revenueMultiple != null ? [{ at: snapshot.at, row }] : [];
+    const comparison=compareSnapshot(coin,snapshot,RULE_VERSION);
+    return comparison.state === "comparable" && comparison.revenueComparable!==false&&row?.revenueMultiple != null ? [{ at: snapshot.at, row }] : [];
   });
   return <section className="detail-section revenue-panel">
     <div className="section-title"><h3>{multipleLabel(coin)} · 기간별 추이</h3><span>현재 토큰 시총 · {fmtUsd(coin.mcap)}</span></div>
@@ -30,7 +32,7 @@ export function RevenuePanel({ coin, history, reference }: { coin: CoinScored; h
       { label: `Revenue · ${revenueLabel(coin)}`, parts: coin.fundamentals.revenue.components },
       { label: `Fees · ${feeLabel(coin)}`, parts: coin.fundamentals.fees.components },
       { label: "HoldersRevenue · 홀더 귀속 원천 집계", parts: coin.fundamentals.holders },
-    ].map(group => <div key={group.label}><strong>{group.label}</strong>{group.parts.length ? group.parts.map((part, i) => <p key={`${part.slug}-${i}`}><a href={part.source} target="_blank" rel="noreferrer">{part.slug}</a> · {part.status === "matched" ? `정의 대조 ${part.reviewedAt}` : "정의 재검토 필요"}<br /><span lang="en">{part.definition ?? "원천 정의 없음"}</span></p>) : <p>원천 구성요소 없음</p>}</div>)}<p className="muted">제공처의 정의를 대조한 분류입니다. 재무감사나 거래별 검증을 뜻하지 않습니다.</p></details>
+    ].map(group => <div key={group.label}><strong>{group.label}</strong>{group.parts.length ? group.parts.map((part, i) => <div key={`${part.slug}-${i}`}><p><a href={part.source} target="_blank" rel="noreferrer">{part.slug}</a> · {part.status === "matched" ? `정의 대조 ${part.reviewedAt}` : "정의 재검토 필요"}<br /><span lang="en">{part.definition ?? "원천 정의 없음"}</span></p>{part.decision&&<EconomicEvidence decision={part.decision}/>}</div>) : <p>원천 구성요소 없음</p>}</div>)}<p className="muted">제공처의 정의를 대조한 분류입니다. 재무감사나 거래별 검증을 뜻하지 않습니다.</p></details>
     <div className="revenueMultiple-periods">
       {([365, 90, 30, 7] as RevenueWindowDays[]).map(days => {
         const revenueMultiple = researchMultiple(coin, days), period = coin.revenueHistory?.periods[days];
@@ -39,6 +41,8 @@ export function RevenuePanel({ coin, history, reference }: { coin: CoinScored; h
           <strong className={reference !== null && days === 30 && revenueMultiple !== null && revenueMultiple <= reference ? "revenueMultiple-highlight" : ""}>{fmtMult(revenueMultiple)}</strong>
           <small>원천 집계액 {fmtUsd(revenueAmount(coin, days))}</small>
           {period && <small>{period.start} ~ {period.end}</small>}
+          {period&&metricTemporalLabel(coin,"Revenue",period)&&<small>{metricTemporalLabel(coin,"Revenue",period)}</small>}
+          {!metricComparisonAllowed(coin,"Revenue",days)&&coin.fundamentals.revenue.components.some(c=>c.decision?.comparabilityBoundary)&&<small className="caution-text">귀속 범위 전환이 포함돼 직전 기간과의 성장 비교는 보류합니다.</small>}
           {period && period.reportedDays !== days && <small className="caution-text">{period.reportedDays}/{days}일 확보 · 일부 이력 누락</small>}
           {period?.total !== null && period?.total !== undefined && period.total <= 0 && <small>집계액 0 이하 · 시총/집계액 산출 보류</small>}
         </div>;

@@ -1,8 +1,24 @@
 # Production deployment safety
 
+## Metric-specific economic reader and writer
+
+The economic decision rollout uses `metric-economic-decisions-v1` readers in a compatible paused deployment first. Readers retain schema 1/2 and acquisition revision 1/2 archive replay, including the frozen b519 definition registry. The actual b519 writer rejects the new reader-release identity. Historical Phase-A identity remains historical proof; it does not authorize the new economic writer.
+
+After the canonical paused deployment and its immutable protected URL agree on exact production commit, deployment ID, reader contract and economic artifact hash, prepare activation:
+
+```powershell
+node scripts/prepare-economic-release.mjs activate <verified-paused-economic-reader-commit>
+```
+
+This writes only the explicit release configuration. Review, commit and deploy through the canonical wrapper. Every new writer verifies its executing commit against the current canonical deployment and verifies the active algorithm/artifact plus both immutable reader proofs before claim and promotion. An older queued revision cannot promote after the canonical revision changes. The existing protected-URL automation bypass applies only to the validated pinned hosts.
+
+For a compatible economic pause, run `node scripts/prepare-economic-release.mjs pause`, review/commit, and deploy through the same wrapper. It clears the activation reference while Git preserves the old proof. Reactivation requires a newly verified canonical paused deployment; the previous active proof cannot authorize it. Retained cron invocations return paused results. Never restore an incompatible schema-only reader or weaken the exact revision fence.
+
+Accepted captures store the full economic review ledger in an immutable `economic-review.json` release asset. Wire journals contain its exact URL, byte count, SHA256, state hash and bounded public summary. Writers hydrate and validate the asset before using its baseline; missing or changed evidence fails closed. Public GitHub asset redirects carry no credential. Start/wake/blocked/confirmed journals preserve unchanged asset references. The complete ledger is never embedded in GitHub Release body or paginated API output.
+
 ## Reader-first activation and compatible pause
 
-The initial rollout starts with Phase A: pipeline/journal 1/2 readers, writer 1, legacy two-slot schedules. Integrate and deploy that reviewed reader release through the canonical production procedure below. Verify `/api/status` advertises exact reader contracts `[1,2]`, production environment, deployment ID/unique URL and the expected Phase-A code commit. Verify real legacy snapshot reading and preserved source replay. A legacy freshness-accounting verdict remains unavailable; this does not invalidate a safe reader deployment. The current checked-in contract has completed this ordering and selects Phase B; retain its pinned Phase-A proof during subsequent fixes.
+The initial rollout starts with Phase A: pipeline/journal 1/2 readers, writer 1, legacy two-slot schedules. Integrate and deploy that reviewed reader release through the canonical production procedure below. Verify `/api/status` advertises exact reader contracts `[1,2]`, production environment, deployment ID/unique URL and the expected Phase-A code commit. Verify real legacy snapshot reading and preserved source replay. A legacy freshness-accounting verdict remains unavailable; this does not invalidate a safe reader deployment. The freshness rollout completed this ordering; retain its pinned Phase-A proof during subsequent fixes. The current economic rollout uses the separate paused-reader contract above.
 
 Only after that deployment is verified, prepare Phase B in the canonical checkout:
 
@@ -73,7 +89,7 @@ npm run verify:local
 
 ## Post-deploy readback gate
 
-`npm run verify:production` requires both canonical endpoints to return HTTP 200. The page must contain `화면 모드`, `tovenit-theme`, `밝게`, `어둡게`, `DefiLlama 전체 종목`, `열 표시`, `필터`, `연결 토큰`, `배수 분자`, `P/R · 24시간`, `P/HR · 24시간`, `P/R · 30일`, `P/HR · 30일`, `지표 안내`, `최신 자료 확인`, `page-size-top`, `scan-table`, and `수익 정렬 기준`. Main HTML must not contain `저평가 80+`, `고평가 20 이하`, a P/S table heading, or the removed `결과 정렬` dropdown. P/S evidence is still available in client-opened coin details. The API must return `scoreVersion=research-v10-source-revenue-recovery`, valid pagination and universe coverage, row fields including `opportunities` and `peerCounts`, a non-empty result, and a payload below 4.5 MB. At least one row must have usable completed-day revenue history with positive 30-day revenue and 13 weekly observations. The source-root, repository, branch, remote, credential, and Vercel identity guards are unchanged.
+`npm run verify:production` requires both canonical endpoints to return HTTP 200. The page must contain `화면 모드`, `tovenit-theme`, `밝게`, `어둡게`, `DefiLlama 전체 종목`, `열 표시`, `필터`, `연결 토큰`, `배수 분자`, `P/R · 24시간`, `P/HR · 24시간`, `P/R · 30일`, `P/HR · 30일`, `지표 안내`, `최신 자료 확인`, `page-size-top`, `scan-table`, and `수익 정렬 기준`. Main HTML must not contain `저평가 80+`, `고평가 20 이하`, a P/S table heading, or the removed `결과 정렬` dropdown. P/S evidence is still available in client-opened coin details. The API must return `scoreVersion=research-v10-source-revenue-recovery`, valid pagination and universe coverage, row fields including `opportunities` and `peerCounts`, a non-empty result, and a buffered payload below 4.5 MB. Larger pages use a bounded streamed JSON response with the identical rows, evidence and pagination, an exact decoded byte count and an 8 MB decoded ceiling. Browser and audit readers reject missing/invalid transport metadata, interrupted/incomplete bodies or exceeded budgets. The response is serialized and measured before headers, so exceeding the ceiling yields an explicit error without partial JSON or reduced page size. At least one row must have usable completed-day revenue history with positive 30-day revenue and 13 weekly observations. The source-root, repository, branch, remote, credential, and Vercel identity guards are unchanged.
 
 The readback requires the `descriptionKo` API field with at least one usable Korean introduction. It rejects legacy `multiples.ps`, unknown/mixed multiples, unreviewed holder shares and non-business growth. A separate paginated search must find the live VVV row and verify that it remains holder-return scoped for both Revenue and Fees, with no business growth or inferred 100% share.
 
@@ -88,3 +104,15 @@ A reader repair may deploy while the existing archive fails candidate acquisitio
 The gate also checks separate sales evidence identity and amount, P/HR arithmetic and complete 30-day coverage, reviewed protocol/service-receipt P/R, and stablecoin capital exclusions. Pagination must retain the full universe count while returning at most the requested page size.
 
 V9 moves column controls into display settings and details below the selected row. Holder eligibility continues to include reviewed conditional distributions and native burns. Exact methodology, token identity, complete daily windows and numerator guards remain mandatory; see [SCREENER_V9.md](./SCREENER_V9.md) and the underlying [SCREENER_V8.md](./SCREENER_V8.md) rules. After the automated gate, check AERO search, inline details, the CMC link and the 24-hour columns in the live browser.
+
+The largest supported conditional favorites-200 response measured 5,772,352 decoded bytes, compared with 3,860,038 for the same previous snapshot selection. Streaming preserves full evidence beyond the buffered platform limit; gzip alone is not treated as proof. See [Vercel body-limit guidance](https://vercel.com/kb/guide/how-to-bypass-vercel-body-size-limit-serverless-functions) and [streaming documentation](https://vercel.com/docs/functions/streaming-functions). Local byte-equivalence/completion tests do not attest production transport; retain canonical large-page HTTP/browser readback after a natural new-policy publication.
+
+Publication storage uses a compact Release-body envelope and the existing complete immutable `state.json`; all dated obligations remain in that state. Latest-reader hydration validates exact same-release URL/ID/hash/bytes with a separate 30 MB state budget. A protected overdue start can pass the safe-reader deployment gate only when the retained archive, API equality and original source replay remain valid; its execution/recovery verdicts remain failed. Storage repair never promotes an unpublished candidate.
+
+To review preservation of an interrupted archive, use the bounded read-only helper with a transient `GITHUB_TOKEN` that can read the approved repository's Actions artifacts. The helper verifies the actual ZIP digest, extracts only seven named members with `unzip`, and compares original replay and retained baseline. Git for Windows supplies `unzip.exe` under `C:/Program Files/Git/usr/bin` when local review needs a transient PATH addition. Signed download URLs and credentials are never persisted.
+
+```powershell
+npx tsx scripts/preserve-failed-observation.ts prepare <expected-start-journal> <failed-run-id> <failed-attempt> C:/outside-repository/review.json
+```
+
+After independent review and exact canonical active-revision deployment, dispatch the existing daily workflow with only `failed_observation_parent`, `failed_observation_run` and `failed_observation_attempt`. This is maintenance without collection, under its existing sole-writer concurrency group. It permanently archives original failure evidence, preserves the published pointer and imports only verified missing-date ages. Local commit mode is rejected. Preparation is review evidence only; actual immutable release/readback remains an operational gate. If the parent advances, stop and re-prepare rather than overwrite its later attempt. Keep any temporarily disabled workflow visible in operating evidence, and re-enable only the reviewed exact writer; skipped cycles earn no success credit.

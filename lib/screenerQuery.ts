@@ -10,7 +10,7 @@ import { revenueReading } from "./revenueReading";
 
 export interface ScreenerPage extends ScreenerResponse {
   pagination: { page: number; size: number; total: number; filtered: number; favorites: number };
-  coverage: ReturnType<typeof metricCoverage>;
+  coverage: ReturnType<typeof metricCoverage>&{capital:WorkspacePreferences["capital"];window:WorkspacePreferences["coverageWindow"]};
   visibleCoverage: ReturnType<typeof visibleMetricCoverage>;
   universe: { projects: number; linkedTokens: number; withRevenue: number; withHolder: number };
 }
@@ -45,7 +45,7 @@ export function queryScreener(data: ScreenerResponse, prefs: WorkspacePreference
     || (b.mcap ?? 0) - (a.mcap ?? 0) || a.slug.localeCompare(b.slug));
   const pageSize = [50, 100, 200].includes(size) ? size : 100;
   const currentPage = Math.max(1, Math.min(Number.isFinite(page) ? Math.trunc(page) : 1, Math.ceil(rows.length / pageSize) || 1));
-  const coverage = metricCoverage(data.coins, prefs.capital, prefs.coverageWindow, false);
+  const coverage = {...metricCoverage(data.coins, prefs.capital, prefs.coverageWindow, false),capital:prefs.capital,window:prefs.coverageWindow};
   const linked = data.coins.filter(c => c.identityStatus === "verified" && !c.capitalExclusionReason);
   const cmcGecko = new Map(linked.filter(c => c.cmcId && c.geckoId).map(c => [c.cmcId, c.geckoId]));
   const tokens = new Set(linked.flatMap(c => {

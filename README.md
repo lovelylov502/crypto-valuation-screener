@@ -10,7 +10,7 @@
 
 ## Current product and data engine
 
-- The checked-in release contract is active Phase B: compatible pipeline/journal 1/2 readers, schema-2 writing and four regular slots at 05:00/11:00/17:00/23:00 KST, with two bounded catch-up stages. Activation used verified canonical and pinned Phase-A deployment proof. [PUBLICATION.md](./docs/PUBLICATION.md) owns scheduling; [freshness acceptance](./docs/FRESHNESS_IMPLEMENTATION_ACCEPTANCE_2026-10-08.md) records local and rollout evidence separately from the required 72-hour operational observation.
+- The checked-in economic release is a compatible paused reader: pipeline/journal 1/2 and legacy acquisition replay remain supported, with economic writing inactive until a separately verified reader deployment authorizes activation. The existing four-slot scheduler and historical Phase-A proof remain preserved. [PUBLICATION.md](./docs/PUBLICATION.md) owns scheduling; [economic implementation evidence](./docs/ECONOMIC_DECISION_IMPLEMENTATION_2026-10-08.md) separates local tests, conditional source assessment and the required future 72-hour operating observation.
 
 - Every new candidate retains original HTTP responses and must reproduce its normalization and complete output in an offline replay. Accounted local failures withhold affected metrics while valid current rows can publish. Required census, identity, financial and source-integrity failures still block publication. [ARCHITECTURE.md](./docs/ARCHITECTURE.md) defines the active contract.
 

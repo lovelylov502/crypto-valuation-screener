@@ -1,5 +1,5 @@
 import type { CoinRaw } from "./types";
-import { businessRevenue } from "./fundamentals";
+import { businessRevenue, metricComparisonAllowed } from "./fundamentals";
 import { historyMatches, revenueAmount, type RevenueWindowDays } from "./revenueHistory";
 import { fmtPct } from "./format";
 
@@ -15,7 +15,7 @@ export function growthLabel(trend: ReturnType<typeof revenueTrend>) {
 export function revenueTrend(c: CoinRaw, days: RevenueWindowDays) {
   const valid = businessRevenue(c) && historyMatches(c);
   const current = valid ? revenueAmount(c, days) : null;
-  const previous = !valid ? null : c.revenueHistory
+  const previous = !valid || !metricComparisonAllowed(c,"Revenue",days) ? null : c.revenueHistory
     ? (c.revenueHistory.previous?.[days] ?? (days === 30 ? c.revenueHistory.previous30 : undefined))?.total ?? null
     : days === 7 ? c.revenuePrev7d ?? null : days === 30 ? c.revenuePrev30d : null;
   const delta = current !== null && previous !== null ? current - previous : null;

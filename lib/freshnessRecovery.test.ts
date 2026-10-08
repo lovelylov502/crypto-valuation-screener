@@ -163,12 +163,15 @@ it("raw holder freshness independently retains exact-parent day/provenance despi
  expect(Date.parse(h.rawFreshness!.observedAt)).toBeGreaterThan(Date.parse(at));
 });
 
-it("new slots do not reset 24-hour obligation age, definition changes leave superseded evidence, and missed stages/deadlines stay failed",async()=>{
+it("new slots preserve 24-hour age, definition changes preserve versioned lineage, and missed stages/deadlines stay failed",async()=>{
   upstream("2026-10-07T02:01Z",false);const data=(await captureDataPipeline(null,iso("2026-10-07T02:01Z"),async()=>{},[],2)).data;
   const r=updateObligations(initialRecovery(),data,"data-first"),aged=structuredClone(data);aged.updatedAt=iso("2026-10-08T02:02Z");
   const checked=updateObligations(r,aged,"data-later");expect(checked.obligations[0]).toMatchObject({disposition:"overdue",firstMissingAt:iso("2026-10-07T02:01Z")});
   aged.coins.find(c=>c.slug==="aave-v2")!.freshness!.revenue.definition="changed";
-  expect(updateObligations(checked,aged,"data-changed").obligations[0].disposition).toBe("superseded");
+  const changed=updateObligations(checked,aged,"data-changed").obligations[0];
+  // Legacy history used supersession; a new-policy scope change cannot retire an unproved dated obligation.
+  expect(changed.disposition).toBe(aged.pipeline?.economicPolicy?"overdue":"superseded");
+  expect(changed.firstMissingAt).toBe(checked.obligations[0].firstMissingAt);
   upstream("2026-10-07T03:35Z",false);const late=(await captureDataPipeline(null,iso("2026-10-07T03:35Z"),async()=>{},[],2)).data;
   const j=finish(claim(prior(),"2026-10-07T03:35Z",trigger("2026-10-07T03:35Z")),late,"2026-10-07T03:40Z");expect(j.recovery!.slots[0].deadlineMissed).toBe(true);
   const next=reconcileRecovery(j,Date.parse("2026-10-07T06:02Z"));expect(next.slots[0].catchup1.missed).toBe(true);

@@ -1,10 +1,11 @@
 import { Buffer } from "node:buffer";
 import { pathToFileURL } from "node:url";
 import { DEPLOY_CONTRACT } from "./deploy-contract.mjs";
+import economicIdentity from "../lib/economic-policy-v1.identity.json" with {type:"json"};
+import {readJsonText,jsonTransportErrors} from "../lib/jsonTransport.mjs";
 
 const ADVANCED_UI_MARKERS = ["화면 모드", "tovenit-theme", "밝게", "어둡게", "DefiLlama 전체 종목", "열 표시", "필터", "연결 토큰", "배수 분자", "P/R · 24시간", "P/HR · 24시간", "P/R · 30일", "P/HR · 30일", "지표 안내", "최신 자료 확인", "page-size-top", "scan-table", "수익 정렬 기준"];
 const LEGACY_UI_MARKERS = ["저평가 80+", "고평가 20 이하", "P/S 참고선", "P/S · 30일", "P/S · 사업 매출", 'aria-label="결과 정렬"'];
-const MAX_API_BYTES = 4_500_000;
 const MAX_ATTEMPTS = 8;
 const RETRY_DELAY_MS = 5_000;
 
@@ -25,11 +26,13 @@ async function readPath(pathname, attempt) {
     headers: { "cache-control": "no-cache" },
     signal: AbortSignal.timeout(300_000),
   });
-  const body = await response.text();
+  const body = pathname.startsWith("/api/screener")&&response.ok?await readJsonText(response):await response.text();
   return {
     pathname,
     status: response.status,
     bytes: Buffer.byteLength(body),
+    transport:response.headers.get("x-tovenit-json-transport"),
+    declaredBytes:response.headers.get("x-tovenit-json-bytes"),
     cache: response.headers.get("x-vercel-cache"),
     requestId: response.headers.get("x-vercel-id"),
     body,
@@ -83,6 +86,18 @@ export function inspectPipelineProof(data) {
         f.coverage!==null&&(!f.coverage||!date(f.coverage.start)||f.coverage.end!==target||Date.parse(f.coverage.end)-Date.parse(f.coverage.start)!==729*86400_000||!/^[a-f0-9]{183}$/.test(f.coverage.bits)))errors.push(`invalid v2 row freshness: ${coin.slug}:${metric}`);
     }
   }
+  if(proof.economicPolicy!==undefined) {
+    const valid=p=>p?.algorithm===economicIdentity.algorithm&&p.artifact===economicIdentity.artifact&&p.sha256===economicIdentity.sha256;
+    const review=data.economicReview;
+    if(proof.schema!==2||!valid(proof.economicPolicy)||!review||!valid(review.policy)||review.schema!==1||!Number.isFinite(Date.parse(review.trackingStartedAt))||!/[a-f0-9]{64}/.test(review.stateSha256)||!Array.isArray(review.sample)||review.sample.length>12||
+      !["sources","sourceMetrics","pending","evidenceUnavailable","reviewedUnavailable","approved","affectedProjects","retired"].every(k=>Number.isInteger(review.summary?.[k])&&review.summary[k]>=0))errors.push("invalid economic review accounting");
+    for(const c of data.coins??[]) {
+      if(!valid(c.fundamentals?.economicPolicy))errors.push(`unbound economic row: ${c.slug}`);
+      for(const [metric,parts] of [["Revenue",c.fundamentals?.revenue?.components],["Fees",c.fundamentals?.fees?.components],["HoldersRevenue",c.fundamentals?.holders]]) {
+        if(!Array.isArray(parts)||parts.some(p=>!valid(p.decision?.policy)||p.decision.metric!==metric||!["approved","pending","evidence-unavailable","reviewed-unavailable"].includes(p.decision.disposition)||p.kind!==p.decision.kind))errors.push(`invalid economic row decisions: ${c.slug}:${metric}`);
+      }
+    }
+  }
   return errors;
 }
 
@@ -96,9 +111,7 @@ export function inspectApi(readback, requireUsableHistory = true) {
     errors.push(`API JSON parse failed: ${error instanceof Error ? error.message : String(error)}`);
     return { errors, data: null };
   }
-  if (readback.bytes >= MAX_API_BYTES) {
-    errors.push(`API payload ${readback.bytes} bytes exceeds fail-closed limit ${MAX_API_BYTES}`);
-  }
+  errors.push(...jsonTransportErrors(readback));
   if (data.scoreVersion !== DEPLOY_CONTRACT.scoreVersion) {
     errors.push(`unexpected scoreVersion: ${data.scoreVersion ?? "missing"}`);
   }

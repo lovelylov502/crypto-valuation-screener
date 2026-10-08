@@ -7,10 +7,10 @@ import { recoverOverviewRows } from "./overviewRecovery";
 import { fetchHolderHistory } from "./holderHistorySource";
 import { resolveSalesEvidence } from "./salesSource";
 import { koreanDescription } from "./protocolDescriptions";
-import { aggregateDefinitions, combineFundamentals, definitionReviewed } from "./fundamentalSource";
+import { aggregateDefinitions, combineFundamentals, definitionReviewed, physicalSeriesFingerprint } from "./fundamentalSource";
 import type { MetricDefinition, RevenueKind, FeeKind } from "./fundamentals";
 import type { RevenueHistory } from "./revenueHistory";
-import { sourceDelay, sourceFetch, sourceNow, sourceObservedAt, sourceReplayActive, sourcePipelineSchema,sourceAcquisitionRevision,sourceRequestDeferred,objectHash } from "./sourceBundle";
+import { sourceDelay, sourceFetch, sourceNow, sourceObservedAt, sourceReplayActive, sourcePipelineSchema,sourceAcquisitionRevision,sourceRequestDeferred,sourceEconomicPolicy,objectHash } from "./sourceBundle";
 import { validateDirectoryRows, validateProtocolFinancialRows } from "./sourceValidation";
 import {
   aggregateHolderValueByGroup,
@@ -667,7 +667,8 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
       revenueSource: { url: recoveredRevenue.get(k) ?? REVENUE_OVERVIEW_URL, observedAt: observations.find(s => s.url === (recoveredRevenue.get(k) ?? REVENUE_OVERVIEW_URL) && s.status === "ok")?.observedAt ?? inputs.asOf, periods: sourceRevAgg.get(k) },
       holderHistory: holderHistories[k] ?? null,
       ...(holderHistories[k]?.rawFreshness ? { rawHolderFreshness: holderHistories[k].rawFreshness } : {}),
-      ...(holderHistories[k]?.rawFreshness ? { rawHolderDefinition:objectHash(hrL.filter(p=>p.doublecounted!==true&&typeof p.slug==="string"&&groupKey(p.slug)===k).map(p=>[p.slug,p.defillamaId,p.methodology,p.parentProtocol]).sort()) } : {}),
+      ...(holderHistories[k]?.rawFreshness ? { rawHolderDefinition:sourceEconomicPolicy()?physicalSeriesFingerprint(hrL.filter(p=>p.doublecounted!==true&&typeof p.slug==="string"&&groupKey(p.slug)===k),"HoldersRevenue"):objectHash(hrL.filter(p=>p.doublecounted!==true&&typeof p.slug==="string"&&groupKey(p.slug)===k).map(p=>[p.slug,p.defillamaId,p.methodology,p.parentProtocol]).sort()),
+        ...(sourceEconomicPolicy()?{rawHolderLegacyDefinition:objectHash(hrL.filter(p=>p.doublecounted!==true&&typeof p.slug==="string"&&groupKey(p.slug)===k).map(p=>[p.slug,p.defillamaId,p.methodology,p.parentProtocol]).sort())}:{}) } : {}),
       sales: resolveSalesEvidence({ slug: k, geckoId, symbol, identityStatus }, inputs.asOf),
 
       mcap: cap.value,

@@ -1,8 +1,10 @@
 import type { PublicationJournal } from "../lib/publicationTypes";
 import { JOURNAL_REPOSITORY } from "../lib/publication";
-import { parseJournal, sha256,readArchivedJournal } from "../lib/snapshotArchive";
+import { sha256,readArchivedJournal } from "../lib/snapshotArchive";
 import { compactRecoveryJournal,withMigrationEvidence } from "../lib/freshnessRecovery";
 import {verifyWriterActivation,verifyCorrectionDeployment} from "../lib/pipelineRelease";
+import {archiveEconomicReview,hydrateEconomicReview} from "../lib/economicReviewArchive";
+import {journalBody,journalFromRelease} from "../lib/journalBody";
 
 const api = `https://api.github.com/repos/${JOURNAL_REPOSITORY}`;
 class RetryableArchiveError extends Error {}
@@ -25,19 +27,25 @@ async function request(path: string, method = "GET", body?: unknown) {
 }
 export async function latestJournal(): Promise<PublicationJournal | null> {
   const release = await request("/releases/latest");
-  return release ? withMigrationEvidence(parseJournal(JSON.parse(release.body)),readArchivedJournal) : null;
+  return release ? hydrateEconomicReview(await withMigrationEvidence(await journalFromRelease(release),readArchivedJournal)) : null;
 }
 export async function publishJournal(journal: PublicationJournal, files: Record<string, Uint8Array>) {
   headers();
+  const caller=journal;
   const compact=compactRecoveryJournal(journal);
   journal=compact.journal;
   if(compact.history)files={...files,"recovery-history.json":compact.history};
-  const body = JSON.stringify(journal);
-  const expected = { ...files, "state.json": Buffer.from(body) };
+  const economic=archiveEconomicReview(journal);
+  // The caller's confirmed journal must inherit the asset that was actually prepared here.
+  if(economic.journal.economicReviewRef) {caller.economicReviewRef=economic.journal.economicReviewRef;caller.publicEconomicReview=economic.journal.publicEconomicReview;}
+  journal=economic.journal;files={...files,...economic.files};
+  const wire = JSON.stringify(journal),{body,state} = journalBody(journal);
+  if(body.length>120_000)throw Error("Publication journal exceeds compact release-body budget");
+  const expected = { ...files, "state.json": state };
   const checkParent = async () => {
     const latest = await latestJournal();
     if (latest?.id === journal.id) {
-      if (JSON.stringify(latest) !== body) throw new Error("Existing journal identity has different content");
+      if (JSON.stringify(archiveEconomicReview(latest).journal) !== wire) throw new Error("Existing journal identity has different content");
       return true;
     }
     if ((latest?.id ?? null) !== journal.previousId) throw new Error("Journal changed; refusing a stale writer");
@@ -89,10 +97,11 @@ export async function publishJournal(journal: PublicationJournal, files: Record<
       if (!await checkParent()) {
         // Queued old binaries must honor a compatible canonical pause immediately before promotion.
         await verifyWriterActivation();
-        if(journal.correction?.journalId===journal.id)await verifyCorrectionDeployment();
+        if(journal.correction?.journalId===journal.id||journal.publicationFailure?.journalId===journal.id)await verifyCorrectionDeployment();
         await request(`/releases/${release.id}`, "PATCH", { draft: false, make_latest: "true" });
       }
-      if ((await latestJournal())?.id !== journal.id) throw new RetryableArchiveError("Published journal readback mismatch");
+      const verified=await latestJournal();
+      if (verified?.id !== journal.id||JSON.stringify(archiveEconomicReview(verified).journal)!==wire) throw new RetryableArchiveError("Published journal readback mismatch");
       console.log(JSON.stringify({ journal: journal.id, outcome: journal.attempt.outcome, published: journal.published?.id ?? null, errors: journal.attempt.errors.length }));
       return;
     } catch (error) {

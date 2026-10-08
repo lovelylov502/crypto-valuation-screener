@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
-import registry from "./fundamentalDefinitions.json";
+import registry from "./fundamentalDefinitions.legacy-b519.json";
+import { economicDecision,metricSemanticIdentity } from "./economicDecisionSource";
+import { sourceEconomicPolicy, sourceNow } from "./sourceBundle";
 import { FUNDAMENTAL_VERSION, type Fundamentals, type RevenueKind, type FeeKind, type MetricDefinition, type DefinitionComponent } from "./fundamentals";
 
 type Row = Record<string, unknown>;
@@ -32,13 +34,19 @@ export function aggregateDefinitions(rows: Row[], groupKey: (slug: string) => st
     const definitions: DefinitionComponent[] = components.map(row => {
       const slug = String(row.slug), review = reviews[slug], definition = text(method(row)[field]);
       const matched = definitionReviewed(row);
-      return { slug, definition, kind: matched ? (field === "Revenue" ? review.revenueKind : review.feeKind) : "unknown", reviewedAt: matched ? review.reviewedAt : null, reviewNote: matched ? review.reviewNote : undefined, source: `https://defillama.com/protocol/${encodeURIComponent(slug)}`, status: matched ? "matched" : !definition ? "missing" : review ? "changed" : "unreviewed" };
+      const decision=economicDecision(row,field),approved=decision?.disposition==="approved"||decision?.disposition==="reviewed-unavailable";
+      return { slug, definition, kind: decision?decision.kind as RevenueKind|FeeKind:matched ? (field === "Revenue" ? review.revenueKind : review.feeKind) : "unknown", reviewedAt: decision?decision.evidence.reviewedAt:matched ? review.reviewedAt : null, reviewNote: matched ? review.reviewNote : undefined, source: `https://defillama.com/protocol/${encodeURIComponent(slug)}`, status: decision?approved?"matched":!definition?"missing":decision.changedFields.length?"changed":"unreviewed":matched ? "matched" : !definition ? "missing" : review ? "changed" : "unreviewed",...(decision?{decision}:{}) };
     });
     const kinds = new Set(definitions.map(d => d.kind));
     const duplicate = new Set(components.map(c => c.slug)).size !== components.length;
     const kind = duplicate || kinds.has("unknown") ? "unknown" : kinds.size === 1 ? definitions[0].kind : "mixed";
-    return [key, { kind, fingerprint: hash([FUNDAMENTAL_VERSION, field, components.map(r => [r.slug, r.name, method(r), r.parentProtocol ?? null]), definitions.map(d => d.kind)]), components: definitions }];
+    const legacyFingerprint=hash([FUNDAMENTAL_VERSION,field,components.map(r=>[r.slug,r.name,method(r),r.parentProtocol??null]),components.map(row=>definitionReviewed(row)?field==="Revenue"?reviews[String(row.slug)].revenueKind:reviews[String(row.slug)].feeKind:"unknown")]);
+    return [key, { kind, fingerprint: sourceEconomicPolicy()?hash(components.map((row,i)=>[row.slug,row.name,row.parentProtocol??null,metricSemanticIdentity(row,definitions[i].decision!)])):legacyFingerprint, components: definitions,...(sourceEconomicPolicy()?{physicalFingerprint:physicalSeriesFingerprint(components,field),legacyPhysicalFingerprint:legacyFingerprint}:{}) }];
   }));
+}
+
+export function physicalSeriesFingerprint(rows:Row[],metric:"Revenue"|"Fees"|"HoldersRevenue"):string {
+  return hash(["reported-series-v1",metric,rows.filter(r=>r.doublecounted!==true).map(r=>[r.slug,r.defillamaId??null,r.name,r.module??null,r.parentProtocol??null,text(method(r)[metric])]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))]);
 }
 
 export function combineFundamentals(revenue: MetricDefinition<RevenueKind> | undefined, fees: MetricDefinition<FeeKind> | undefined, holders: Row[]): Fundamentals {
@@ -47,11 +55,13 @@ export function combineFundamentals(revenue: MetricDefinition<RevenueKind> | und
   const r = revenue ?? empty, f = fees ?? empty;
   // A numerical equality or a holder classification cannot prove denominator coverage.
   const holderShareReviewed = r.components.length > 0 && r.components.every(c => c.status === "matched" && reviews[c.slug]?.holderShareReviewed)
+    && r.components.every(c=>!c.decision||c.decision.basis==="legacy-definition-only")
     && holders.length > 0 && holders.every(h => definitionReviewed(h))
     && r.components.map(c => c.slug).sort().join() === holders.map(h => String(h.slug)).sort().join();
   const holderDefinitions: DefinitionComponent[] = holders.map(h => {
     const slug = String(h.slug), definition = text(method(h).HoldersRevenue), matched = definitionReviewed(h);
-    return { slug, definition, kind: matched ? "holder_return" : "unknown", reviewedAt: matched ? reviews[slug].reviewedAt : null, source: `https://defillama.com/protocol/${encodeURIComponent(slug)}`, status: matched ? "matched" : !definition ? "missing" : reviews[slug] ? "changed" : "unreviewed" };
+    const decision=economicDecision(h,"HoldersRevenue"),approved=decision?.disposition==="approved"||decision?.disposition==="reviewed-unavailable";
+    return { slug, definition, kind: decision?decision.kind as RevenueKind:matched ? "holder_return" : "unknown", reviewedAt: decision?decision.evidence.reviewedAt:matched ? reviews[slug].reviewedAt : null, source: `https://defillama.com/protocol/${encodeURIComponent(slug)}`, status: decision?approved?"matched":!definition?"missing":decision.changedFields.length?"changed":"unreviewed":matched ? "matched" : !definition ? "missing" : reviews[slug] ? "changed" : "unreviewed",...(decision?{decision}:{}) };
   });
-  return { version: FUNDAMENTAL_VERSION, revenue: r, fees: f, holders: holderDefinitions, holderShareReviewed, fingerprint: hash([r.fingerprint, f.fingerprint, holderDefinitions]) };
+  return { version: FUNDAMENTAL_VERSION, revenue: r, fees: f, holders: holderDefinitions, holderShareReviewed, fingerprint: hash([r.fingerprint, f.fingerprint, holderDefinitions]),...(sourceEconomicPolicy()?{economicPolicy:sourceEconomicPolicy(),economicAsOf:new Date(sourceNow()).toISOString()}:{}) };
 }

@@ -2,6 +2,7 @@ import type { CoinScored } from "./types";
 import { FUNDAMENTAL_VERSION, KIND_ORDER, businessRevenue, businessFees } from "./fundamentals";
 import { researchMultiple } from "./research";
 import { salesMultiple, protocolMultiple, holderMultiple } from "./valuationMetrics";
+import {economicCoinErrors} from "./economicContract";
 
 /** Applied to generated snapshots, browser refreshes, and replay tests. Fail closed on schema drift. */
 export function fundamentalErrors(c: CoinScored): string[] {
@@ -12,6 +13,7 @@ export function fundamentalErrors(c: CoinScored): string[] {
     ![f.fingerprint, f.revenue?.fingerprint, f.fees?.fingerprint].every(h => typeof h === "string" && /^[a-f0-9]{64}$/.test(h)) ||
     !Array.isArray(f.revenue?.components) || !Array.isArray(f.fees?.components) || !Array.isArray(f.holders) || typeof f.holderShareReviewed !== "boolean") return ["definition schema"];
   if ([...f.revenue.components, ...f.fees.components, ...f.holders].some(p => !p || typeof p.slug !== "string" || !["matched", "changed", "unreviewed", "missing"].includes(p.status))) errors.push("definition component");
+  errors.push(...economicCoinErrors(c));
   const expected = researchMultiple(c), actual = c.multiples.revenueMultiple;
   if (expected === null ? actual !== null : typeof actual !== "number" || !Number.isFinite(actual) || Math.abs(actual - expected) > Math.max(1, expected) * 1e-10) errors.push("multiple basis");
   if (Object.hasOwn(c.multiples, "ps")) errors.push("legacy sales field");

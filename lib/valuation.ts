@@ -9,7 +9,7 @@ import type {
   ValueCapture,
 } from "./types";
 import { compareFlow, deriveOpportunities } from "./signals";
-import { businessRevenue, businessFees, revenueKind, RULE_VERSION, sourceDefinitionsChanged } from "./fundamentals";
+import { businessRevenue, businessFees, revenueKind, RULE_VERSION, sourceDefinitionsChanged, metricDecisionHeld, metricDecisionIssue, metricComparisonAllowed } from "./fundamentals";
 import { revenueAmount, historyMatches, revenueBasis } from "./revenueHistory";
 import { researchMultiple } from "./research";
 import { salesMultiple, protocolMultiple, holderMultiple, datedHolderValue } from "./valuationMetrics";
@@ -136,7 +136,7 @@ function computeValueCapture({
   const datedHolder = datedHolderValue(coin);
   const hasEligibleCapture =
     eligibleCapital(coin) &&
-    !sourceDefinitionsChanged(coin) &&
+    !metricDecisionHeld(coin,"HoldersRevenue") &&
     (datedHolder.eligibleRunRate ?? 0) >= MIN_ACTIVITY_USD &&
     (datedHolder.eligibleCurrent30d ?? 0) > 0;
   const hasRevenueOrFees =
@@ -299,10 +299,10 @@ function scoringInput(raw: CoinRaw): CoinRaw {
   const fees = businessFees(raw);
   return { ...raw,
     holderValue: datedHolderValue(raw),
-    revenue30d: recent, revenuePrev30d: revenue ? (raw.revenueHistory ? raw.revenueHistory.previous30.total : raw.revenuePrev30d) : null,
+    revenue30d: recent, revenuePrev30d: revenue && metricComparisonAllowed(raw,"Revenue") ? (raw.revenueHistory ? raw.revenueHistory.previous30.total : raw.revenuePrev30d) : null,
     revenueAnnual: recent !== null ? recent * 365 / 30 : null,
     revenue1y: revenue ? revenueAmount(raw, 365) : null,
-    fees30d: fees ? raw.fees30d : null, feesPrev30d: fees ? raw.feesPrev30d : null,
+    fees30d: fees ? raw.fees30d : null, feesPrev30d: fees && metricComparisonAllowed(raw,"Fees") ? raw.feesPrev30d : null,
     feesAnnual: fees && raw.fees30d !== null ? raw.fees30d * 365 / 30 : null, fees1y: null };
 }
 
@@ -456,7 +456,7 @@ export function scoreCoins(
 
     const gateReasons: string[] = [];
     if (!eligibleCapital(coin)) gateReasons.push(coin.capitalExclusionReason ?? coin.identityReason);
-    if (sourceDefinitionsChanged(coin)) gateReasons.push("원천 집계 정의 변경 · 재검토 필요");
+    if (coin.fundamentals.economicPolicy ? !businessRevenue(coin) && !businessFees(coin) && metricDecisionHeld(coin,"HoldersRevenue") : sourceDefinitionsChanged(coin)) gateReasons.push(coin.fundamentals.economicPolicy?(["Revenue","Fees","HoldersRevenue"] as const).map(m=>metricDecisionIssue(coin,m)).filter(Boolean).join(" · "):"원천 집계 정의 변경 · 재검토 필요");
     if (!marketData) gateReasons.push("CMC 시세·60일·거래량 데이터 부족/지연");
     if (!fundamentalHistory) gateReasons.push("최근·직전 30일 펀더멘털 비교 불가");
     if (!liquidity) gateReasons.push("24시간 거래량이 유동성 기준 미달");
