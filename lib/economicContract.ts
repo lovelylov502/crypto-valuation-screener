@@ -1,7 +1,7 @@
 import {economicArtifactFor} from "./economicPolicy";
 import {knownEconomicPolicy} from "./economicPolicyIdentity";
 import type {CoinRaw,ScreenerResponse} from "./types";
-import {registryDecisionProofMatches} from "./economicProvenanceV3";
+import {registryDecisionProofMatches} from "./economicRegistryProof";
 
 /** Consistency gate. Source-economic truth is checked separately by independent fixtures. */
 export function economicCoinErrors(c:CoinRaw):string[] {

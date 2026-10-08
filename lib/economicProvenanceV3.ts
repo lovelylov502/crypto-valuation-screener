@@ -5,6 +5,7 @@ import {sourceFetch,sourceNow,sourceObservedAt,sourceReceipt,sourceReplayActive,
 import {contextHash,gitBlobHash,projectEconomicContext,CONTEXT_FILE_LIMIT,CONTEXT_TOTAL_LIMIT} from "./economicContext";
 import {typeSurfaceMatches,type ReviewedDimensionAddition} from "./economicTypeSurface";
 import {literalRegistryProjection,type LiteralRegistryContract} from "./economicLiteralRegistry";
+import {registryDecisionProofMatches,REVIEWED_LITERAL_REGISTRY_PROOF} from "./economicRegistryProof";
 import {PROVENANCE_COMMIT_URL,provenanceTreeUrl} from "./economicDecisionSourceV1";
 export const provenanceBlobUrl=(sha:string)=>`https://api.github.com/repos/DefiLlama/dimension-adapters/git/blobs/${sha}`;
 type ContextFile={path:string;blobSha1:string;sha256:string;body:string};
@@ -14,9 +15,7 @@ const registry=artifact.context.literalRegistry;
 const runtimeFiles=[...new Map(artifact.contracts.flatMap(c=>c.sourceClosure.filter(f=>f.role==="runtime")).map(f=>[f.path,f])).values()];
 if(contextHash(runtimeFiles.map(f=>[f.path,f.blobSha1,f.sha256]))!==contextHash(registry.closure.map(f=>[f.path,f.blobSha1,f.sha256])))throw Error("Incomplete retained registry closure");
 export const reviewedRegistryProjection=literalRegistryProjection(registry,registry.body);
-export function registryDecisionProofMatches(proof:NonNullable<EconomicProvenance["runtime"]>["literalRegistry"]) {
- return proof?.path===registry.path&&proof.state==="matched"&&/^[a-f0-9]{40}$/.test(proof.actualBlobSha1??"")&&/^[a-f0-9]{64}$/.test(proof.rawSha256??"")&&proof.projectionSha256===reviewedRegistryProjection.projectionSha256&&proof.consumerClosureSha256===reviewedRegistryProjection.consumerClosureSha256&&Array.isArray(proof.addedMembers);
-}
+if(registry.path!==REVIEWED_LITERAL_REGISTRY_PROOF.path||reviewedRegistryProjection.projectionSha256!==REVIEWED_LITERAL_REGISTRY_PROOF.projectionSha256||reviewedRegistryProjection.consumerClosureSha256!==REVIEWED_LITERAL_REGISTRY_PROOF.consumerClosureSha256)throw Error("Registry proof identity mismatch");
 export function registryContinuityMatches(provenance:EconomicProvenance|undefined) {
  const proof=provenance?.runtime?.literalRegistry;
  return registryDecisionProofMatches(proof)&&proof!.actualBlobSha1===provenance?.files.find(f=>f.path===registry.path)?.actual;
