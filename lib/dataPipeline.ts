@@ -20,7 +20,7 @@ export const encodeSourceBundle = (bundle: SourceBundle) => gzipSync(Buffer.from
 function derive(raw: CoinRaw[], observations: SourceObservation[], bundle: SourceBundle, rawBundleSha256: string): ScreenerResponse {
   const sources = orderedSources(observations);
   const quality = annotateDataQuality(raw, sources);
-  const normalized = bundle.pipelineSchema === 2 ? annotateFreshness(quality, bundle.asOf) : quality;
+  const normalized = bundle.pipelineSchema === 2 ? annotateFreshness(quality, bundle.asOf,bundle.acquisitionRevision===4?bundle.baseline:undefined) : quality;
   const data = assembleScreener(normalized, bundle.asOf, sources);
   if (bundle.pipelineSchema === 2) data.freshness = freshnessSummary(normalized, bundle.asOf);
   const review=buildEconomicReview(normalized,bundle.asOf,rawBundleSha256,bundle.economicReviewBaseline,bundle.baseline,objectHash);

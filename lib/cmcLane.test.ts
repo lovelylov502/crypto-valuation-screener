@@ -3,11 +3,11 @@ import {captureSourceBundle,replaySourceBundle,sourceFetch} from "./sourceBundle
 import {getJson} from "./sources";
 afterEach(()=>{vi.unstubAllGlobals();vi.useRealTimers();});
 const at="2026-10-08T08:00:00Z",base="https://pro-api.coinmarketcap.com/public-api/v3/cryptocurrency/",listing=base+"listings/latest?start=1",quote=base+"quotes/latest?id=1",other=base+"quotes/latest?id=2";
-it("revision3 serializes listings, quotes and actual retries, reserving starts after the latest cooldown",async()=>{
+it.each([3,4] as const)("revision%s serializes listings, quotes and actual retries, reserving starts after the latest cooldown",async revision=>{
  vi.useFakeTimers();vi.setSystemTime(at);const starts:{url:string;at:number}[]=[];let active=0,max=0;
  vi.stubGlobal("fetch",async(url:string)=>{starts.push({url,at:Date.now()});max=Math.max(max,++active);await new Promise(r=>setTimeout(r,100));active--;return starts.length===2?new Response("limited",{status:429,headers:{"retry-after":"10"}}):Response.json({ok:true});});
  const run=()=>Promise.all([listing,quote,other].map(url=>getJson(url,[],{timeout:1000,deadline:Date.now()+180_000})));
- const pending=captureSourceBundle(at,null,run,undefined,2,3);await vi.advanceTimersByTimeAsync(30_000);const result=await pending;
+ const pending=captureSourceBundle(at,null,run,undefined,2,revision);await vi.advanceTimersByTimeAsync(30_000);const result=await pending;
  expect(result.error).toBeUndefined();expect(max).toBe(1);expect(starts.map(s=>s.at-Date.parse(at))).toEqual([0,6000,17100,23100]);
  expect(result.bundle.requestStats).toMatchObject({requests:4,rateLimited:1,deferred:0});
  vi.stubGlobal("fetch",()=>{throw new Error("Offline only");});expect(await replaySourceBundle(result.bundle,run)).toEqual(result.value);

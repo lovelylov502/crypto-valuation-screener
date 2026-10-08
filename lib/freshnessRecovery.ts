@@ -12,6 +12,7 @@ export interface CollectionTrigger {
 export interface DateObligation {
   failedEvidence?:{manifestUrl:string;manifestSha256:string}[];
   identityMigration?: {from:string;at:string;rawBundleSha256:string;basis:"identical-captured-legacy-metadata"};
+  parentIdentityMigration?: {from:string;at:string;rawBundleSha256:string;basis:"identical-captured-parent-metadata"};
   key: string; slug: string; metric: "revenue" | "holders"; identity: string; date: string;
   firstMissingAt: string; lastCheckedAt: string; lastAttemptId: string; checks: number;
   disposition: "pending" | "overdue" | "resolved" | "superseded"; sources: string[];
@@ -108,6 +109,7 @@ export function validateRecovery(j: PublicationJournal, now = Infinity) {
     !finiteTime(o.firstMissingAt) || !finiteTime(o.lastCheckedAt) || Date.parse(o.firstMissingAt) > Date.parse(o.lastCheckedAt) || Date.parse(o.lastCheckedAt)>now ||
     !Number.isInteger(o.checks) || o.checks < 1 || !["pending","overdue","resolved","superseded"].includes(o.disposition) || !Array.isArray(o.sources)||
     o.identityMigration&&(o.identityMigration.basis!=="identical-captured-legacy-metadata"||!o.identityMigration.from||!finiteTime(o.identityMigration.at)||Date.parse(o.identityMigration.at)>Date.parse(o.lastCheckedAt)||!/^[a-f0-9]{64}$/.test(o.identityMigration.rawBundleSha256))||
+    o.parentIdentityMigration&&(o.metric!=="revenue"||o.parentIdentityMigration.basis!=="identical-captured-parent-metadata"||!o.parentIdentityMigration.from||!finiteTime(o.parentIdentityMigration.at)||Date.parse(o.parentIdentityMigration.at)>Date.parse(o.lastCheckedAt)||!/^[a-f0-9]{64}$/.test(o.parentIdentityMigration.rawBundleSha256))||
     o.failedEvidence&&(!Array.isArray(o.failedEvidence)||!o.failedEvidence.length||new Set(o.failedEvidence.map(m=>m.manifestUrl)).size!==o.failedEvidence.length||o.failedEvidence.some(m=>!/^https:\/\/github\.com\/lovelylov502\/crypto-valuation-screener\/releases\/download\/data-[a-zA-Z0-9-]+-failed-observation\/failed-evidence\.json$/.test(m.manifestUrl)||!/^[a-f0-9]{64}$/.test(m.manifestSha256)))) throw new Error("Invalid date obligation");
   const a=j.attempt;
   if(a.action) {
@@ -138,7 +140,8 @@ export function updateObligations(r: RecoveryState, data: ScreenerResponse, atte
     if (f.state === "pending") {
       const key = JSON.stringify([c.slug,metric,identity,f.targetDate]);
       const alias=!!data.pipeline&&!!c.fundamentals?.economicPolicy&&f.legacyIdentityAlias?.basis==="identical-captured-legacy-metadata"?f.legacyIdentityAlias.identity:null;
-      if (!old.has(key)&&![...old.values()].some(o=>o.slug===c.slug&&o.metric===metric&&o.date===f.targetDate&&o.identity===alias)) old.set(key,{key,slug:c.slug,metric,identity,date:f.targetDate,firstMissingAt:data.updatedAt,lastCheckedAt:data.updatedAt,lastAttemptId:attemptId,checks:0,disposition:"pending",sources:f.sources});
+      const parentAlias=metric==="revenue"&&!!data.pipeline&&!!c.fundamentals?.economicPolicy&&f.parentIdentityAlias?.basis==="identical-captured-parent-metadata"?f.parentIdentityAlias.identity:null;
+      if (!old.has(key)&&![...old.values()].some(o=>o.slug===c.slug&&o.metric===metric&&o.date===f.targetDate&&(o.identity===alias||o.identity===parentAlias))) old.set(key,{key,slug:c.slug,metric,identity,date:f.targetDate,firstMissingAt:data.updatedAt,lastCheckedAt:data.updatedAt,lastAttemptId:attemptId,checks:0,disposition:"pending",sources:f.sources});
     }
   }
   for (const o of old.values()) {
@@ -147,6 +150,10 @@ export function updateObligations(r: RecoveryState, data: ScreenerResponse, atte
     o.lastCheckedAt=data.updatedAt; o.lastAttemptId=attemptId; o.checks++;
     if(f&&freshnessIdentity(f)!==o.identity&&data.pipeline&&data.coins.find(c=>c.slug===o.slug)?.fundamentals?.economicPolicy&&f.legacyIdentityAlias?.identity===o.identity) {
       o.identityMigration={from:o.identity,at:data.updatedAt,rawBundleSha256:data.pipeline.rawBundleSha256,basis:"identical-captured-legacy-metadata"};
+      o.identity=freshnessIdentity(f);o.key=JSON.stringify([o.slug,o.metric,o.identity,o.date]);
+    }
+    if(f&&freshnessIdentity(f)!==o.identity&&o.metric==="revenue"&&data.pipeline&&data.coins.find(c=>c.slug===o.slug)?.fundamentals?.economicPolicy&&f.parentIdentityAlias?.basis==="identical-captured-parent-metadata"&&f.parentIdentityAlias.identity===o.identity) {
+      o.parentIdentityMigration={from:o.identity,at:data.updatedAt,rawBundleSha256:data.pipeline.rawBundleSha256,basis:"identical-captured-parent-metadata"};
       o.identity=freshnessIdentity(f);o.key=JSON.stringify([o.slug,o.metric,o.identity,o.date]);
     }
     if (!f || freshnessIdentity(f) !== o.identity) o.disposition=data.coins.some(c=>c.fundamentals?.economicPolicy)?now-Date.parse(o.firstMissingAt)>=UTC_DAY_MS?"overdue":"pending":"superseded";

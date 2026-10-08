@@ -5,6 +5,7 @@ export const completedUtcDate = (now: number) => new Date(Math.floor(now / UTC_D
 export type FreshnessState = "current" | "pending" | "insufficient" | "unknown" | "unsupported" | "conflict";
 export interface DatedFreshness {
   legacyIdentityAlias?: {identity:string;basis:"identical-captured-legacy-metadata"};
+  parentIdentityAlias?: {identity:string;basis:"identical-captured-parent-metadata"};
   state: FreshnessState; targetDate: string; latestCompleteDate: string | null;
   scope: string; definition: string; components: { id: string; latestDate: string | null; targetPresent: boolean }[];
   missingRecentDates: string[];
@@ -43,7 +44,8 @@ export function dateIsComplete(f: DatedFreshness, date: string): boolean {
 export const freshnessIdentity = (f: DatedFreshness) => JSON.stringify([f.scope, f.definition, f.components.map(c => c.id)]);
 
 /** Applied after collection-only issues. Economic approval never gates this accounting. */
-export function annotateFreshness(coins: CoinRaw[], asOf: string): CoinRaw[] {
+export function annotateFreshness(coins: CoinRaw[], asOf: string, parentIdentityBaseline?: ScreenerResponse | null): CoinRaw[] {
+  const previous=new Map(parentIdentityBaseline?.coins.map(c=>[c.slug,c]));
   return coins.map(c => ({ ...c, freshness: Object.fromEntries((["revenue", "holders"] as const).map(metric => {
     const f = metric === "revenue" ? c.revenueHistory?.freshness : c.rawHolderFreshness;
     const hasSource = metric === "revenue" ? c.revenueSource?.periods !== undefined : c.holderValue.components.length > 0;
@@ -54,7 +56,12 @@ export function annotateFreshness(coins: CoinRaw[], asOf: string): CoinRaw[] {
     const definitionConflict = f && (metric === "revenue" ? f.definition !== (c.fundamentals.revenue.physicalFingerprint??c.fundamentals.revenue.fingerprint) : c.rawHolderDefinition !== undefined&&f.definition!==c.rawHolderDefinition);
     const legacyDefinition=metric==="revenue"?c.fundamentals.revenue.legacyPhysicalFingerprint:c.rawHolderLegacyDefinition;
     const alias=c.fundamentals.economicPolicy&&f&&legacyDefinition?{legacyIdentityAlias:{identity:JSON.stringify([f.scope,legacyDefinition,f.components.map(p=>p.id)]),basis:"identical-captured-legacy-metadata" as const}}:{};
-    return [metric, conflict || definitionConflict ? { ...base, ...alias,state: "conflict" as const } : {...base,...alias}];
+    const prior=metric==="revenue"?previous.get(c.slug):undefined,priorHistory=prior?.revenueHistory,priorFreshness=priorHistory?.freshness,physical=c.fundamentals.revenue.physicalFingerprint;
+    const parentAlias=c.fundamentals.economicPolicy&&prior?.fundamentals.economicPolicy&&f?.coverageBasis==="exact_parent"&&priorFreshness?.coverageBasis==="exact_parent"&&physical&&/^[a-f0-9]{64}$/.test(physical)&&physical===f.definition&&physical===prior.fundamentals.revenue.physicalFingerprint&&
+      priorFreshness.definition!==physical&&priorFreshness.definition===prior.fundamentals.revenue.fingerprint&&priorHistory?.definitionFingerprint===priorFreshness.definition&&c.revenueHistory?.definitionFingerprint===priorFreshness.definition&&prior.freshness?.revenue.definition===priorFreshness.definition&&
+      f.scope===c.slug&&f.scope===priorFreshness.scope&&f.components.length>0&&JSON.stringify(f.components.map(p=>p.id))===JSON.stringify(priorFreshness.components.map(p=>p.id))?
+      {parentIdentityAlias:{identity:freshnessIdentity(priorFreshness),basis:"identical-captured-parent-metadata" as const}}:{};
+    return [metric, conflict || definitionConflict ? { ...base, ...alias,...parentAlias,state: "conflict" as const } : {...base,...alias,...parentAlias}];
   })) as NonNullable<CoinRaw["freshness"]> }));
 }
 export function freshnessSummary(coins: CoinRaw[], asOf: string): FreshnessSummary {
