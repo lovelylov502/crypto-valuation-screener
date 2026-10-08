@@ -7,7 +7,7 @@ import { sample } from "./testFixtures";
 import { sha256, decodeSnapshot } from "./snapshotArchive";
 import { assessCandidate, finishJournal, startJournal, snapshotErrors } from "./publication";
 import { collectionCoverage } from "./collectionQuality";
-import { collectionHealth, comparisonSummary } from "./collectionHealth";
+import { collectionHealth, comparisonSummary, publicationComparisonSummary } from "./collectionHealth";
 import type { CollectionAttempt, PublishedSnapshot } from "./publicationTypes";
 const at="2026-09-29T10:00:00Z";
 const paths=["/protocols","/config","/overview/fees","/overview/fees?dataType=dailyRevenue","/overview/fees?dataType=dailyHoldersRevenue","/overview/dexs"];
@@ -83,6 +83,28 @@ it("does not report zero changes when collection or comparison never completed",
   expect(comparisonSummary(blocked.attempt)).toContain("확인하지 못했습니다");
   expect(comparisonSummary({ ...blocked.attempt, comparisonCompleted: true })).toContain("0개 종목");
   expect(comparisonSummary({ ...blocked.attempt, comparisonCompleted: false, collection: data().collection })).not.toContain("0개");
+});
+
+it("distinguishes completed collection with failed publication storage from incomplete collection", () => {
+  const journal = baseline();
+  journal.attempt = { ...journal.attempt, outcome: "blocked", comparisonCompleted: false, errors: ["publication_storage_failed"] };
+  journal.publicationFailure = { schema: 1, journalId: "data-failed-observation", attemptId: journal.attempt.id, runId: "1", runAttempt: 1, failedAt: at, archivedAt: at, manifestUrl: "https://github.com/failed-evidence.json", manifestSha256: "a".repeat(64) };
+  const before = JSON.stringify(journal);
+  expect(publicationComparisonSummary(journal)).toBe("당시 수집·검사 결과는 원본 보고서에 보존되어 있습니다. 공개본 교체는 완료되지 않았습니다.");
+  expect(publicationComparisonSummary(journal)).not.toContain("수집·검사가 완료되지 않아");
+  expect(JSON.stringify(journal)).toBe(before);
+  delete journal.publicationFailure;
+  expect(publicationComparisonSummary(journal)).toBe(comparisonSummary(journal.attempt));
+  expect(publicationComparisonSummary(journal)).toContain("수집·검사가 완료되지 않아");
+});
+
+it.each(["running", "published", "blocked"] as const)("keeps inherited storage-failure evidence historical for a later %s attempt", outcome => {
+  const journal = baseline();
+  journal.publicationFailure = { schema: 1, journalId: "data-failed-observation", attemptId: journal.attempt.id, runId: "1", runAttempt: 1, failedAt: at, archivedAt: at, manifestUrl: "https://github.com/failed-evidence.json", manifestSha256: "a".repeat(64) };
+  journal.attempt = { ...journal.attempt, id: "data-later-attempt", outcome, comparisonCompleted: outcome === "published" };
+  expect(publicationComparisonSummary(journal)).toBe(comparisonSummary(journal.attempt));
+  expect(publicationComparisonSummary(journal)).not.toContain("원본 보고서");
+  expect(publicationComparisonSummary({ ...journal, attempt: { ...journal.attempt, id: journal.publicationFailure.attemptId, outcome: "published", comparisonCompleted: true } })).toContain("직전 검증본 대비 변화");
 });
 it("detects an interrupted durable start and never labels stale snapshots current",()=>{
   const a={...attempt("data-2"),startedAt:"2026-09-29T10:30:00Z"};const running=startJournal(baseline(),a,"data-2-start");

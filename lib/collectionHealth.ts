@@ -21,6 +21,12 @@ export function comparisonSummary(attempt: CollectionAttempt): string {
   return `직전 검증본 대비 변화: ${attempt.affectedProjects.toLocaleString()}개 종목 · ${attempt.changeCount.toLocaleString()}개 항목`;
 }
 
+export function publicationComparisonSummary(journal: PublicationJournal): string {
+  return journal.publicationFailure?.attemptId === journal.attempt.id && journal.attempt.outcome === "blocked"
+    ? "당시 수집·검사 결과는 원본 보고서에 보존되어 있습니다. 공개본 교체는 완료되지 않았습니다."
+    : comparisonSummary(journal.attempt);
+}
+
 export function publicationFailure(attempt: CollectionAttempt): string {
   if(attempt.errors.includes("publication_storage_failed"))return "검증 결과 보관 실패";
   if (!comparisonCompleted(attempt)) return "수집·검사 미완료";

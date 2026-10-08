@@ -25,7 +25,7 @@ import { revenueReading } from "@/lib/revenueReading";
 import { businessRevenue } from "@/lib/fundamentals";
 import { BRAND } from "@/lib/brand";
 import { CollectionStatus } from "./CollectionStatus";
-import { comparisonSummary } from "@/lib/collectionHealth";
+import { publicationComparisonSummary } from "@/lib/collectionHealth";
 import { ThemeSwitch } from "./ThemeSwitch";
 import { metricStatus } from "@/lib/metricStatus";
 
@@ -141,8 +141,8 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
     {data && <p className="mobile-data-status">표시 자료 수집 · {fmtKstMinute(data.updatedAt)}</p>}
     {publication && (publication.incident || publication.attempt.outcome === "blocked") && <div className="publication-notice publication-blocked" role="status">
       <strong>새 수집본 공개 보류</strong>
-      <span>{data ? `${fmtKstMinute(data.updatedAt)}에 수집한 자료입니다. 이번 수집에서 확인한 값을 표시합니다.` : "검사를 통과한 자료를 불러오고 있습니다."}</span>
-      {publication.attempt.outcome === "blocked" && <span>{comparisonSummary(publication.attempt)} 오른쪽 상단에서 원인과 이력을 볼 수 있습니다.</span>}
+      <span>{data ? `마지막으로 공개된 검증본(${fmtKstMinute(data.updatedAt)} 수집)을 표시합니다.` : "검사를 통과한 자료를 불러오고 있습니다."}</span>
+      {publication.attempt.outcome === "blocked" && <span>{publicationComparisonSummary(publication)} 오른쪽 상단에서 원인과 이력을 볼 수 있습니다.</span>}
     </div>}
     {error && <div className="workspace-status" role="alert">{error} {data && "기존 결과를 표시하고 있습니다."}<button className="text-button" onClick={refresh}>다시 시도</button></div>}
     {storageError && <p className="notice">브라우저 저장소를 사용할 수 없어 설정·관심종목이 유지되지 않을 수 있습니다.</p>}

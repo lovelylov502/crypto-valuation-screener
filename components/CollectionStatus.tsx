@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, CircleHelp, Clock3, LoaderCircle } from "lucide-react";
 import type { ScreenerResponse } from "@/lib/types";
-import { collectionHealth, comparisonSummary, publicationFailure, sourceProvider } from "@/lib/collectionHealth";
+import { collectionHealth, publicationComparisonSummary, publicationFailure, sourceProvider } from "@/lib/collectionHealth";
 import { fmtKstMinute } from "@/lib/format";
 import { SettingsDialog } from "./SettingsDialog";
 import type { PublicationJournal } from "@/lib/publicationTypes";
@@ -76,7 +76,7 @@ export function CollectionStatus({ data, publication, error, refreshing, checked
           {p.incident && <><p className="negative">기록 시작 이후 첫 실패 관측: {time(p.incident.firstFailureObservedAt)}</p><p>마지막 정상 자료: {time(p.incident.lastGoodDataAt)}</p><p>최근 실패 관측: {time(p.incident.lastFailureObservedAt)}</p></>}
           {p.recoveredAt && <p>최근 회복 확인: {time(p.recoveredAt)}</p>}
           {p.attempt.outcome === "blocked" && <p className="negative">공개 보류 사유: {publicationFailure(p.attempt)}</p>}
-          <p>{p.publicationFailure?.attemptId===p.attempt.id&&p.attempt.outcome==="blocked"?"당시 수집·검사 결과는 원본 보고서에 보존되어 있습니다. 공개본 교체는 완료되지 않았습니다.":comparisonSummary(p.attempt)}</p>
+          <p>{publicationComparisonSummary(p)}</p>
           {recovery && <><p>자동 시도 {recovery.slots.at(-1)?[recovery.slots.at(-1)!.primary,recovery.slots.at(-1)!.catchup1,recovery.slots.at(-1)!.catchup2].reduce((n,s)=>n+s.claims,0):0}/5 · 별도 수동 복구 {recovery.slots.at(-1)?.manualClaims??0}/2</p><p>기한 내 공개 실패 {recovery.projectionDiagnostics?.deadlineMisses??((recovery.history?.deadlineMisses??0)+recovery.slots.filter(s=>s.deadlineMissed).length)}회 · 보완 실행 누락 {recovery.projectionDiagnostics?.missedCatchups??((recovery.history?.missedCatchups??0)+recovery.slots.reduce((n,s)=>n+Number(s.catchup1.missed)+Number(s.catchup2.missed),0))}회 · 24시간 이상 대기 {recovery.obligations.filter(o=>o.disposition==="overdue").length}건</p></>}
           <p>{p.attempt.outcome !== "running" && <><a href={p.publicationFailure?.attemptId===p.attempt.id?`https://github.com/lovelylov502/crypto-valuation-screener/releases/download/${p.publicationFailure.journalId}/failed-report.json`:p.attempt.reportUrl} target="_blank" rel="noreferrer">종목별 변경값·검사 결과</a> · </>}<a href={p.attempt.runUrl} target="_blank" rel="noreferrer">수집 작업 기록</a></p>
           <p><a href={`https://github.com/lovelylov502/crypto-valuation-screener/releases/tag/${p.id}`} target="_blank" rel="noreferrer">공개·장애 이력 보관함</a></p>
