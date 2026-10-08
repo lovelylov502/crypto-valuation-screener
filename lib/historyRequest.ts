@@ -3,7 +3,7 @@ import { sourceDelay, sourceFetch, sourceObservedAt, sourceReplayActive,sourceRe
 
 /** Child and parent recovery use the same bounded retry policy. */
 export async function readHistorySummary(url: string, now: number, deadline: number, observations: SourceObservation[], sourceSlugs?: string[]): Promise<Record<string, unknown> | undefined> {
-  const boundedTransport=sourceAcquisitionRevision()===2;
+  const boundedTransport=sourceAcquisitionRevision()>=2;
   let httpStatus: number | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {
     let delay = 500;

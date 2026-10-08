@@ -1,6 +1,7 @@
 import {afterEach,expect,it,vi} from "vitest";
 vi.mock("./pipelineRelease",async original=>({...await original<typeof import("./pipelineRelease")>(),activeEconomicPolicy:()=>ECONOMIC_POLICY,activeWriterSchema:()=>2}));
 import {ECONOMIC_POLICY,economicArtifact} from "./economicPolicy";
+import artifact from "./economic-policy-v2.json";
 import inputs from "./fixtures/economic-current-inputs.json";
 import {captureDataPipeline,replayDataPipeline,assessPipelineCandidate} from "./dataPipeline";
 import {PROVENANCE_COMMIT_URL} from "./economicDecisionSource";
@@ -26,7 +27,7 @@ function upstream(provenanceFails=false) {
     const u=new URL(String(input));
     if(u.hostname==="api.github.com") {
       expect(init?.headers).toMatchObject({authorization:"Bearer test-only-source-token"});expect(init?.redirect).toBe("error");
-      return String(input)===PROVENANCE_COMMIT_URL?Response.json({sha:"1".repeat(40),commit:{tree:{sha:tree},committer:{date:at}}},{status:provenanceFails?503:200}):Response.json({sha:tree,url:`https://api.github.com/repos/DefiLlama/dimension-adapters/git/trees/${tree}`,truncated:false,tree:[...new Map(economicArtifact.contracts.flatMap(c=>c.sourceClosure).map(f=>[f.path,f])).values()].map(f=>({path:f.path,sha:f.blobSha1,type:"blob"}))});
+      return String(input)===PROVENANCE_COMMIT_URL?Response.json({sha:"1".repeat(40),commit:{tree:{sha:tree},committer:{date:at}}},{status:provenanceFails?503:200}):Response.json({sha:tree,url:`https://api.github.com/repos/DefiLlama/dimension-adapters/git/trees/${tree}`,truncated:false,tree:[...new Map([...economicArtifact.contracts.flatMap(c=>c.sourceClosure),...artifact.context.files].map(f=>[f.path,f])).values()].map(f=>({path:f.path,sha:f.blobSha1,type:"blob"}))});
     }
     const metric=u.searchParams.get("dataType")==="dailyRevenue"?"revenue":u.searchParams.get("dataType")==="dailyHoldersRevenue"?"holders":"fees";
     const valued=rows.map(r=>{const amount=expected.find(e=>e.slug===r.slug)![metric];return {...r,total24h:amount,total7d:amount*7,total30d:amount*30,total60dto30d:amount*30,total1y:amount*365};});

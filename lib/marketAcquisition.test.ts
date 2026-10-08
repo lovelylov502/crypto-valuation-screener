@@ -35,7 +35,7 @@ it("overlapping cooldown extension still caps a transport by provider deadline",
 });
 it("rejects unknown acquisition semantics rather than replaying with current behavior",async()=>{
  vi.stubGlobal("fetch",async()=>Response.json({}));const captured=await captureSourceBundle(at,null,()=>sourceFetch(listing),undefined,2,2);
- expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:3} as any)).toThrow("Invalid source bundle");
+ expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:4} as any)).toThrow("Invalid source bundle");
  expect(()=>validateSourceBundle({...captured.bundle,pipelineSchema:undefined})).toThrow("Invalid source bundle");
 });
 it("history transport also begins its15s timeout after cooldown and preserves historical retry semantics",async()=>{

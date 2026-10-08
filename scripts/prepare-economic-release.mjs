@@ -1,8 +1,8 @@
 import {readFile,writeFile} from "node:fs/promises";
 import {fileURLToPath} from "node:url";
 import {resolve} from "node:path";
-import identity from "../lib/economic-policy-v1.identity.json" with {type:"json"};
-const base="https://crypto-valuation-screener.vercel.app",release="metric-economic-decisions-v1";
+import identity from "../lib/economic-policy-v2.identity.json" with {type:"json"};
+const base="https://crypto-valuation-screener.vercel.app",release="metric-economic-decisions-v2";
 function proof(value,expectedCommit) {
   if(value?.compatibility?.release!==release||JSON.stringify(value.compatibility.pipelineSchemas)!=="[1,2]"||JSON.stringify(value.compatibility.journalSchemas)!=="[1,2]"||!value.compatibility.economicPolicies?.some(p=>JSON.stringify(p)===JSON.stringify(identity))||
     value.collectionRelease?.schedule!=="paused"||value.collectionRelease?.writerSchema!==2||value.collectionRelease?.economic?.active!==false||JSON.stringify(value.collectionRelease?.economic?.policy)!==JSON.stringify(identity)||

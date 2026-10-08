@@ -2,7 +2,9 @@
 
 ## Metric-specific economic reader and writer
 
-The economic decision rollout uses `metric-economic-decisions-v1` readers in a compatible paused deployment first. Readers retain schema 1/2 and acquisition revision 1/2 archive replay, including the frozen b519 definition registry. The actual b519 writer rejects the new reader-release identity. Historical Phase-A identity remains historical proof; it does not authorize the new economic writer.
+The current economic decision rollout uses `metric-economic-decisions-v2` readers in a compatible paused deployment first. Readers retain schema 1/2, acquisition revisions 1/2/3 and the immutable economic-v1 artifact/evaluator, including the frozen b519 definition registry. The b519 and economic-v1 writers cannot authorize the new reader-release identity; the new writer requires its exact v2 algorithm/artifact/hash in the local contract, current selection, pinned paused selection and both supported-policy lists. Historical Phase-A identity remains historical proof; it does not authorize the new economic writer.
+
+Economic v2 proves adapter-local continuity under reviewed import erasure, exact relevant compiler/loader configuration and resolved runtime package integrities, plus the known shared fee runtime surface. It neither attests the provider's deployed code nor proves complete repository-framework equivalence. Changed fixed context content is hash-bound to the captured tree and bounded to four extra reads, 1 MB per file and 2 MB in aggregate. Raw type-target changes remain visible; unknown runtime changes, execution hooks or unproved configuration hold approvals. Acquisition revision 3 serializes CMC requests with at least six seconds between actual starts under the unchanged 180-second provider and nine-minute capture limits. Natural capture is still needed to verify behavior against external rate limits. See [R24/R25 implementation evidence](./R24_R25_IMPLEMENTATION_2026-10-08.md).
 
 After the canonical paused deployment and its immutable protected URL agree on exact production commit, deployment ID, reader contract and economic artifact hash, prepare activation:
 

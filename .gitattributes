@@ -1,2 +1,4 @@
 # These executable legacy fixtures are exact Git/evidence bytes, including line endings.
 lib/fixtures/legacy-b519-writer/* -text
+# New immutable policy bytes also remain identical across Windows and Actions checkouts.
+lib/economic-policy-v2*.json -text

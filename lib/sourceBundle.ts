@@ -21,7 +21,7 @@ export interface SourceBundle {
   economicReviewBaselineRef?:import("./economicReviewArchive").EconomicReviewRef;
   schema: 1;
   pipelineSchema?: 2;
-  acquisitionRevision?: 2;
+  acquisitionRevision?: 2 | 3;
   economicPolicy?: EconomicPolicyIdentity;
   economicProvenance?: EconomicProvenance;
   economicReviewBaseline?: import("./economicReview").EconomicReviewState;
@@ -41,6 +41,7 @@ interface Session {
   cooldowns?: Map<string, number>;
   deadlineAt?: number;
   provenanceRequests?: number;
+  cmcLane?: { tail: Promise<void>; nextAt: number };
 }
 const sessions = new AsyncLocalStorage<Session>();
 export const contentHash = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
@@ -72,9 +73,9 @@ export function sourceDelay(ms: number,signal?:AbortSignal): Promise<void> {
   });
 }
 
-function validateUrl(url: string, economic = false) {
+function validateUrl(url: string, economic = false, roleAware = false) {
   const u = new URL(url);
-  const provenance = economic && u.hostname === "api.github.com" && (u.pathname === "/repos/DefiLlama/dimension-adapters/commits/HEAD" && !u.search || /^\/repos\/DefiLlama\/dimension-adapters\/git\/trees\/[a-f0-9]{40}$/.test(u.pathname) && u.search === "?recursive=1");
+  const provenance = economic && u.hostname === "api.github.com" && (u.pathname === "/repos/DefiLlama/dimension-adapters/commits/HEAD" && !u.search || /^\/repos\/DefiLlama\/dimension-adapters\/git\/trees\/[a-f0-9]{40}$/.test(u.pathname) && u.search === "?recursive=1" || roleAware&&/^\/repos\/DefiLlama\/dimension-adapters\/git\/blobs\/[a-f0-9]{40}$/.test(u.pathname)&&!u.search);
   if (u.protocol !== "https:" || !provenance && !["api.llama.fi", "stablecoins.llama.fi", "api.coingecko.com", "pro-api.coinmarketcap.com"].includes(u.hostname)
     || u.username || u.password || [...u.searchParams.keys()].some(k => /token|secret|api.?key|authorization/i.test(k))) throw new Error("Unapproved source URL");
 }
@@ -83,12 +84,26 @@ function responseOf(receipt: SourceReceipt): Response {
   return new Response(receipt.status === 204 || receipt.status === 304 ? null : receipt.body, { status: receipt.status, headers: receipt.headers });
 }
 
+/** Abort a queued reservation without letting its successors overtake the active transport. */
+async function waitForTurn(turn: Promise<void>, signal: AbortSignal): Promise<void> {
+  if(signal.aborted)throw new Error("provider cooldown deferred");
+  let abort!:()=>void;
+  try { await Promise.race([turn,new Promise<never>((_,reject)=>{abort=()=>reject(new Error("provider cooldown deferred"));signal.addEventListener("abort",abort,{once:true});})]); }
+  finally { signal.removeEventListener("abort",abort); }
+}
+async function boundedSourceBody(response:Response,limit:number) {
+ const reader=response.body?.getReader(),parts:Uint8Array[]=[];let bytes=0;if(!reader)return "";
+ try {while(true){const next=await reader.read();if(next.done)break;if((bytes+=next.value.byteLength)>limit)throw Error("source response too large");parts.push(next.value);}return new TextDecoder("utf-8",{fatal:true}).decode(Buffer.concat(parts,bytes));}
+ catch(error){await reader.cancel().catch(()=>{});throw error;}
+ finally {reader.releaseLock();}
+}
+
 /** Explicit transport injection; no global fetch patch and no network fallback during replay. */
-export async function sourceFetch(input: string | URL | Request, init?: RequestInit, transport?: { timeout:number; deadline:number }): Promise<Response> {
+export async function sourceFetch(input: string | URL | Request, init?: RequestInit, transport?: { timeout:number; deadline:number;maxBytes?:number }): Promise<Response> {
   const session = sessions.getStore();
   if (!session) return fetch(input, init);
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-  validateUrl(url, !!session.bundle.economicPolicy);
+  validateUrl(url, !!session.bundle.economicPolicy,session.bundle.economicPolicy?.algorithm==="metric-decisions-v2");
   if ((init?.method ?? (input instanceof Request ? input.method : "GET")) !== "GET") throw new Error("Source capture is read-only");
   const reused = session.successful.get(url);
   if (reused) { session.latest.set(url, reused); return responseOf(reused); }
@@ -109,27 +124,40 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
   } else {
     let pending = session.pending.get(url);
     if (!pending) {
-      if(new URL(url).hostname==="api.github.com" && (session.provenanceRequests=(session.provenanceRequests??0)+1)>2)throw new Error("Economic provenance request budget exceeded");
+      if(new URL(url).hostname==="api.github.com" && (session.provenanceRequests=(session.provenanceRequests??0)+1)>(session.bundle.economicPolicy?.algorithm==="metric-decisions-v2"?6:2))throw new Error("Economic provenance request budget exceeded");
       pending = (async () => {
         let requestedAt = new Date().toISOString();
         let result: SourceReceipt;
+        let releaseLane: (()=>void)|undefined;
         try {
+          const host=new URL(url).hostname,requestSignal=init?.signal??(input instanceof Request?input.signal:undefined);
+          const deadline=Math.min(session.deadlineAt??Infinity,transport?.deadline??Infinity);
+          const paced=session.bundle.acquisitionRevision===3&&host==="pro-api.coinmarketcap.com";
+          let queuedSignal:AbortSignal|undefined;
+          if(paced) {
+            const lane=session.cmcLane??=( {tail:Promise.resolve(),nextAt:0} );
+            const turn=lane.tail,reservation=new Promise<void>(resolve=>{releaseLane=resolve;});
+            lane.tail=turn.then(()=>reservation);
+            queuedSignal=AbortSignal.any([session.signal,requestSignal,AbortSignal.timeout(Math.max(1,deadline-Date.now()))].filter((s):s is AbortSignal=>!!s));
+            await waitForTurn(turn,queuedSignal);
+          }
           if (session.bundle.pipelineSchema===2) {
-            const host=new URL(url).hostname,requestSignal=init?.signal??(input instanceof Request?input.signal:undefined);
-            while ((session.cooldowns?.get(host)??0)>Date.now()) {
-              const until=session.cooldowns!.get(host)!;
-              if (until >= Math.min(session.deadlineAt??Infinity,transport?.deadline??Infinity)||session.signal?.aborted||requestSignal?.aborted) throw new Error("provider cooldown deferred");
-              await sourceDelay(until-Date.now(),requestSignal??undefined);
-              if(session.signal?.aborted||requestSignal?.aborted)throw new Error("provider cooldown deferred");
+            while (Math.max(session.cooldowns?.get(host)??0,paced?session.cmcLane!.nextAt:0)>Date.now()) {
+              const until=Math.max(session.cooldowns?.get(host)??0,paced?session.cmcLane!.nextAt:0);
+              if (until >= deadline||session.signal?.aborted||requestSignal?.aborted||queuedSignal?.aborted) throw new Error("provider cooldown deferred");
+              await sourceDelay(until-Date.now(),queuedSignal??requestSignal??undefined);
+              if(session.signal?.aborted||requestSignal?.aborted||queuedSignal?.aborted)throw new Error("provider cooldown deferred");
             }
+            if(paced&&(queuedSignal!.aborted||Date.now()>=deadline))throw new Error("provider cooldown deferred");
             requestedAt=new Date().toISOString();
+            if(paced)session.cmcLane!.nextAt=Date.now()+6000;
           }
           const remaining=Math.min(session.deadlineAt??Infinity,transport?.deadline??Infinity)-Date.now();
           if(transport&&remaining<=0)throw new Error("provider cooldown deferred");
           const signals = [session.signal, init?.signal ?? (input instanceof Request ? input.signal : null),transport?AbortSignal.timeout(Math.max(1,Math.min(transport.timeout,remaining))):null].filter((s): s is AbortSignal => !!s);
           const signal = signals.length ? AbortSignal.any(signals) : undefined;
           const response = await fetch(input, { ...init, signal });
-          const body = await response.text();
+          const body = transport?.maxBytes?await boundedSourceBody(response,transport.maxBytes):await response.text();
           const headers: Record<string, string> = {};
           for (const key of ["content-type", "retry-after"]) { const value = response.headers.get(key); if (value) headers[key] = value; }
           result = { url, requestedAt, observedAt: new Date().toISOString(), status: response.status, headers, body, sha256: contentHash(body) };
@@ -140,7 +168,9 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
             session.cooldowns!.set(host,Math.max(session.cooldowns!.get(host)??0,Date.now()+Math.max(5000,Number.isFinite(ms)?ms+1000:60_000)));
           }
         } catch (error) {
-          result = { url, requestedAt, observedAt: new Date().toISOString(), status: null, headers: {}, body: "", sha256: contentHash(""), error: error instanceof Error && error.message==="provider cooldown deferred" ? "Recorded source request deferred by provider cooldown" : "Recorded source transport failure" };
+          result = { url, requestedAt, observedAt: new Date().toISOString(), status: null, headers: {}, body: "", sha256: contentHash(""), error: error instanceof Error && error.message==="provider cooldown deferred" ? "Recorded source request deferred by provider cooldown" : error instanceof Error&&error.message==="source response too large"?"Recorded source response exceeds byte limit":"Recorded source transport failure" };
+        } finally {
+          releaseLane?.();
         }
         session.bundle.receipts.push(result);
         return result;
@@ -156,7 +186,7 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
 }
 
 export function validateSourceBundle(bundle: SourceBundle): void {
-  if (bundle?.schema !== 1 || (bundle.pipelineSchema !== undefined && bundle.pipelineSchema !== 2) || (bundle.acquisitionRevision!==undefined&&(bundle.pipelineSchema!==2||bundle.acquisitionRevision!==2)) || !Number.isFinite(Date.parse(bundle.asOf)) || !Array.isArray(bundle.receipts) || !bundle.receipts.length) throw new Error("Invalid source bundle");
+  if (bundle?.schema !== 1 || (bundle.pipelineSchema !== undefined && bundle.pipelineSchema !== 2) || (bundle.acquisitionRevision!==undefined&&(bundle.pipelineSchema!==2||![2,3].includes(bundle.acquisitionRevision))) || !Number.isFinite(Date.parse(bundle.asOf)) || !Array.isArray(bundle.receipts) || !bundle.receipts.length) throw new Error("Invalid source bundle");
   if(bundle.economicPolicy) { validateEconomicPolicy(bundle.economicPolicy); if(bundle.pipelineSchema!==2)throw new Error("Economic policy requires pipeline schema 2"); }
   else if(bundle.economicProvenance)throw new Error("Economic provenance has no bound policy");
   if(bundle.economicReviewBaseline||bundle.economicReviewBaselineRef) {
@@ -164,16 +194,16 @@ export function validateSourceBundle(bundle: SourceBundle): void {
     validateEconomicReview(bundle.economicReviewBaseline);validateEconomicReviewRef(bundle.economicReviewBaselineRef);
     if(objectHash(bundle.economicReviewBaseline)!==bundle.economicReviewBaselineRef.stateSha256||contentHash(JSON.stringify(bundle.economicReviewBaseline))!==bundle.economicReviewBaselineRef.sha256||Buffer.byteLength(JSON.stringify(bundle.economicReviewBaseline))!==bundle.economicReviewBaselineRef.bytes)throw Error("Economic review baseline reference mismatch");
   }
-  if(bundle.receipts.filter(r=>new URL(r.url).hostname==="api.github.com").length>2)throw new Error("Economic provenance request budget exceeded");
+  if(bundle.receipts.filter(r=>new URL(r.url).hostname==="api.github.com").length>(bundle.economicPolicy?.algorithm==="metric-decisions-v2"?6:2))throw new Error("Economic provenance request budget exceeded");
   for (const receipt of bundle.receipts) {
-    validateUrl(receipt.url, !!bundle.economicPolicy);
+    validateUrl(receipt.url, !!bundle.economicPolicy,bundle.economicPolicy?.algorithm==="metric-decisions-v2");
     if (typeof receipt.body !== "string" || contentHash(receipt.body) !== receipt.sha256 || !Number.isFinite(Date.parse(receipt.requestedAt))
       || !Number.isFinite(Date.parse(receipt.observedAt)) || Date.parse(receipt.observedAt) < Date.parse(receipt.requestedAt)
       || (receipt.status !== null && (!Number.isInteger(receipt.status) || receipt.status < 200 || receipt.status > 599))) throw new Error("Invalid source receipt integrity");
   }
 }
 
-export async function captureSourceBundle<T>(asOf: string, baseline: ScreenerResponse | null, task: () => Promise<T>, signal = AbortSignal.timeout(9 * 60_000), pipelineSchema: 1 | 2 = 1, acquisitionRevision?:2, economicPolicy?: EconomicPolicyIdentity,economicReviewBaseline?:import("./economicReview").EconomicReviewState,economicReviewBaselineRef?:import("./economicReviewArchive").EconomicReviewRef) {
+export async function captureSourceBundle<T>(asOf: string, baseline: ScreenerResponse | null, task: () => Promise<T>, signal = AbortSignal.timeout(9 * 60_000), pipelineSchema: 1 | 2 = 1, acquisitionRevision?:2|3, economicPolicy?: EconomicPolicyIdentity,economicReviewBaseline?:import("./economicReview").EconomicReviewState,economicReviewBaselineRef?:import("./economicReviewArchive").EconomicReviewRef) {
   if(economicPolicy)validateEconomicPolicy(economicPolicy);
   const bundle: SourceBundle = { schema: 1, ...(pipelineSchema === 2 ? { pipelineSchema } : {}), ...(acquisitionRevision?{acquisitionRevision}:{}), ...(economicPolicy?{economicPolicy,...(economicReviewBaseline?{economicReviewBaseline}:{}),...(economicReviewBaselineRef?{economicReviewBaselineRef}:{})}:{}), asOf, baseline, receipts: [] };
   const started=Date.now();

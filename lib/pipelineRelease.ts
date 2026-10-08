@@ -1,5 +1,5 @@
 import contract from "./pipeline-release.json";
-import { ECONOMIC_POLICY_IDENTITY as ECONOMIC_POLICY,knownEconomicPolicy } from "./economicPolicyIdentity";
+import { ECONOMIC_POLICY_IDENTITY as ECONOMIC_POLICY,ECONOMIC_POLICIES,knownEconomicPolicy } from "./economicPolicyIdentity";
 import type {EconomicPolicyIdentity} from "./economicTypes";
 export function activeEconomicPolicy() { return (contract as { economic?: { active: boolean } }).economic?.active ? ECONOMIC_POLICY : undefined; }
 
@@ -11,7 +11,7 @@ export function parseCollectionRelease(value:unknown):CollectionRelease {
   return {writerSchema:r.writerSchema,schedule:r.schedule,phaseADeploymentId:r.phaseADeploymentId,...(r.economic?{economic:r.economic}:{})};
 }
 
-export const READER_COMPATIBILITY = { release: contract.readerRelease, pipelineSchemas: [1, 2], journalSchemas: [1, 2],economicPolicies:["legacy",ECONOMIC_POLICY] };
+export const READER_COMPATIBILITY = { release: contract.readerRelease, pipelineSchemas: [1, 2], journalSchemas: [1, 2],economicPolicies:["legacy",...ECONOMIC_POLICIES] };
 export function readerDeployment() { return { environment:process.env.VERCEL_ENV??"local",codeCommit:process.env.VERCEL_GIT_COMMIT_SHA??null,
   id:process.env.VERCEL_DEPLOYMENT_ID??null,url:process.env.VERCEL_URL?`https://${process.env.VERCEL_URL}`:null }; }
 export const activeWriterSchema = (): 1 | 2 => contract.writerSchema === 2 ? 2 : 1;
@@ -21,6 +21,7 @@ export function collectionReleaseState():CollectionRelease { return parseCollect
   phaseADeploymentId:(contract.phaseA as null|{deploymentId:string})?.deploymentId??null,...((contract as EconomicReleaseContract).economic?{economic:{policy:ECONOMIC_POLICY,active:!!activeEconomicPolicy(),readerDeploymentId:(contract as EconomicReleaseContract).economic?.reader?.deploymentId??null}}:{}) }); }
 type ReaderProof={base:string;readerRelease:string;codeCommit:string;deploymentId:string;deploymentUrl:string};
 type EconomicReleaseContract={economic?:{active:boolean;policy:EconomicPolicyIdentity;reader:ReaderProof|null}};
+const currentEconomicPolicy=(value:unknown)=>knownEconomicPolicy(value)&&value.algorithm===ECONOMIC_POLICY.algorithm&&value.artifact===ECONOMIC_POLICY.artifact&&value.sha256===ECONOMIC_POLICY.sha256;
 export async function verifyCorrectionDeployment(fetcher=fetch) {
   if(!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA??""))throw new Error("Correction executing revision unavailable");
   const response=await fetcher("https://crypto-valuation-screener.vercel.app/api/status",{cache:"no-store",redirect:"error",signal:AbortSignal.timeout(10_000)}),live=await response.json();
@@ -33,7 +34,7 @@ export async function verifyWriterActivation(fetcher = fetch) {
   const base = "https://crypto-valuation-screener.vercel.app";
   const economic=(contract as EconomicReleaseContract).economic;
   if(economic) {
-    if(!economic.active||!knownEconomicPolicy(economic.policy)||!economic.reader||!fourDailyActive()||activeWriterSchema()!==2)throw new Error("Economic writer requires a verified paused reader and separate activation");
+    if(!economic.active||!currentEconomicPolicy(economic.policy)||!economic.reader||!fourDailyActive()||activeWriterSchema()!==2)throw new Error("Economic writer requires a verified paused reader and separate activation");
     const historical=contract.phaseA as ReaderProof|null,reader=economic.reader;
     if(!historical||historical.readerRelease!=="four-daily-freshness-v2"||reader.readerRelease!==READER_COMPATIBILITY.release||historical.deploymentId===reader.deploymentId)throw new Error("Economic reader proof is not distinct from historical Phase A");
     for(const p of [historical,reader])if(p.base!==base||!/^[a-f0-9]{40}$/.test(p.codeCommit)||!/^dpl_[a-zA-Z0-9]+$/.test(p.deploymentId)||!/^https:\/\/crypto-valuation-screener-[a-zA-Z0-9-]+\.vercel\.app$/.test(p.deploymentUrl))throw new Error("Invalid economic reader deployment proof");
@@ -45,10 +46,10 @@ export async function verifyWriterActivation(fetcher = fetch) {
     const [current,pinned,old]=await Promise.all(responses.map(r=>r.json()));
     const identity=(v:any,p?:ReaderProof)=>v.deployment?.environment==="production"&&/^dpl_[a-zA-Z0-9]+$/.test(v.deployment?.id??"")&&/^[a-f0-9]{40}$/.test(v.deployment?.codeCommit??"")&&(!p||v.deployment.id===p.deploymentId&&v.deployment.codeCommit===p.codeCommit&&v.deployment.url===p.deploymentUrl);
     const schemas=(v:any)=>JSON.stringify(v.compatibility?.pipelineSchemas)==="[1,2]"&&JSON.stringify(v.compatibility?.journalSchemas)==="[1,2]";
-    const compatible=(v:any)=>v.compatibility?.release===READER_COMPATIBILITY.release&&schemas(v)&&v.compatibility?.economicPolicies?.some((p:unknown)=>knownEconomicPolicy(p));
-    if(!identity(current)||!identity(pinned,reader)||!compatible(current)||!compatible(pinned)||pinned.collectionRelease?.schedule!=="paused"||pinned.collectionRelease?.economic?.active!==false||!knownEconomicPolicy(pinned.collectionRelease?.economic?.policy)||
+    const compatible=(v:any)=>v.compatibility?.release===READER_COMPATIBILITY.release&&schemas(v)&&v.compatibility?.economicPolicies?.some((p:unknown)=>currentEconomicPolicy(p));
+    if(!identity(current)||!identity(pinned,reader)||!compatible(current)||!compatible(pinned)||pinned.collectionRelease?.schedule!=="paused"||pinned.collectionRelease?.economic?.active!==false||!currentEconomicPolicy(pinned.collectionRelease?.economic?.policy)||
       !identity(old,historical)||!schemas(old)||old.compatibility?.release!==historical.readerRelease)throw new Error("Economic compatible reader deployment unverified");
-    if(current.deployment.codeCommit!==executing||current.collectionRelease?.writerSchema!==2||current.collectionRelease?.schedule!=="four-daily"||current.collectionRelease?.economic?.active!==true||!knownEconomicPolicy(current.collectionRelease?.economic?.policy)||current.collectionRelease?.economic?.readerDeploymentId!==reader.deploymentId||current.collectionRelease?.phaseADeploymentId!==historical.deploymentId)throw new Error("Canonical economic writer revision or activation fence changed");
+    if(current.deployment.codeCommit!==executing||current.collectionRelease?.writerSchema!==2||current.collectionRelease?.schedule!=="four-daily"||current.collectionRelease?.economic?.active!==true||!currentEconomicPolicy(current.collectionRelease?.economic?.policy)||current.collectionRelease?.economic?.readerDeploymentId!==reader.deploymentId||current.collectionRelease?.phaseADeploymentId!==historical.deploymentId)throw new Error("Canonical economic writer revision or activation fence changed");
     return;
   }
   if (activeWriterSchema() === 1 && !fourDailyActive()) {

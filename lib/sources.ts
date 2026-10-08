@@ -31,7 +31,7 @@ type Json = Record<string, unknown>;
 
 export async function getJson<T>(url: string, observations: SourceObservation[], options: { timeout?: number; beforeAttempt?: () => Promise<void>; deadline?: number } = {}): Promise<T> {
   const { timeout = 30_000, beforeAttempt, deadline = Infinity } = options;
-  const boundedTransport=sourceAcquisitionRevision()===2;
+  const boundedTransport=sourceAcquisitionRevision()>=2;
   let httpStatus: number | undefined;
   try {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -424,7 +424,7 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
     return windows;
   };
   const histories = Promise.all([fetchRevenueHistory(observations, preserved("revenueHistory")), fetchHolderHistory(observations,preserved("holderHistory"))]);
-  const cmcDeadline=sourceAcquisitionRevision()===2?Date.now()+180_000:undefined;
+  const cmcDeadline=sourceAcquisitionRevision()>=2?Date.now()+180_000:undefined;
   const initial = await Promise.allSettled([
     getJson<Json[]>(`${LLAMA}/protocols`, observations),
     fetchOverviewList("/overview/fees", observations),
@@ -474,7 +474,7 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
     cmc:[...cmc.byId.values()].sort((a,b)=>Number(a.id)-Number(b.id)),cmcLookups:[...cmcLookups].sort(([a],[b])=>a-b),cmcDiscoveryComplete:cmc.discoveryComplete !== false,
     gecko:[...gecko.byId.values()].sort((a,b)=>String(a.id).localeCompare(String(b.id))),geckoLookups:[...gecko.lookups].sort(([a],[b])=>a.localeCompare(b)),
     revenueHistories,holderHistories,recoveredRevenue:[...recoveredRevenue].sort(([a],[b])=>a.localeCompare(b)),observations:[...observations],priorCmcTargets,
-    ...(sourceAcquisitionRevision()===2?{priorCmcIdentities:(baseline?.coins??[]).flatMap(c=>c.identityStatus==="verified"&&c.cmcId!==null?[{slug:c.slug,sourceSlugs:c.sourceSlugs??[c.slug],name:c.name,symbol:c.symbol,geckoId:c.geckoId,cmcId:c.cmcId,cmcSlug:c.cmcSlug,baselineAt:baseline!.updatedAt}]:[])}:{})};
+    ...(sourceAcquisitionRevision()>=2?{priorCmcIdentities:(baseline?.coins??[]).flatMap(c=>c.identityStatus==="verified"&&c.cmcId!==null?[{slug:c.slug,sourceSlugs:c.sourceSlugs??[c.slug],name:c.name,symbol:c.symbol,geckoId:c.geckoId,cmcId:c.cmcId,cmcSlug:c.cmcSlug,baselineAt:baseline!.updatedAt}]:[])}:{})};
   // A broad discovery row outside this source universe cannot taint its rows.
   const linkedCmcIds=new Set(normalizeCoinInputs(inputs).flatMap(c=>c.marketSources?.requests?.cmc.map(q=>q.id) ?? []));
   for(const row of inputs.cmc) if(linkedCmcIds.has(String(row.id)) && Array.isArray(row.quoteInvalidFields) && row.quoteInvalidFields.length && typeof row.quoteSchemaUrl === "string" && row.quoteSchemaUrl.includes("/listings/latest")) {

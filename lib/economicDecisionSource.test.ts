@@ -1,6 +1,6 @@
 import {afterEach,expect,it,vi} from "vitest";
 import {captureSourceBundle,replaySourceBundle} from "./sourceBundle";
-import {ECONOMIC_POLICY,economicArtifact} from "./economicPolicy";
+import {ECONOMIC_POLICY_V1 as ECONOMIC_POLICY,economicArtifactV1 as economicArtifact} from "./economicPolicy";
 import {acquireEconomicProvenance,PROVENANCE_COMMIT_URL,economicDecision} from "./economicDecisionSource";
 import {aggregateDefinitions,combineFundamentals} from "./fundamentalSource";
 import {aggregateHolderValueByGroup} from "./holderValue";

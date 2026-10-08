@@ -1,6 +1,6 @@
 import {afterEach,expect,it,vi} from "vitest";
 import {captureSourceBundle,objectHash,recordEconomicProvenance} from "./sourceBundle";
-import {ECONOMIC_POLICY,economicArtifact} from "./economicPolicy";
+import {ECONOMIC_POLICY,ECONOMIC_POLICY_V1,economicArtifact} from "./economicPolicy";
 import {aggregateDefinitions,combineFundamentals} from "./fundamentalSource";
 import {aggregateHolderValueByGroup} from "./holderValue";
 import {sample} from "./testFixtures";
@@ -15,8 +15,8 @@ import {buildEconomicReview,summarizeEconomicReview,validateEconomicReview} from
 import type {EconomicProvenance} from "./economicTypes";
 const at="2026-10-07T20:00:00Z",hash="a".repeat(64);
 afterEach(()=>vi.useRealTimers());
-function proof():EconomicProvenance{return {state:"verified",repository:"DefiLlama/dimension-adapters",observedAt:at,commit:"1".repeat(40),tree:"2".repeat(40),receiptHashes:["b".repeat(64),"c".repeat(64)],files:[...new Map(economicArtifact.contracts.flatMap(c=>c.sourceClosure).map(f=>[f.path,f])).values()].map(f=>({path:f.path,expected:f.blobSha1,actual:f.blobSha1})),limitation:"provider-execution-revision-unattested"};}
-async function coin(slug="fake-world-assets-v1",p=proof()) {
+function proof():EconomicProvenance{return {state:"verified",repository:"DefiLlama/dimension-adapters",observedAt:at,commit:"1".repeat(40),tree:"2".repeat(40),receiptHashes:["b".repeat(64),"c".repeat(64)],files:[...new Map(economicArtifact.contracts.flatMap(c=>c.sourceClosure).map(f=>[f.path,f])).values()].map(f=>({path:f.path,expected:f.blobSha1,actual:f.blobSha1})),limitation:"provider-execution-revision-unattested",runtime:{scope:"adapter-local-with-reviewed-shared-fee-surface",typeSurface:"matched",contexts:economicArtifact.contracts.map(c=>({slug:c.slug,sha256:c.runtimeContext!.sha256})),rawChangedPaths:[]}};}
+async function coin(slug="fake-world-assets-v1",p=proof(),policy=ECONOMIC_POLICY) {
   const c=economicArtifact.contracts.find(c=>c.slug===slug)!;
   const row={slug,module:c.expectedModule,defillamaId:c.providerId,name:c.expectedName,parentProtocol:c.expectedParent,methodology:c.expectedDefinitions,total30d:300};
   const r=await captureSourceBundle(at,null,async()=>{recordEconomicProvenance(p);const key=c.expectedParent??slug;
@@ -25,7 +25,7 @@ async function coin(slug="fake-world-assets-v1",p=proof()) {
     const chart=Array.from({length:730},(_,i)=>[Date.parse("2026-10-06")/1000-i*86400,{[row.name]:10}]);
     const history=summarizeRevenueHistory([row],chart,Date.parse(at),"fixture",defs,[row],2)[key];
     return sample({slug:key,fundamentals,revenueHistory:history,holderValue:aggregateHolderValueByGroup([row],()=>key).get(key),mcap:36500,fdv:73000});
-  },undefined,2,2,ECONOMIC_POLICY);return r.value!;
+  },undefined,2,2,policy);return r.value!;
 }
 it("independent positive USD sums enable P/R while unresolved holders stay null for every window and numerator",async()=>{
   const c=await coin();for(const days of [1,7,30,90,365] as const)for(const basis of ["mcap","fdv"] as const) {
@@ -86,4 +86,16 @@ it("economic review ages survive dates and proven stable IDs through renames, un
   expect(absent.entries).toEqual(resolved.entries);
   const returned=buildEconomicReview([next],"2026-11-11T20:00:00Z","0".repeat(64),absent,null,objectHash)!;
   expect(returned.entries.find(e=>e.key===pending.key)).toMatchObject({firstKnownAt:at,resolution:{at:"2026-10-10T20:00:00Z"},observationCount:4});
+});
+it("v1 to v2 review migration preserves the exact metric age and dated obligation, recording only the evidenced resolution",async()=>{
+  const p=proof();p.state="changed";p.files.find(f=>f.path==="adapters/types.ts")!.actual="9".repeat(40);
+  const old=await coin("fake-world-assets-v1",p,ECONOMIC_POLICY_V1),current=await coin("fake-world-assets-v1",p);
+  expect(old.fundamentals.revenue.components[0].decision!.disposition).toBe("pending");expect(current.fundamentals.revenue.components[0].decision!.disposition).toBe("approved");
+  const first=buildEconomicReview([old],at,hash,undefined,null,objectHash)!;
+  const migrated=buildEconomicReview([current],"2026-10-08T20:00:00Z","d".repeat(64),first,null,objectHash)!;
+  expect(migrated.trackingStartedAt).toBe(at);expect(migrated.entries.find(e=>e.metric==="Revenue")).toMatchObject({firstKnownAt:at,firstRawBundleSha256:hash,observationCount:2,resolution:{at:"2026-10-08T20:00:00Z",policySha256:ECONOMIC_POLICY.sha256}});
+  for(const c of [old,current]) {const f=c.revenueHistory!.freshness!;f.state="pending";f.latestCompleteDate="2026-10-05";f.coverage=null;f.missingRecentDates=[f.targetDate];}
+  const before=annotateFreshness([old],at)[0],after=annotateFreshness([current],at)[0];expect(freshnessIdentity(after.freshness!.revenue)).toBe(freshnessIdentity(before.freshness!.revenue));
+  const dated=updateObligations(initialRecovery(),{coins:[before],updatedAt:at} as any,"first");
+  expect(updateObligations(dated,{coins:[after],updatedAt:"2026-10-08T20:00:00Z"} as any,"next").obligations[0]).toMatchObject({firstMissingAt:at,checks:2,disposition:"overdue"});
 });
