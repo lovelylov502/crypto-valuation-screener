@@ -5,7 +5,7 @@
     2
   ],
   "writerSchema": 2,
-  "schedule": "paused",
+  "schedule": "four-daily",
   "phaseA": {
     "base": "https://crypto-valuation-screener.vercel.app",
     "readerRelease": "four-daily-freshness-v2",
@@ -14,12 +14,18 @@
     "deploymentUrl": "https://crypto-valuation-screener-jx7xr1h40-bodycation.vercel.app"
   },
   "economic": {
-    "active": false,
+    "active": true,
     "policy": {
       "algorithm": "metric-decisions-v3",
       "artifact": "economic-policy-2026-10-08-v3",
       "sha256": "e582ebe1694702e45193467a69f5e1a587363c08f37880c5901c5bb7ea1e584b"
     },
-    "reader": null
+    "reader": {
+      "base": "https://crypto-valuation-screener.vercel.app",
+      "readerRelease": "metric-economic-decisions-v3",
+      "codeCommit": "574ec3766c09e35b2ec423f78f36dde87a692ce8",
+      "deploymentId": "dpl_7L64Na5R77Vrb9tJDDfCgy1MLCzf",
+      "deploymentUrl": "https://crypto-valuation-screener-fq8e3arlf-bodycation.vercel.app"
+    }
   }
 }
