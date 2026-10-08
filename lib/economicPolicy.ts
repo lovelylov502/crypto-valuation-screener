@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import artifactV1 from "./economic-policy-v1.json";
 import artifact from "./economic-policy-v2.json";
+import artifactV3 from "./economic-policy-v3.json";
 import legacy from "./fundamentalDefinitions.legacy-b519.json";
 import type { EconomicPolicyIdentity } from "./economicTypes";
 import { knownEconomicPolicy } from "./economicPolicyIdentity";
@@ -14,7 +15,9 @@ export const ECONOMIC_POLICY_V1: EconomicPolicyIdentity = { algorithm: "metric-d
   sha256: createHash("sha256").update(JSON.stringify(canonical({artifact:artifactV1,legacy}))).digest("hex") };
 export const ECONOMIC_POLICY: EconomicPolicyIdentity = { algorithm: "metric-decisions-v2", artifact: "economic-policy-2026-10-08-v2",
   sha256: createHash("sha256").update(JSON.stringify(canonical({artifact,legacy}))).digest("hex") };
-if(![ECONOMIC_POLICY_V1,ECONOMIC_POLICY].every(knownEconomicPolicy))throw new Error("Immutable economic artifact content changed");
+export const ECONOMIC_POLICY_V3: EconomicPolicyIdentity = { algorithm: "metric-decisions-v3", artifact: "economic-policy-2026-10-08-v3",
+  sha256: createHash("sha256").update(JSON.stringify(canonical({artifact:artifactV3,legacy}))).digest("hex") };
+if(![ECONOMIC_POLICY_V1,ECONOMIC_POLICY,ECONOMIC_POLICY_V3].every(knownEconomicPolicy))throw new Error("Immutable economic artifact content changed");
 export interface EconomicContract {
   providerId:string;slug:string;expectedName:string;expectedModule:string;expectedParent:string|null;expectedDefinitions:Record<string,string|null>;reviewedAt:string;
   sourceClosure:{path:string;blobSha1:string;sha256:string;role?:string}[];
@@ -23,7 +26,8 @@ export interface EconomicContract {
 }
 export const economicArtifact = artifact as unknown as {contracts:EconomicContract[]};
 export const economicArtifactV1 = artifactV1 as unknown as {contracts:EconomicContract[]};
-export const economicArtifactFor=(policy:EconomicPolicyIdentity)=>policy.algorithm==="metric-decisions-v1"?economicArtifactV1:economicArtifact;
+export const economicArtifactV3 = artifactV3 as unknown as {contracts:EconomicContract[]};
+export const economicArtifactFor=(policy:EconomicPolicyIdentity)=>policy.algorithm==="metric-decisions-v1"?economicArtifactV1:policy.algorithm==="metric-decisions-v3"?economicArtifactV3:economicArtifact;
 export function validateEconomicPolicy(value: unknown): asserts value is EconomicPolicyIdentity {
   const p = value as EconomicPolicyIdentity;
   if (!knownEconomicPolicy(p)) throw new Error("Unknown or mismatched economic policy artifact");

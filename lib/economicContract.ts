@@ -1,6 +1,7 @@
 import {economicArtifactFor} from "./economicPolicy";
 import {knownEconomicPolicy} from "./economicPolicyIdentity";
 import type {CoinRaw,ScreenerResponse} from "./types";
+import {registryDecisionProofMatches} from "./economicProvenanceV3";
 
 /** Consistency gate. Source-economic truth is checked separately by independent fixtures. */
 export function economicCoinErrors(c:CoinRaw):string[] {
@@ -12,7 +13,7 @@ export function economicCoinErrors(c:CoinRaw):string[] {
     const d=p.decision;
     if(!d||!knownEconomicPolicy(d.policy)||d.key!==`DefiLlama:${d.componentId}:${metric}`||d.metric!==metric||d.provider!=="DefiLlama"||!d.reason||!Array.isArray(d.changedFields)||!Array.isArray(d.requiredFields)||!Array.isArray(d.affectedOutputs)||!d.evidence||!Array.isArray(d.limits)||d.kind!==p.kind||!["approved","pending","evidence-unavailable","reviewed-unavailable"].includes(d.disposition)) {errors.push(`economic decision:${p.slug}:${metric}`);continue;}
     const contract=economicArtifactFor(d.policy).contracts.find(r=>r.providerId===d.componentId||r.slug===p.slug),review=contract?.decisions.find(r=>r.metric===metric);
-    if(d.basis==="reviewed-code-contract"&&(!contract||d.evidence.limitation!=="provider-execution-revision-unattested"||d.disposition==="approved"&&(contract.providerId!==d.componentId||contract.slug!==p.slug||review?.decision!=="approve_current_economic_kind"||(review as {kind?:string}).kind!==d.kind||!d.evidence.commit||!d.evidence.tree||(d.policy.algorithm==="metric-decisions-v1"?d.evidence.receiptHashes.length!==2:d.evidence.receiptHashes.length<2||d.evidence.receiptHashes.length>6||d.evidence.runtimeContextSha256!==contract.runtimeContext?.sha256||d.evidence.scope!=="adapter-local-with-reviewed-shared-fee-surface"))))errors.push(`unproved economic approval:${p.slug}:${metric}`);
+    if(d.basis==="reviewed-code-contract"&&(!contract||d.evidence.limitation!=="provider-execution-revision-unattested"||d.disposition==="approved"&&(contract.providerId!==d.componentId||contract.slug!==p.slug||review?.decision!=="approve_current_economic_kind"||(review as {kind?:string}).kind!==d.kind||!d.evidence.commit||!d.evidence.tree||(d.policy.algorithm==="metric-decisions-v1"?d.evidence.receiptHashes.length!==2:d.evidence.receiptHashes.length<2||d.evidence.receiptHashes.length>(d.policy.algorithm==="metric-decisions-v3"?7:6)||d.evidence.runtimeContextSha256!==contract.runtimeContext?.sha256||d.evidence.scope!==(d.policy.algorithm==="metric-decisions-v3"?"adapter-local-with-reviewed-shared-fee-and-literal-registry-surfaces":"adapter-local-with-reviewed-shared-fee-surface")||d.policy.algorithm==="metric-decisions-v3"&&!registryDecisionProofMatches(d.evidence.literalRegistry)))))errors.push(`unproved economic approval:${p.slug}:${metric}`);
     if(contract&&d.basis!=="reviewed-code-contract")errors.push(`weaker approval fallback:${p.slug}:${metric}`);
     if(metric==="HoldersRevenue") {
       const h=c.holderValue.components.find(h=>h.slug===p.slug);

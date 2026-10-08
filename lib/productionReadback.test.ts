@@ -8,6 +8,7 @@ import { normalizedHash, pipelineOutputHash } from "./pipelineIntegrity";
 import type { SourceObservation } from "./types";
 import {annotateFreshness,freshnessSummary} from "./datedFreshness";
 import {jsonResponse,readJsonText} from "./jsonTransport.mjs";
+import {ECONOMIC_POLICIES} from "./economicPolicyIdentity";
 
 it("verifies source amounts while keeping incomplete current FWA windows unavailable", () => {
   const coin = { mcap: 100, revenue30d: 30, fundamentals: { revenue: { kind: "protocol_revenue" } },
@@ -86,4 +87,19 @@ it("schema2 pending dates and a later wall-clock UTC target retain safe capture 
  page.publicFreshness={...page.freshness!,targetDate:"2026-10-04",unassessed:true,current:0};
  page.freshness!.projects=7211;page.freshness!.unsupported+=2*7210;page.pagination.total=7211;page.universe.projects=7211;
  expect(page.pagination.filtered).toBe(1);expect(inspectPipelineProof(page)).toEqual([]);
+});
+function economicPage(policy=ECONOMIC_POLICIES[0]) {
+ const page=v2Page();page.coins=structuredClone(page.coins);page.pipeline!.economicPolicy=policy;
+ page.coins[0].fundamentals.revenue.components=[{slug:"sample",kind:"protocol_revenue"} as any];
+ page.economicReview={schema:1,policy,trackingStartedAt:page.updatedAt,stateSha256:"a".repeat(64),sample:[],summary:{sources:1,sourceMetrics:3,pending:0,evidenceUnavailable:0,reviewedUnavailable:0,approved:3,affectedProjects:0,retired:0,oldestPendingAt:null}};
+ page.coins[0].fundamentals.economicPolicy=policy;
+ for(const [metric,parts] of [["Revenue",page.coins[0].fundamentals.revenue.components],["Fees",page.coins[0].fundamentals.fees.components],["HoldersRevenue",page.coins[0].fundamentals.holders]] as const)for(const p of parts)p.decision={policy,metric,disposition:"approved",kind:p.kind} as any;
+ return page;
+}
+it("paused readers verify retained v1/v2 and new v3 accounting without accepting forged or mixed policy identities",()=>{
+ for(const policy of ECONOMIC_POLICIES)expect(inspectPipelineProof(economicPage(policy))).toEqual([]);
+ const forged=economicPage();forged.pipeline!.economicPolicy={...forged.pipeline!.economicPolicy!,sha256:"f".repeat(64)};expect(inspectPipelineProof(forged)).toContain("invalid economic review accounting");
+ const summary=economicPage(ECONOMIC_POLICIES[2]);summary.economicReview!.policy=ECONOMIC_POLICIES[1];expect(inspectPipelineProof(summary)).toContain("invalid economic review accounting");
+ const row=economicPage(ECONOMIC_POLICIES[2]);row.coins[0].fundamentals.economicPolicy=ECONOMIC_POLICIES[1];expect(inspectPipelineProof(row)).toContain("unbound economic row: sample");
+ const decision=economicPage(ECONOMIC_POLICIES[2]);decision.coins[0].fundamentals.revenue.components[0].decision!.policy=ECONOMIC_POLICIES[1];expect(inspectPipelineProof(decision)).toContain("invalid economic row decisions: sample:Revenue");
 });

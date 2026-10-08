@@ -44,6 +44,8 @@ interface Session {
   cmcLane?: { tail: Promise<void>; nextAt: number };
 }
 const sessions = new AsyncLocalStorage<Session>();
+const roleAwarePolicy=(policy?:EconomicPolicyIdentity)=>policy?.algorithm==="metric-decisions-v2"||policy?.algorithm==="metric-decisions-v3";
+const provenanceBudget=(policy?:EconomicPolicyIdentity)=>policy?.algorithm==="metric-decisions-v3"?7:policy?.algorithm==="metric-decisions-v2"?6:2;
 export const contentHash = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
@@ -103,7 +105,7 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
   const session = sessions.getStore();
   if (!session) return fetch(input, init);
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-  validateUrl(url, !!session.bundle.economicPolicy,session.bundle.economicPolicy?.algorithm==="metric-decisions-v2");
+  validateUrl(url, !!session.bundle.economicPolicy,roleAwarePolicy(session.bundle.economicPolicy));
   if ((init?.method ?? (input instanceof Request ? input.method : "GET")) !== "GET") throw new Error("Source capture is read-only");
   const reused = session.successful.get(url);
   if (reused) { session.latest.set(url, reused); return responseOf(reused); }
@@ -124,7 +126,7 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
   } else {
     let pending = session.pending.get(url);
     if (!pending) {
-      if(new URL(url).hostname==="api.github.com" && (session.provenanceRequests=(session.provenanceRequests??0)+1)>(session.bundle.economicPolicy?.algorithm==="metric-decisions-v2"?6:2))throw new Error("Economic provenance request budget exceeded");
+      if(new URL(url).hostname==="api.github.com" && (session.provenanceRequests=(session.provenanceRequests??0)+1)>provenanceBudget(session.bundle.economicPolicy))throw new Error("Economic provenance request budget exceeded");
       pending = (async () => {
         let requestedAt = new Date().toISOString();
         let result: SourceReceipt;
@@ -194,9 +196,9 @@ export function validateSourceBundle(bundle: SourceBundle): void {
     validateEconomicReview(bundle.economicReviewBaseline);validateEconomicReviewRef(bundle.economicReviewBaselineRef);
     if(objectHash(bundle.economicReviewBaseline)!==bundle.economicReviewBaselineRef.stateSha256||contentHash(JSON.stringify(bundle.economicReviewBaseline))!==bundle.economicReviewBaselineRef.sha256||Buffer.byteLength(JSON.stringify(bundle.economicReviewBaseline))!==bundle.economicReviewBaselineRef.bytes)throw Error("Economic review baseline reference mismatch");
   }
-  if(bundle.receipts.filter(r=>new URL(r.url).hostname==="api.github.com").length>(bundle.economicPolicy?.algorithm==="metric-decisions-v2"?6:2))throw new Error("Economic provenance request budget exceeded");
+  if(bundle.receipts.filter(r=>new URL(r.url).hostname==="api.github.com").length>provenanceBudget(bundle.economicPolicy))throw new Error("Economic provenance request budget exceeded");
   for (const receipt of bundle.receipts) {
-    validateUrl(receipt.url, !!bundle.economicPolicy,bundle.economicPolicy?.algorithm==="metric-decisions-v2");
+    validateUrl(receipt.url, !!bundle.economicPolicy,roleAwarePolicy(bundle.economicPolicy));
     if (typeof receipt.body !== "string" || contentHash(receipt.body) !== receipt.sha256 || !Number.isFinite(Date.parse(receipt.requestedAt))
       || !Number.isFinite(Date.parse(receipt.observedAt)) || Date.parse(receipt.observedAt) < Date.parse(receipt.requestedAt)
       || (receipt.status !== null && (!Number.isInteger(receipt.status) || receipt.status < 200 || receipt.status > 599))) throw new Error("Invalid source receipt integrity");

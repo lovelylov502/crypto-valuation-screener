@@ -1,7 +1,9 @@
 import { Buffer } from "node:buffer";
 import { pathToFileURL } from "node:url";
 import { DEPLOY_CONTRACT } from "./deploy-contract.mjs";
-import economicIdentity from "../lib/economic-policy-v1.identity.json" with {type:"json"};
+import economicIdentityV1 from "../lib/economic-policy-v1.identity.json" with {type:"json"};
+import economicIdentityV2 from "../lib/economic-policy-v2.identity.json" with {type:"json"};
+import economicIdentityV3 from "../lib/economic-policy-v3.identity.json" with {type:"json"};
 import {readJsonText,jsonTransportErrors} from "../lib/jsonTransport.mjs";
 
 const ADVANCED_UI_MARKERS = ["화면 모드", "tovenit-theme", "밝게", "어둡게", "DefiLlama 전체 종목", "열 표시", "필터", "연결 토큰", "배수 분자", "P/R · 24시간", "P/HR · 24시간", "P/R · 30일", "P/HR · 30일", "지표 안내", "최신 자료 확인", "page-size-top", "scan-table", "수익 정렬 기준"];
@@ -87,7 +89,9 @@ export function inspectPipelineProof(data) {
     }
   }
   if(proof.economicPolicy!==undefined) {
-    const valid=p=>p?.algorithm===economicIdentity.algorithm&&p.artifact===economicIdentity.artifact&&p.sha256===economicIdentity.sha256;
+    const same=(p,q)=>p?.algorithm===q?.algorithm&&p?.artifact===q?.artifact&&p?.sha256===q?.sha256;
+    const known=[economicIdentityV1,economicIdentityV2,economicIdentityV3].some(p=>same(p,proof.economicPolicy));
+    const valid=p=>known&&same(p,proof.economicPolicy);
     const review=data.economicReview;
     if(proof.schema!==2||!valid(proof.economicPolicy)||!review||!valid(review.policy)||review.schema!==1||!Number.isFinite(Date.parse(review.trackingStartedAt))||!/[a-f0-9]{64}/.test(review.stateSha256)||!Array.isArray(review.sample)||review.sample.length>12||
       !["sources","sourceMetrics","pending","evidenceUnavailable","reviewedUnavailable","approved","affectedProjects","retired"].every(k=>Number.isInteger(review.summary?.[k])&&review.summary[k]>=0))errors.push("invalid economic review accounting");

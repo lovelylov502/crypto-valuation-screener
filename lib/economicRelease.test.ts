@@ -1,10 +1,10 @@
 import {afterEach,expect,it,vi} from "vitest";
 import {readFileSync} from "node:fs";
 import {createHash} from "node:crypto";
-const {contract}=vi.hoisted(()=>({contract:{readerRelease:"metric-economic-decisions-v2",writerSchema:2,schedule:"paused",phaseA:{base:"https://crypto-valuation-screener.vercel.app",readerRelease:"four-daily-freshness-v2",codeCommit:"a".repeat(40),deploymentId:"dpl_original",deploymentUrl:"https://crypto-valuation-screener-original.vercel.app"},economic:{active:false,policy:null as any,reader:null as any}}}));
+const {contract}=vi.hoisted(()=>({contract:{readerRelease:"metric-economic-decisions-v3",writerSchema:2,schedule:"paused",phaseA:{base:"https://crypto-valuation-screener.vercel.app",readerRelease:"four-daily-freshness-v2",codeCommit:"a".repeat(40),deploymentId:"dpl_original",deploymentUrl:"https://crypto-valuation-screener-original.vercel.app"},economic:{active:false,policy:null as any,reader:null as any}}}));
 vi.mock("./pipeline-release.json",()=>({default:contract}));
 import {verifyWriterActivation,collectionReleaseState,READER_COMPATIBILITY} from "./pipelineRelease";
-import {ECONOMIC_POLICY_IDENTITY as policy,ECONOMIC_POLICY_V1_IDENTITY as previousPolicy} from "./economicPolicyIdentity";
+import {ECONOMIC_POLICY_IDENTITY as policy,ECONOMIC_POLICY_V2_IDENTITY as previousPolicy} from "./economicPolicyIdentity";
 import {verifyWriterActivation as actualB519Writer} from "./fixtures/legacy-b519-writer/pipelineRelease";
 import b519Contract from "./fixtures/legacy-b519-writer/pipeline-release.json";
 import {readEconomicReaderProof,economicActivationFile,economicPauseFile} from "../scripts/prepare-economic-release.mjs";
@@ -47,7 +47,7 @@ it("prepares activation only after exact paused canonical and protected immutabl
   await expect(readEconomicReaderProof(reader.codeCommit,vi.fn(async()=>Response.json({...pinned(),collectionRelease:{...pinned().collectionRelease,schedule:"four-daily"}})))).rejects.toThrow("paused");
   await expect(readEconomicReaderProof(reader.codeCommit,vi.fn(async(url:RequestInfo|URL)=>String(url).startsWith(reader.deploymentUrl)?new Response(null,{status:302}):Response.json(pinned())))).rejects.toThrow("unavailable");
 });
-it("requires the executing v2 policy in the local contract and each current/pinned selection and support list",async()=>{
+it("requires the executing v3 policy in the local contract and each current/pinned selection and support list",async()=>{
   activate();await verifyWriterActivation(network());
   contract.economic.policy=previousPolicy;
   const untouched=network();await expect(verifyWriterActivation(untouched)).rejects.toThrow("separate activation");expect(untouched).not.toHaveBeenCalled();

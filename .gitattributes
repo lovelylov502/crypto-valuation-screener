@@ -2,3 +2,4 @@
 lib/fixtures/legacy-b519-writer/* -text
 # New immutable policy bytes also remain identical across Windows and Actions checkouts.
 lib/economic-policy-v2*.json -text
+lib/economic-policy-v3*.json -text
