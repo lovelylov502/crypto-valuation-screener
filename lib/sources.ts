@@ -405,6 +405,7 @@ export interface CoinInputs {
   marketRevision?: 2 | 3;
   chainIdentities?: Json[];
   providerHolderWindows?: true;
+  recoveredHolders?: [string, string][];
   asOf: string;
   protocols: Json[]; fees: Json[]; revenue: Json[]; holders: Json[]; dexs: Json[];
   parents: Json[]; stablecoins: StablecoinAsset[];
@@ -474,7 +475,7 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
     protocols=validateDirectoryRows(protocolsRaw,"slug",`${LLAMA}/protocols`,observations);
     config={parentProtocols:validateDirectoryRows(configRaw?.parentProtocols,"id",`${LLAMA}/config`,observations)};
   } catch(error) { await histories;throw error; }
-  const [, recoveredRevenue] = await Promise.all([
+  const [, recoveredRevenue, recoveredHolders] = await Promise.all([
     recoverOverviewRows(protocols, feesL, baseline, "dailyFees", observations),
     recoverOverviewRows(protocols, revL, baseline, "dailyRevenue", observations),
     recoverOverviewRows(protocols, hrL, baseline, "dailyHoldersRevenue", observations),
@@ -500,6 +501,7 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
 
   const inputs:CoinInputs = {asOf,...(sourceAcquisitionRevision()>=6?{marketRevision:3 as const}:sourceAcquisitionRevision()>=5?{marketRevision:2 as const}:{}),protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,parents:config.parentProtocols,stablecoins:stablecoins.peggedAssets,
     ...(sourceAcquisitionRevision()>=7?{chainIdentities,providerHolderWindows:true as const}:{}),
+    ...(sourceAcquisitionRevision()>=8?{recoveredHolders:[...recoveredHolders].sort(([a],[b])=>a.localeCompare(b))}:{}),
     cmc:[...cmc.byId.values()].sort((a,b)=>Number(a.id)-Number(b.id)),cmcLookups:[...cmcLookups].sort(([a],[b])=>a-b),cmcDiscoveryComplete:cmc.discoveryComplete !== false,
     gecko:[...gecko.byId.values()].sort((a,b)=>String(a.id).localeCompare(String(b.id))),geckoLookups:[...gecko.lookups].sort(([a],[b])=>a.localeCompare(b)),
     revenueHistories,holderHistories,recoveredRevenue:[...recoveredRevenue].sort(([a],[b])=>a.localeCompare(b)),observations:[...observations],priorCmcTargets,
@@ -522,6 +524,7 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
   const parents = new Map(inputs.parents.flatMap(p => typeof p.id === "string" ? [[p.id,p] as const] : []));
   const identityRows = [...protocols,...feesL,...revL,...hrL,...dexsL,...inputs.parents,...(inputs.chainIdentities ?? [])];
   const recoveredRevenue = new Map(inputs.recoveredRevenue);
+  const recoveredHolders = new Map(inputs.recoveredHolders ?? []);
   const cmc: CmcIndex = {byId:new Map(),bySlug:new Map(),byNameSymbol:new Map(),bySymbol:new Map(),discoveryComplete:inputs.cmcDiscoveryComplete};
   indexCmcRows(cmc, revisedMarket ? inputs.cmc.map(r => checkedMarketRow(r, "cmc", inputs.asOf)) : inputs.cmc);
   const cmcRows = [...cmc.byId.values()];
@@ -744,7 +747,7 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
       website: str(parent?.url) ?? str(rep.url),
       revenueHistory: history,
       revenueSource: { url: recoveredRevenue.get(k) ?? REVENUE_OVERVIEW_URL, observedAt: observations.find(s => s.url === (recoveredRevenue.get(k) ?? REVENUE_OVERVIEW_URL) && s.status === "ok")?.observedAt ?? inputs.asOf, periods: sourceRevAgg.get(k) },
-      ...(sourceHolderAgg ? { holderSource: { url: HOLDER_OVERVIEW_URL, observedAt: observations.find(s => s.url === HOLDER_OVERVIEW_URL && s.status === "ok")?.observedAt ?? inputs.asOf, periods: sourceHolderAgg.get(k) } } : {}),
+      ...(sourceHolderAgg ? { holderSource: { url: recoveredHolders.get(k) ?? HOLDER_OVERVIEW_URL, observedAt: observations.find(s => s.url === (recoveredHolders.get(k) ?? HOLDER_OVERVIEW_URL) && s.status === "ok")?.observedAt ?? inputs.asOf, periods: sourceHolderAgg.get(k) } } : {}),
       holderHistory: holderHistories[k] ?? null,
       ...(holderHistories[k]?.rawFreshness ? { rawHolderFreshness: holderHistories[k].rawFreshness } : {}),
       ...(holderHistories[k]?.rawFreshness ? { rawHolderDefinition:sourceEconomicPolicy()?physicalSeriesFingerprint(hrL.filter(p=>p.doublecounted!==true&&typeof p.slug==="string"&&groupKey(p.slug)===k),"HoldersRevenue"):objectHash(hrL.filter(p=>p.doublecounted!==true&&typeof p.slug==="string"&&groupKey(p.slug)===k).map(p=>[p.slug,p.defillamaId,p.methodology,p.parentProtocol]).sort()),

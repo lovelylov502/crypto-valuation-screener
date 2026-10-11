@@ -31,6 +31,15 @@ it("retains all complete raw holder windows and counts missing group components"
   expect(c.holderSource?.periods?.[7]).toEqual({ total: 70, reported: 1, expected: 1 });
   expect(referenceMultiple(c, "holders", 7, "fdv")).toBeCloseTo(240000 * 7 / (70 * 365));
 });
+it("retains the individual holder source URL and its actual observation time after overview recovery", () => {
+  const i = chainInputs(), url = "https://api.llama.fi/summary/fees/near?dataType=dailyHoldersRevenue", observedAt = "2026-10-11T09:15:20.000Z";
+  i.holders = [{ slug: "near", name: "Near", total7d: 70 }];
+  i.recoveredHolders = [["near", url]];
+  i.observations = [{ url, observedAt, sourceSlugs: ["near"], status: "ok" }];
+  const [c] = normalizeCoinInputs(i);
+  expect(c.holderSource).toMatchObject({ url, observedAt });
+  expect(referenceMultiple(c, "holders", 7, "fdv")).toBeCloseTo(240000 * 7 / (70 * 365));
+});
 it("uses a chain's own official token, never its gas token or a similarly named protocol", () => {
   const registry = { "OP Mainnet": { geckoId: "optimism", cmcId: "11840", symbol: "OP", gasTokenGeckoId: "ethereum" },
     "Gas only": { gasTokenGeckoId: "ethereum", symbol: "ETH" } };
@@ -59,17 +68,18 @@ it("captures and replays registry connections and raw holder windows only in rev
       : { protocols: u.pathname.includes("dexs") ? [{ slug: "unrelated", name: "Unrelated" }] : [{ ...chain, total7d: 70 }], totalDataChartBreakdown: [] };
     return Response.json(body);
   });
-  for (const revision of [6, 7] as const) {
+  for (const revision of [6, 7, 8] as const) {
     network();
     const pending = captureSourceBundle(at, null, () => collectCoinInputs(), undefined, 2, revision);
     await vi.runAllTimersAsync();
     const captured = await pending;
     expect(captured.error).toBeUndefined();
-    expect(captured.value?.providerHolderWindows).toBe(revision === 7 ? true : undefined);
-    expect(captured.value?.chainIdentities?.[0]?.gecko_id).toBe(revision === 7 ? "near" : undefined);
+    expect(captured.value?.providerHolderWindows).toBe(revision >= 7 ? true : undefined);
+    expect(captured.value?.chainIdentities?.[0]?.gecko_id).toBe(revision >= 7 ? "near" : undefined);
+    expect(captured.value?.recoveredHolders).toEqual(revision >= 8 ? [] : undefined);
     vi.stubGlobal("fetch", () => { throw new Error("Offline only"); });
     expect(await replaySourceBundle(captured.bundle, () => collectCoinInputs())).toEqual(captured.value);
     const c = normalizeCoinInputs(captured.value!).find(c => c.slug === "near")!;
-    expect(referenceMultiple(c, "holders", 7, "fdv") !== null).toBe(revision === 7);
+    expect(referenceMultiple(c, "holders", 7, "fdv") !== null).toBe(revision >= 7);
   }
 });
