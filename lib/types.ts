@@ -33,6 +33,7 @@ export interface CoinRaw {
   website?: string | null;
   revenueHistory?: RevenueHistory | null;
   revenueSource?: { url: string; observedAt: string; periods?: Partial<Record<1 | 7 | 30 | 365, { total: number | null; reported: number; expected: number }>> };
+  holderSource?: CoinRaw["revenueSource"];
   sourceSlugs?: string[];
   marketSources?: {
     mcap: "CoinMarketCap" | "CoinGecko" | "DefiLlama" | null;

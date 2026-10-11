@@ -74,6 +74,28 @@ describe("source reference multiples", () => {
     expect(referenceMultiple(c, "holders")).toBeCloseTo(100000000 / (500 * 365 / 30));
     expect(referenceMultiple(c, "holders", 7)).toBeNull();
   });
+  it("uses complete provider holder amounts for 24h and 7d independently of classification", () => {
+    const c = sample({ holderHistory: null });
+    c.holderSource = { url: "https://api.llama.fi/overview/fees?dataType=dailyHoldersRevenue", observedAt: new Date(at).toISOString(),
+      periods: { 1: { total: 10, reported: 2, expected: 2 }, 7: { total: 70, reported: 2, expected: 2 } } };
+    expect(referenceReading(c, "holders", 1)).toMatchObject({ amount: 10, basis: "provider_total" });
+    expect(referenceMultiple(c, "holders", 7)).toBeCloseTo(c.mcap! * 7 / (70 * 365));
+    expect(referenceMultiple(c, "holders", 90)).toBeNull();
+  });
+  it("keeps partial holder totals visible without using a legacy partial sum as a denominator", () => {
+    const c = sample({ holderHistory: null, holderValue: { rawCurrent30d: 500 } });
+    c.holderSource = { url: "https://api.llama.fi/overview/fees?dataType=dailyHoldersRevenue", observedAt: new Date(at).toISOString(),
+      periods: { 30: { total: 500, reported: 1, expected: 2 } } };
+    expect(referenceReading(c, "holders", 30)).toMatchObject({ amount: 500, basis: "provider_partial" });
+    expect(referenceMultiple(c, "holders", 30)).toBeNull();
+  });
+  it("distinguishes an absent holder year from an explicitly reported zero", () => {
+    const c = sample({ holderHistory: null, holderValue: { rawTtm: 0 } });
+    c.holderSource = { url: "https://api.llama.fi/overview/fees?dataType=dailyHoldersRevenue", observedAt: new Date(at).toISOString(),
+      periods: { 1: { total: 0, reported: 1, expected: 1 }, 365: { total: null, reported: 0, expected: 1 } } };
+    expect(referenceReading(c, "holders", 1)).toMatchObject({ amount: 0, basis: "provider_total" });
+    expect(referenceReading(c, "holders", 365)).toMatchObject({ amount: null, basis: "missing" });
+  });
   it("uses the same raw ratios for API values, sorting, filters and coverage", () => {
     const a = sample({ slug: "a", revenue30d: 1000000 }), b = sample({ slug: "b", revenue30d: 500000 });
     a.fundamentals = structuredClone(a.fundamentals);

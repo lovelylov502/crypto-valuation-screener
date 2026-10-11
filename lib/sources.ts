@@ -20,6 +20,7 @@ import {
 
 const LLAMA = "https://api.llama.fi";
 const CMC = "https://pro-api.coinmarketcap.com/public-api";
+const HOLDER_OVERVIEW_URL = `${LLAMA}/overview/fees?dataType=dailyHoldersRevenue&excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true`;
 
 // 자동 이름/slug 매칭으로 확정할 수 없는 canonical CMC 예외.
 // 각 항목은 프로젝트 구성원·심볼과 CMC 자산을 수동 검증한 뒤에만 추가한다.
@@ -402,6 +403,8 @@ export function aggregateRevenueSource(list: Json[], groupKey: (slug: string) =>
  * original HTTP response bytes are retained by the enclosing source session. */
 export interface CoinInputs {
   marketRevision?: 2 | 3;
+  chainIdentities?: Json[];
+  providerHolderWindows?: true;
   asOf: string;
   protocols: Json[]; fees: Json[]; revenue: Json[]; holders: Json[]; dexs: Json[];
   parents: Json[]; stablecoins: StablecoinAsset[];
@@ -411,6 +414,27 @@ export interface CoinInputs {
   recoveredRevenue: [string,string][]; observations: SourceObservation[];
   priorCmcTargets: [number,string[]][];
   priorCmcIdentities?: {slug:string;sourceSlugs:string[];name:string;symbol:string|null;geckoId:string|null;cmcId:number;cmcSlug:string|null;baselineAt:string}[];
+}
+
+/** Only the registry's own token belongs to an explicitly identified chain fee row. */
+export function chainIdentityRows(registry: unknown, rows: Json[]): Json[] {
+  if (!registry || typeof registry !== "object" || Array.isArray(registry)) return [];
+  const byName = new Map<string, Json[]>();
+  for (const [name, value] of Object.entries(registry)) if (value && typeof value === "object" && !Array.isArray(value)) {
+    const key = normalize(name);
+    byName.set(key, [...(byName.get(key) ?? []), value as Json]);
+  }
+  const identities = new Map<string, Json>();
+  for (const row of rows) {
+    if (row.category !== "Chain" || !str(row.id)?.startsWith("chain#") || !str(row.slug) || !str(row.name)) continue;
+    const matches = byName.get(normalize(String(row.name))) ?? [];
+    if (matches.length !== 1) continue;
+    const token = matches[0], geckoId = str(token.geckoId), cmcId = Number(token.cmcId);
+    if (!geckoId && !(Number.isSafeInteger(cmcId) && cmcId > 0)) continue;
+    identities.set(String(row.slug), { slug: row.slug, gecko_id: geckoId, symbol: str(token.symbol),
+      cmcId: Number.isSafeInteger(cmcId) && cmcId > 0 ? cmcId : null });
+  }
+  return [...identities.values()];
 }
 
 export async function collectCoinInputs(observations: SourceObservation[] = [], baseline?: ScreenerResponse): Promise<CoinInputs> {
@@ -455,7 +479,8 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
     recoverOverviewRows(protocols, revL, baseline, "dailyRevenue", observations),
     recoverOverviewRows(protocols, hrL, baseline, "dailyHoldersRevenue", observations),
   ]);
-  const identityRows = [...protocols, ...feesL, ...revL, ...hrL, ...dexsL, ...config.parentProtocols];
+  const chainIdentities = sourceAcquisitionRevision() >= 7 ? chainIdentityRows((configRaw as Json).chainCoingeckoIds, [...feesL, ...revL, ...hrL]) : undefined;
+  const identityRows = [...protocols, ...feesL, ...revL, ...hrL, ...dexsL, ...config.parentProtocols, ...(chainIdentities ?? [])];
   const currentSlugs = new Set(identityRows.flatMap(p=>typeof p.slug === "string" ? [p.slug] : typeof p.id === "string" && p.id.startsWith("parent#") ? [p.id] : []));
   const priorTargets = new Map<number,Set<string>>();
   for (const c of baseline?.coins ?? []) {
@@ -474,6 +499,7 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
   ]);
 
   const inputs:CoinInputs = {asOf,...(sourceAcquisitionRevision()>=6?{marketRevision:3 as const}:sourceAcquisitionRevision()>=5?{marketRevision:2 as const}:{}),protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,parents:config.parentProtocols,stablecoins:stablecoins.peggedAssets,
+    ...(sourceAcquisitionRevision()>=7?{chainIdentities,providerHolderWindows:true as const}:{}),
     cmc:[...cmc.byId.values()].sort((a,b)=>Number(a.id)-Number(b.id)),cmcLookups:[...cmcLookups].sort(([a],[b])=>a-b),cmcDiscoveryComplete:cmc.discoveryComplete !== false,
     gecko:[...gecko.byId.values()].sort((a,b)=>String(a.id).localeCompare(String(b.id))),geckoLookups:[...gecko.lookups].sort(([a],[b])=>a.localeCompare(b)),
     revenueHistories,holderHistories,recoveredRevenue:[...recoveredRevenue].sort(([a],[b])=>a.localeCompare(b)),observations:[...observations],priorCmcTargets,
@@ -494,7 +520,7 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
   const revisedMarket = inputs.marketRevision === 2 || inputs.marketRevision === 3;
   const {protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,revenueHistories,holderHistories,observations}=inputs;
   const parents = new Map(inputs.parents.flatMap(p => typeof p.id === "string" ? [[p.id,p] as const] : []));
-  const identityRows = [...protocols,...feesL,...revL,...hrL,...dexsL,...inputs.parents];
+  const identityRows = [...protocols,...feesL,...revL,...hrL,...dexsL,...inputs.parents,...(inputs.chainIdentities ?? [])];
   const recoveredRevenue = new Map(inputs.recoveredRevenue);
   const cmc: CmcIndex = {byId:new Map(),bySlug:new Map(),byNameSymbol:new Map(),bySymbol:new Map(),discoveryComplete:inputs.cmcDiscoveryComplete};
   indexCmcRows(cmc, revisedMarket ? inputs.cmc.map(r => checkedMarketRow(r, "cmc", inputs.asOf)) : inputs.cmc);
@@ -522,6 +548,7 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
   const feesAgg = aggregateOverviewByGroup(feesL, groupKey);
   const revAgg = aggregateOverviewByGroup(revL, groupKey);
   const sourceRevAgg = aggregateRevenueSource(revL, groupKey);
+  const sourceHolderAgg = inputs.providerHolderWindows ? aggregateRevenueSource(hrL, groupKey) : null;
   const holderValues = aggregateHolderValueByGroup(hrL, groupKey, definitionReviewed);
   const revenueDefinitions = aggregateDefinitions(revL, groupKey, "Revenue");
   const feeDefinitions = aggregateDefinitions(feesL, groupKey, "Fees");
@@ -717,6 +744,7 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
       website: str(parent?.url) ?? str(rep.url),
       revenueHistory: history,
       revenueSource: { url: recoveredRevenue.get(k) ?? REVENUE_OVERVIEW_URL, observedAt: observations.find(s => s.url === (recoveredRevenue.get(k) ?? REVENUE_OVERVIEW_URL) && s.status === "ok")?.observedAt ?? inputs.asOf, periods: sourceRevAgg.get(k) },
+      ...(sourceHolderAgg ? { holderSource: { url: HOLDER_OVERVIEW_URL, observedAt: observations.find(s => s.url === HOLDER_OVERVIEW_URL && s.status === "ok")?.observedAt ?? inputs.asOf, periods: sourceHolderAgg.get(k) } } : {}),
       holderHistory: holderHistories[k] ?? null,
       ...(holderHistories[k]?.rawFreshness ? { rawHolderFreshness: holderHistories[k].rawFreshness } : {}),
       ...(holderHistories[k]?.rawFreshness ? { rawHolderDefinition:sourceEconomicPolicy()?physicalSeriesFingerprint(hrL.filter(p=>p.doublecounted!==true&&typeof p.slug==="string"&&groupKey(p.slug)===k),"HoldersRevenue"):objectHash(hrL.filter(p=>p.doublecounted!==true&&typeof p.slug==="string"&&groupKey(p.slug)===k).map(p=>[p.slug,p.defillamaId,p.methodology,p.parentProtocol]).sort()),

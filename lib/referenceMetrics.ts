@@ -17,13 +17,15 @@ export function referenceReading(c: CoinRaw, metric: ReferenceMetric, days: Reve
   // Stored holder history covers the reviewed subset. Use it as the full source only when every component is included.
   const dated = c.holderValue.components.every(p => p.eligible) && holderHistoryMatches(c)
     && !hasDataQualityConflict(c, "holders") && period?.reportedDays === days && finite(period.total);
-  const raw = days === 30 ? c.holderValue.rawCurrent30d : days === 365 ? c.holderValue.rawTtm : null;
+  const sourcePeriod = days === 90 ? undefined : c.holderSource?.periods?.[days];
+  const raw = c.holderSource ? sourcePeriod?.total : days === 30 ? c.holderValue.rawCurrent30d : days === 365 ? c.holderValue.rawTtm : null;
   const amount = dated ? period!.total : finite(raw) ? raw : null;
-  const basis = dated ? "completed_utc" : amount !== null ? "provider_total" : "missing";
+  const partial = !dated && amount !== null && sourcePeriod && sourcePeriod.reported < sourcePeriod.expected;
+  const basis = dated ? "completed_utc" : partial ? "provider_partial" : amount !== null ? "provider_total" : "missing";
   return { amount, basis, basisLabel: dated ? `${period!.end} UTC까지` : amount !== null
-    ? days === 365 ? "원천 1년 집계 · 365일 미확인" : "제공처 기간 집계" : "기간 자료 미확보",
-    kindLabel: "Holders Revenue 원천", source: history?.source ?? HOLDER_SOURCE,
-    observedAt: history?.observedAt ?? c.freshness?.holders.observedAt ?? null,
+    ? partial ? `부분 집계 · ${sourcePeriod.reported}/${sourcePeriod.expected}개 구성요소` : days === 365 ? "원천 1년 집계 · 365일 미확인" : "제공처 기간 집계" : "기간 자료 미확보",
+    kindLabel: "Holders Revenue 원천", source: dated ? history!.source : c.holderSource?.url ?? history?.source ?? HOLDER_SOURCE,
+    observedAt: dated ? history!.observedAt : c.holderSource?.observedAt ?? history?.observedAt ?? c.freshness?.holders.observedAt ?? null,
     start: dated ? period!.start : null, end: dated ? period!.end : null };
 }
 
