@@ -1,5 +1,15 @@
 export type RangeHandle = "min" | "max";
 
+const USD_SLIDER_LOG_MAX = Math.log1p(1e11);
+export function usdToSlider(usd: number): number {
+  return usd <= 0 ? 0 : Math.min(100, Math.log1p(usd) / USD_SLIDER_LOG_MAX * 100);
+}
+export function sliderToUsd(position: number): number {
+  if (position <= 0) return 0;
+  // Remove logarithm round-trip noise so exact typed bounds remain exact.
+  return Number(Math.expm1(USD_SLIDER_LOG_MAX * (position / 100)).toPrecision(13));
+}
+
 /** Compare displayed values; missing values stay last in both directions. */
 export function compareTableValues(a: number | string | null, b: number | string | null, direction: "asc" | "desc"): number {
   if (a == null && b == null) return 0;

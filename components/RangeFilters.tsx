@@ -1,14 +1,5 @@
-import { clampRangePosition } from "@/lib/screenerFilters";
-
-// 로그 슬라이더(0~100) <-> USD 양방향. 0이면 필터 없음, 100이면 $100B
-function sliderToUsd(s: number): number {
-  if (s <= 0) return 0;
-  return Math.pow(10, 6 + (s / 100) * 5); // 1e6 ~ 1e11
-}
-function usdToSlider(usd: number): number {
-  if (usd <= 0) return 0;
-  return Math.max(0, Math.min(100, ((Math.log10(usd) - 6) / 5) * 100));
-}
+import { useEffect, useState } from "react";
+import { clampRangePosition, sliderToUsd, usdToSlider } from "@/lib/screenerFilters";
 
 // P/HR 같은 멀티플용 로그 슬라이더. 0이면 필터 없음, 100이면 1000x
 function sliderToMultiple(s: number): number {
@@ -35,7 +26,7 @@ function DualRangeSlider({
   onMaxChange: (position: number) => void;
   minLabel: string;
   maxLabel: string;
-  step?: number;
+  step?: number | "any";
 }) {
   const changeMin = (next: number) =>
     onMinChange(clampRangePosition("min", next, minPosition, maxPosition));
@@ -74,6 +65,28 @@ function DualRangeSlider({
   );
 }
 
+function MillionUsdInput({ usd, label, placeholder, onChange }: {
+  usd: number; label: string; placeholder: string; onChange: (usd: number) => number;
+}) {
+  const display = (value: number) => value > 0 ? String(value / 1e6) : "";
+  const [text, setText] = useState(() => display(usd));
+  useEffect(() => { setText(display(usd)); }, [usd]);
+  return <input type="number" inputMode="decimal" min={0} step="any" value={text}
+    aria-label={label} placeholder={placeholder}
+    onChange={e => {
+      const draft = e.target.value;
+      setText(draft);
+      if (e.target.validity.badInput) return;
+      const parsed = e.target.valueAsNumber * 1e6;
+      const next = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+      const applied = onChange(next);
+      if (applied !== next) setText(display(applied));
+    }}
+    onBlur={() => setText(display(usd))}
+    className="min-w-0 w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-2 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
+  />;
+}
+
 export function UsdRangeFilter({
   label,
   minUsd,
@@ -87,10 +100,16 @@ export function UsdRangeFilter({
   onMinChange: (usd: number) => void;
   onMaxChange: (usd: number) => void;
 }) {
-  const setMin = (usd: number) =>
-    onMinChange(maxUsd > 0 ? Math.min(usd, maxUsd) : usd);
-  const setMax = (usd: number) =>
-    onMaxChange(usd > 0 ? Math.max(usd, minUsd) : 0);
+  const setMin = (usd: number) => {
+    const applied = maxUsd > 0 ? Math.min(usd, maxUsd) : usd;
+    onMinChange(applied);
+    return applied;
+  };
+  const setMax = (usd: number) => {
+    const applied = usd > 0 ? Math.max(usd, minUsd) : 0;
+    onMaxChange(applied);
+    return applied;
+  };
 
   return (
     <div className="min-w-0">
@@ -98,35 +117,11 @@ export function UsdRangeFilter({
       <div className="grid grid-cols-2 gap-2 text-xs text-[var(--color-muted)]">
         <label className="flex items-center gap-1">
           <span className="whitespace-nowrap">최소 $M</span>
-          <input
-            type="number"
-            min={0}
-            step={1}
-            value={minUsd > 0 ? Math.round(minUsd / 1e6) : ""}
-            aria-label={`${label} 최소 (백만 달러)`}
-            onChange={(e) => {
-              const m = parseFloat(e.target.value);
-              setMin(Number.isFinite(m) && m > 0 ? m * 1e6 : 0);
-            }}
-            placeholder="0"
-            className="min-w-0 w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-2 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
-          />
+          <MillionUsdInput usd={minUsd} label={`${label} 최소 (백만 달러)`} placeholder="0" onChange={setMin}/>
         </label>
         <label className="flex items-center gap-1">
           <span className="whitespace-nowrap">최대 $M</span>
-          <input
-            type="number"
-            min={0}
-            step={1}
-            value={maxUsd > 0 ? Math.round(maxUsd / 1e6) : ""}
-            aria-label={`${label} 최대 (백만 달러)`}
-            onChange={(e) => {
-              const m = parseFloat(e.target.value);
-              setMax(Number.isFinite(m) && m > 0 ? m * 1e6 : 0);
-            }}
-            placeholder="∞"
-            className="min-w-0 w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-2 text-right text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
-          />
+          <MillionUsdInput usd={maxUsd} label={`${label} 최대 (백만 달러)`} placeholder="∞" onChange={setMax}/>
         </label>
       </div>
       <DualRangeSlider
@@ -138,6 +133,7 @@ export function UsdRangeFilter({
         }
         minLabel={`${label} 최소`}
         maxLabel={`${label} 최대`}
+        step="any"
       />
     </div>
   );

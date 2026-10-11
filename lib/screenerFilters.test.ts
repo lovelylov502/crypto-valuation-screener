@@ -7,7 +7,45 @@ import {
   parseStoredSelection,
   serializeFavoriteSlugs,
   serializeStoredSelection,
+  sliderToUsd,
+  usdToSlider,
 } from "./screenerFilters";
+import { defaultPreferences, parseWorkspace } from "./workspacePreferences";
+import { sample } from "./testFixtures";
+import { assembleScreener } from "./screener";
+import { queryScreener } from "./screenerQuery";
+
+describe("decimal circulating-cap ranges", () => {
+  it("represents and restores sub-million bounds exactly without the inactive position", () => {
+    for (const usd of [0.1, 1, 100000, 250000, 125000.5, 1000000, 1e11]) {
+      expect(usdToSlider(usd)).toBeGreaterThan(0);
+      expect(sliderToUsd(usdToSlider(usd))).toBe(usd);
+      expect(sliderToUsd(Number(usdToSlider(usd).toPrecision(15)))).toBe(usd);
+    }
+    expect(usdToSlider(0)).toBe(0);
+    expect(sliderToUsd(0)).toBe(0);
+    expect(usdToSlider(100000)).toBeLessThan(usdToSlider(250000));
+    expect(sliderToUsd(100)).toBe(1e11);
+  });
+  it("persists decimal-million minimum and maximum as exact USD bounds", () => {
+    const saved = { ...defaultPreferences(), minMcap: 0.1 * 1e6, maxMcap: 0.25 * 1e6 };
+    const restored = parseWorkspace(JSON.stringify(saved));
+    expect(restored.minMcap).toBe(100000);
+    expect(restored.maxMcap).toBe(250000);
+    expect(restored.minMcap / 1e6).toBe(0.1);
+    expect(restored.maxMcap / 1e6).toBe(0.25);
+  });
+  it("includes exact 100K boundaries and excludes amounts immediately outside them", () => {
+    const rows = assembleScreener([
+      sample({ slug: "below", mcap: 99999.99 }), sample({ slug: "equal", mcap: 100000 }),
+      sample({ slug: "above", mcap: 100000.01 }), sample({ slug: "missing", mcap: null }),
+    ], "2026-10-11T11:50:00Z", []);
+    const prefs = parseWorkspace(JSON.stringify({ ...defaultPreferences(), minMcap: sliderToUsd(usdToSlider(100000)), maxMcap: 100000 }));
+    expect(queryScreener(rows, prefs).coins.map(c => c.slug)).toEqual(["equal"]);
+    expect(new Set(queryScreener(rows, { ...prefs, maxMcap: 0 }).coins.map(c => c.slug))).toEqual(new Set(["equal", "above"]));
+    expect(new Set(queryScreener(rows, { ...prefs, minMcap: 0 }).coins.map(c => c.slug))).toEqual(new Set(["below", "equal"]));
+  });
+});
 
 describe("hasEligibleCurrentHolderValue", () => {
   it("requires a positive eligible current run-rate and ignores positive raw TTM", () => {
