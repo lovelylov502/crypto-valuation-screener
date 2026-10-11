@@ -37,7 +37,8 @@ it("rejects unknown acquisition semantics rather than replaying with current beh
  vi.stubGlobal("fetch",async()=>Response.json({}));const captured=await captureSourceBundle(at,null,()=>sourceFetch(listing),undefined,2,2);
  expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:4})).not.toThrow();
  expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:5})).not.toThrow();
- expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:6} as any)).toThrow("Invalid source bundle");
+ expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:6})).not.toThrow();
+ expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:7} as any)).toThrow("Invalid source bundle");
  expect(()=>validateSourceBundle({...captured.bundle,pipelineSchema:undefined})).toThrow("Invalid source bundle");
 });
 it("history transport also begins its15s timeout after cooldown and preserves historical retry semantics",async()=>{

@@ -6,7 +6,7 @@ import { fmtMult } from "./format";
 import { checkedMarketRow, marketValueErrors, resolveCmcAsset } from "./marketSelection";
 import { captureSourceBundle, replaySourceBundle } from "./sourceBundle";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 const at = "2026-10-11T04:42:52.555Z";
 const address = "0xdA5e1988097297dCdc1f90D4dFE7909e847CBeF6";
@@ -27,6 +27,91 @@ function inputs(): CoinInputs {
     cmcDiscoveryComplete: true, gecko: [structuredClone(gecko)], geckoLookups: [[gecko.id, { id: gecko.id, status: "received", observedAt: at, available: ["price", "mcap", "fdv"] }]],
     revenueHistories: {}, holderHistories: {}, recoveredRevenue: [], observations: [], priorCmcTargets: [] } as CoinInputs;
 }
+function parentInputs(): CoinInputs {
+  const i = inputs(); i.marketRevision = 3;
+  const parent = { id: "parent#sun", name: "SUN", symbol: "SUN", gecko_id: "sun-token", cmcId: "10529", address: "tron:TSSMHYeV2uE9qYH95DqyoCuNCzEL1NvU3S" };
+  const member = { slug: "sunswap-v1", name: "Sunswap V1", parentProtocol: parent.id, symbol: "SUN", cmcId: "1116", address: parent.address };
+  i.parents = [parent]; i.protocols = [member]; i.fees = i.revenue = [{ ...member, total30d: 1000 }];
+  i.cmc = [{ ...official, id: 10529, name: "SUN", symbol: "SUN", slug: "sun", platform: { token_address: parent.address.slice(5) } }];
+  i.cmcLookups = [[10529, { id: "10529", status: "received", observedAt: at, available: ["mcap", "price", "fdv"] }], [1116, { id: "1116", status: "not_returned", observedAt: at, available: [] }]];
+  i.gecko = [{ ...gecko, id: "sun-token", name: "SUN", symbol: "sun" }];
+  i.geckoLookups = [["sun-token", { id: "sun-token", status: "received", observedAt: at, available: ["mcap", "price", "fdv"] }]];
+  return i;
+}
+it("uses SUN's declared parent token despite a stale child CMC ID", () => {
+  const i = parentInputs(), [c] = normalizeCoinInputs(i);
+  expect(c).toMatchObject({ identityStatus: "verified", cmcId: 10529, geckoId: "sun-token", symbol: "SUN" });
+  expect(referenceMultiple(c, "revenue", 30, "fdv")).toBeCloseTo(gecko.fully_diluted_valuation * 30 / (1000 * 365));
+  expect(c.marketSources?.requests?.cmc.map(q => q.id)).toEqual(["1116", "10529"]);
+  expect(c.sourceSlugs).toContain("sunswap-v1"); expect(collectionErrors([c])).toEqual([]);
+});
+it("preserves revision 5's ambiguous parent interpretation on replay", () => {
+  const i = parentInputs(); i.marketRevision = 2;
+  expect(normalizeCoinInputs(i)[0].identityStatus).toBe("ambiguous");
+});
+it("does not let another child token block the parent's explicit asset", () => {
+  const i = parentInputs(); i.protocols.push({ slug: "product", name: "Product", parentProtocol: "parent#sun", symbol: "OTHER", gecko_id: "other" });
+  i.gecko.push({ ...gecko, id: "other", symbol: "other", market_cap: 10 });
+  i.geckoLookups.push(["other", { id: "other", status: "received", observedAt: at, available: ["price", "fdv"] }]);
+  const [c] = normalizeCoinInputs(i);
+  expect(c).toMatchObject({ identityStatus: "verified", geckoId: "sun-token", mcap: gecko.market_cap });
+  expect(collectionErrors([c])).toEqual([]);
+});
+it("uses a child's asset ID only when its contract matches the declared parent", () => {
+  const i = parentInputs(); delete i.parents[0].gecko_id; delete i.parents[0].cmcId;
+  i.protocols.unshift({ slug: "other", name: "Other", parentProtocol: "parent#sun", symbol: "OTHER", gecko_id: "other", address: "tron:other", mcap: 100e9 });
+  i.protocols[1].gecko_id = "sun-token";
+  i.geckoLookups.push(["other", { id: "other", status: "not_returned", observedAt: at, available: [] }]);
+  const [c] = normalizeCoinInputs(i);
+  expect(c).toMatchObject({ identityStatus: "verified", geckoId: "sun-token", cmcId: 10529, mcap: gecko.market_cap });
+  expect(collectionErrors([c])).toEqual([]);
+});
+it("does not borrow another child's market cap when the declared parent quote is missing", () => {
+  const i = parentInputs(); i.cmc = []; i.cmcLookups = []; i.gecko = []; i.geckoLookups[0][1] = { id: "sun-token", status: "not_returned", observedAt: at, available: [] };
+  i.protocols.unshift({ slug: "other", name: "Other", parentProtocol: "parent#sun", symbol: "OTHER", gecko_id: "other", address: "tron:other", mcap: 100e9 });
+  const [c] = normalizeCoinInputs(i);
+  expect(c).toMatchObject({ geckoId: "sun-token", mcap: null, fdv: null, price: null });
+  expect(referenceMultiple(c, "revenue", 30)).toBeNull(); expect(collectionErrors([c])).toEqual([]);
+});
+it("withholds a parent asset whose returned symbol conflicts with its declared token", () => {
+  const i = parentInputs(); i.cmc = []; i.cmcLookups = []; i.gecko[0].symbol = "WATT";
+  const [c] = normalizeCoinInputs(i);
+  expect(c).toMatchObject({ identityStatus: "review", geckoId: null, mcap: null, fdv: null, price: null });
+  expect(c.marketSources?.requests?.gecko.map(q => q.id)).toContain("sun-token");
+  expect(collectionErrors([c])).toEqual([]);
+});
+it("uses the current symbol corroborated by both explicit parent IDs and coherent prices", () => {
+  const i = parentInputs(); i.parents[0].symbol = "OLD";
+  const [c] = normalizeCoinInputs(i);
+  expect(c).toMatchObject({ identityStatus: "verified", geckoId: "sun-token", cmcId: 10529, symbol: "SUN", fdv: gecko.fully_diluted_valuation });
+  expect(collectionErrors([c])).toEqual([]);
+});
+it("does not corroborate explicit parent IDs using wildly different prices", () => {
+  const i = parentInputs(); i.parents[0].symbol = "OLD"; i.cmc[0].quote = [{ ...official.quote[0], price: 1e-13 }];
+  const [c] = normalizeCoinInputs(i);
+  expect(c).toMatchObject({ identityStatus: "review", geckoId: null, mcap: null, fdv: null });
+});
+it.each([5, 6] as const)("captures and replays parent identity with its original revision %s", async revision => {
+  vi.useFakeTimers(); vi.setSystemTime(at);
+  const i = parentInputs();
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+    const url = String(input);
+    return Response.json(url.includes("coinmarketcap") ? { data: i.cmc } : url.includes("coingecko") ? i.gecko
+      : url.endsWith("/protocols") ? i.protocols : url.endsWith("/config") ? { parentProtocols: i.parents }
+      : url.includes("stablecoins") ? { peggedAssets: [{ gecko_id: "usdd", symbol: "USDD" }] } : { protocols: i.revenue, totalDataChartBreakdown: [] });
+  }));
+  const pending = captureSourceBundle(at, null, () => fetchCoins([]), undefined, 2, revision);
+  await vi.runAllTimersAsync(); const captured = await pending;
+  expect(captured.error).toBeUndefined();
+  expect(captured.value?.find(c => c.slug === "parent#sun")?.identityStatus).toBe(revision === 6 ? "verified" : "ambiguous");
+  const offline = vi.fn(() => { throw new Error("Replay must be offline"); }); vi.stubGlobal("fetch", offline);
+  expect(await replaySourceBundle(captured.bundle, () => fetchCoins([]))).toEqual(captured.value);
+  expect(offline).not.toHaveBeenCalled();
+});
+it("keeps punctuation in market symbol lookup", () => {
+  const i = inputs(); i.marketRevision = 3; i.protocols[0].symbol = "G$"; i.cmc[0].symbol = "G$"; i.gecko[0].symbol = "g$";
+  expect(normalizeCoinInputs(i)[0].cmcId).toBe(33251);
+});
 it("joins WLFI by contract rather than a shared vendor slug and uses one identified quote", () => {
   const i = inputs(), before = JSON.stringify(i), [c] = normalizeCoinInputs(i);
   expect(c).toMatchObject({ cmcId: 33251, cmcSlug: official.slug, symbol: "WLFI", identityStatus: "verified",

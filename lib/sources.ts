@@ -12,7 +12,7 @@ import type { MetricDefinition, RevenueKind, FeeKind } from "./fundamentals";
 import type { RevenueHistory } from "./revenueHistory";
 import { sourceDelay, sourceFetch, sourceNow, sourceObservedAt, sourceReplayActive, sourcePipelineSchema,sourceAcquisitionRevision,sourceRequestDeferred,sourceEconomicPolicy,objectHash } from "./sourceBundle";
 import { validateDirectoryRows, validateProtocolFinancialRows } from "./sourceValidation";
-import { checkedMarketRow, excludeQuoteField, resolveCmcAsset } from "./marketSelection";
+import { addressKey, checkedMarketRow, excludeQuoteField, resolveCmcAsset } from "./marketSelection";
 import {
   aggregateHolderValueByGroup,
   emptyHolderValueSummary,
@@ -401,7 +401,7 @@ export function aggregateRevenueSource(list: Json[], groupKey: (slug: string) =>
 /** Serializable acquisition result. Normalization consumes only these inputs;
  * original HTTP response bytes are retained by the enclosing source session. */
 export interface CoinInputs {
-  marketRevision?: 2;
+  marketRevision?: 2 | 3;
   asOf: string;
   protocols: Json[]; fees: Json[]; revenue: Json[]; holders: Json[]; dexs: Json[];
   parents: Json[]; stablecoins: StablecoinAsset[];
@@ -473,7 +473,7 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
     histories,
   ]);
 
-  const inputs:CoinInputs = {asOf,...(sourceAcquisitionRevision()>=5?{marketRevision:2 as const}:{}),protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,parents:config.parentProtocols,stablecoins:stablecoins.peggedAssets,
+  const inputs:CoinInputs = {asOf,...(sourceAcquisitionRevision()>=6?{marketRevision:3 as const}:sourceAcquisitionRevision()>=5?{marketRevision:2 as const}:{}),protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,parents:config.parentProtocols,stablecoins:stablecoins.peggedAssets,
     cmc:[...cmc.byId.values()].sort((a,b)=>Number(a.id)-Number(b.id)),cmcLookups:[...cmcLookups].sort(([a],[b])=>a-b),cmcDiscoveryComplete:cmc.discoveryComplete !== false,
     gecko:[...gecko.byId.values()].sort((a,b)=>String(a.id).localeCompare(String(b.id))),geckoLookups:[...gecko.lookups].sort(([a],[b])=>a.localeCompare(b)),
     revenueHistories,holderHistories,recoveredRevenue:[...recoveredRevenue].sort(([a],[b])=>a.localeCompare(b)),observations:[...observations],priorCmcTargets,
@@ -491,13 +491,14 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
 
 /** Pure join and financial classification; no clock, cache, or network reads. */
 export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
-  const revisedMarket = inputs.marketRevision === 2;
+  const revisedMarket = inputs.marketRevision === 2 || inputs.marketRevision === 3;
   const {protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,revenueHistories,holderHistories,observations}=inputs;
   const parents = new Map(inputs.parents.flatMap(p => typeof p.id === "string" ? [[p.id,p] as const] : []));
   const identityRows = [...protocols,...feesL,...revL,...hrL,...dexsL,...inputs.parents];
   const recoveredRevenue = new Map(inputs.recoveredRevenue);
   const cmc: CmcIndex = {byId:new Map(),bySlug:new Map(),byNameSymbol:new Map(),bySymbol:new Map(),discoveryComplete:inputs.cmcDiscoveryComplete};
   indexCmcRows(cmc, revisedMarket ? inputs.cmc.map(r => checkedMarketRow(r, "cmc", inputs.asOf)) : inputs.cmc);
+  const cmcRows = [...cmc.byId.values()];
   const cmcLookups = new Map(inputs.cmcLookups);
   const gecko = {byId:new Map(inputs.gecko.map(row=>[String(row.id), revisedMarket ? checkedMarketRow(row, "gecko", inputs.asOf) : row])),lookups:new Map(inputs.geckoLookups)};
   if (revisedMarket) {
@@ -562,12 +563,22 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
     const memberCmcIds = new Set<number>();
     const parent = parents.get(k);
     const parentWithoutToken = revisedMarket && parent?.symbol === "-" && !parent.gecko_id && !parent.cmcId;
+    const parentSymbol = parent?.symbol === "-" ? null : str(parent?.symbol)?.toUpperCase() ?? null;
+    const parentGeckoId = str(parent?.gecko_id), parentAddress = addressKey(parent?.address);
+    const parentCmcId = typeof parent?.cmcId === "string" && /^\d+$/.test(parent.cmcId) ? Number(parent.cmcId) : num(parent?.cmcId);
+    const declaredParent = inputs.marketRevision === 3 && !!parent && !!(parentGeckoId || parentCmcId! > 0 || parentSymbol && parentAddress);
+    const declaredGecko = parentGeckoId ? gecko.byId.get(parentGeckoId) : undefined;
+    const declaredCmc = parentCmcId! > 0 ? cmc.byId.get(parentCmcId!) : undefined;
+    const parentGeckoPrice = num(declaredGecko?.current_price), parentCmcPrice = num(cmcQuote(declaredCmc)?.price);
+    const parentAgreement = declaredParent && !!str(declaredGecko?.symbol) && str(declaredGecko?.symbol)?.toUpperCase() === str(declaredCmc?.symbol)?.toUpperCase()
+      && parentGeckoPrice! > 0 && parentCmcPrice! > 0 && Math.max(parentGeckoPrice! / parentCmcPrice!, parentCmcPrice! / parentGeckoPrice!) <= 1.25;
+    const identityMembers = [...(parent ? [parent] : []), ...(identities.get(k) ?? members)];
     const memberAddresses = new Set<string>();
     for (const m of members) {
       const t = num(m.tvl);
       if (t !== null && m !== parent) tvl = (tvl ?? 0) + t;
     }
-    for (const m of [...(parent ? [parent] : []), ...(identities.get(k) ?? members)]) {
+    for (const m of identityMembers) {
       if (str(m.address)) memberAddresses.add(String(m.address));
       const id = typeof m.cmcId === "string" && /^\d+$/.test(m.cmcId) ? Number(m.cmcId) : num(m.cmcId);
       if (id !== null && id > 0) memberCmcIds.add(id);
@@ -596,6 +607,16 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
     const isParent = k.startsWith("parent#");
     const name = isParent ? str(parent?.name) ?? prettyParent(k) : (str(rep.name) ?? k);
     if (parentWithoutToken) { geckoId = null; symbol = null; dlMcap = null; }
+    if (declaredParent) {
+      const matching = identityMembers.filter(m => m === parent || parentGeckoId && str(m.gecko_id) === parentGeckoId || parentAddress && addressKey(m.address) === parentAddress);
+      const childIds = new Set(matching.flatMap(m => str(m.gecko_id) ? [String(m.gecko_id)] : []));
+      const candidate = parentGeckoId ?? (childIds.size === 1 ? [...childIds][0] : null);
+      const row = candidate ? gecko.byId.get(candidate) : undefined;
+      const compatible = parentAgreement || !parentSymbol || !row || str(row.symbol)?.toUpperCase() === parentSymbol;
+      geckoId = compatible ? candidate : null; symbol = parentAgreement ? str(row?.symbol)?.toUpperCase() ?? parentSymbol : parentSymbol;
+      const caps = compatible ? matching.map(m => num(m.mcap)).filter((v): v is number => v !== null && v > 0) : [];
+      dlMcap = caps.length ? Math.max(...caps) : null;
+    }
 
     const fees = feesAgg.get(k);
     const rev = revAgg.get(k);
@@ -604,8 +625,10 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
     const vol = volAgg.get(k);
     // CoinGecko는 명시적 gecko_id만 사용한다. symbol-only 폴백은 동명이인 오매칭 위험 때문에 금지.
     const g = geckoId ? gecko.byId.get(geckoId) : undefined;
-    const cmcRow = parentWithoutToken ? undefined : revisedMarket
-      ? resolveCmcAsset([...cmc.byId.values()], [...memberCmcIds], [...memberAddresses], str(g?.name) ?? name, symbol, inputs.cmcDiscoveryComplete)
+    const cmcRow = parentWithoutToken ? undefined : parentAgreement ? declaredCmc : revisedMarket
+      ? resolveCmcAsset(inputs.marketRevision === 3 && symbol ? cmc.bySymbol.get(symbol.toLowerCase()) ?? [] : cmcRows,
+        declaredParent ? parentCmcId! > 0 ? [parentCmcId!] : [] : [...memberCmcIds], declaredParent ? parentAddress ? [parentAddress] : [] : [...memberAddresses],
+        str(g?.name) ?? name, symbol, inputs.cmcDiscoveryComplete)
       : findCmc({ cmcIds: [...memberCmcIds], geckoId, groupKey: k, name, symbol, cmc });
     const quote = cmcQuote(cmcRow);
     const sourceSlugs = [...new Set([k, ...members.map(m => String(m.slug))])];
@@ -617,12 +640,15 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
 
     let identityStatus: IdentityStatus = "review";
     let identityReason = "프로젝트와 시장 토큰의 연결을 확인하지 못함";
-    if (memberCmcIds.size > 1 || memberGeckoIds.size > 1 || (isParent && memberSymbols.size > 1)) {
+    if (declaredParent) {
+      identityStatus = geckoId || cmcRow ? "verified" : "review";
+      identityReason = identityStatus === "verified" ? "상위 프로젝트의 대표 토큰 정보로 연결 · 하위 상품 토큰과 구분" : "상위 프로젝트의 대표 토큰 연결 확인 필요";
+    } else if (memberCmcIds.size > 1 || memberGeckoIds.size > 1 || (isParent && memberSymbols.size > 1)) {
       identityStatus = "ambiguous";
       identityReason = `그룹에 토큰 후보가 여러 개임 (${Math.max(memberSymbols.size, memberGeckoIds.size, memberCmcIds.size)})`;
     } else if (memberCmcIds.size === 1 && cmcRow) {
       identityStatus = "verified";
-      identityReason = "DefiLlama의 숫자 CMC ID와 시장 자산 ID 일치";
+      identityReason = inputs.marketRevision === 3 && !memberCmcIds.has(Number(cmcRow.id)) ? "원천 토큰 정보로 CMC ID 충돌 해소" : "DefiLlama의 숫자 CMC ID와 시장 자산 ID 일치";
     } else if (isParent && memberGeckoIds.size === 1 && memberSymbols.size <= 1) {
       identityStatus = "verified";
       identityReason = "parent 구성원이 하나의 gecko_id·심볼을 공유";
@@ -649,7 +675,7 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
       : marketQuote([num(quote?.price), "CoinMarketCap"], [num(g?.current_price), "CoinGecko"]);
     let fdv = geckoFirst ? marketQuote([num(g?.fully_diluted_valuation), "CoinGecko"], [num(quote?.fully_diluted_market_cap), "CoinMarketCap"])
       : marketQuote([num(quote?.fully_diluted_market_cap), "CoinMarketCap"], [num(g?.fully_diluted_valuation), "CoinGecko"]);
-    const cmcId = parentWithoutToken ? null : cmcRow ? num(cmcRow.id) : memberCmcIds.size === 1 ? [...memberCmcIds][0] : continuity?.cmcId??null;
+    const cmcId = parentWithoutToken ? null : cmcRow ? num(cmcRow.id) : declaredParent ? parentCmcId! > 0 ? parentCmcId : null : memberCmcIds.size === 1 ? [...memberCmcIds][0] : continuity?.cmcId??null;
     const fdvConflict = revisedMarket && fdv.value !== null && (cap.value ?? 0) > 0 && fdv.value < cap.value! * .95;
     if (fdvConflict) fdv = { value: null, source: null };
     const currentLookup = (vendor: "cmc" | "gecko", id: string | number | null) => {

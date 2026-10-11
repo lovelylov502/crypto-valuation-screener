@@ -41,7 +41,7 @@ export async function replayDataPipeline(bundle: SourceBundle, rawBundleSha256 =
 
 export async function captureDataPipeline(baseline: ScreenerResponse | null, asOf: string,
   preserve: (bundle: SourceBundle) => Promise<void>, observations: SourceObservation[] = [], schema: 1 | 2 = activeWriterSchema(),economicReviewBaseline?:EconomicReviewState,economicReviewBaselineRef?:import("./economicReviewArchive").EconomicReviewRef) {
-  const captured = await captureSourceBundle(asOf, baseline, async () => { await acquireEconomicProvenance(); return fetchCoins(observations, baseline ?? undefined); }, undefined, schema,schema===2?5:undefined,activeEconomicPolicy(),economicReviewBaseline,economicReviewBaselineRef);
+  const captured = await captureSourceBundle(asOf, baseline, async () => { await acquireEconomicProvenance(); return fetchCoins(observations, baseline ?? undefined); }, undefined, schema,schema===2?6:undefined,activeEconomicPolicy(),economicReviewBaseline,economicReviewBaselineRef);
   // Even a failed collection retains original successful and failed responses for diagnosis.
   await preserve(captured.bundle);
   if (captured.error || !captured.value) throw captured.error ?? new Error("Source collection did not produce inputs");

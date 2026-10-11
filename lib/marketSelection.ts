@@ -4,7 +4,7 @@ type Row = Record<string, unknown>;
 const num = (v: unknown): number | null => typeof v === "number" && Number.isFinite(v) ? v : null;
 const text = (v: unknown) => typeof v === "string" ? v : "";
 const nameKey = (v: unknown) => text(v).toLowerCase().replace(/[^a-z0-9]/g, "");
-const addressKey = (v: unknown) => {
+export const addressKey = (v: unknown) => {
   const address = text(v).replace(/^[a-z][a-z\d-]*:(?!:)/i, "");
   return /^0x[\da-f]{40}$/i.test(address) ? address.toLowerCase() : address;
 };
