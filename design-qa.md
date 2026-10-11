@@ -2,6 +2,35 @@
 
 final result: passed
 
+## Source-amount filter option 1 — 2026-10-11
+
+Scope: apply the user's selected common-period filter mockup to the existing screener. The source metric and USD threshold share the existing ratio/growth/holder window. No new raster assets, fonts or icon libraries are needed; existing theme tokens and Lucide controls are retained.
+
+Reference: `C:/Users/TAE/.codex/generated_images/01a1294f-97c6-74a2-acb9-008a184d9307/exec-7b45924c-3eff-40d3-bc39-23b5302fc607.png`.
+Evidence directory: `C:/Users/TAE/AppData/Local/Temp/tovenit-source-amount-filter-20261011` (outside Git).
+
+- `13-reference-comparison-final.jpg` compares the approved reference and the actual production build at equal panel widths, with 30 days, Revenue, USD 100,000 and maximum P/R 10 selected.
+- `10-desktop-dark-compact-final.jpg` shows the full filter at 1280 × 1080. The body fits without scrolling at that height; smaller viewports retain the existing fixed header/footer and scrolling body.
+- `11-mobile-light-compact-final.jpg` and `12-narrow-light-compact-final.jpg` verify 390 × 844 and 320 × 740. Long holder labels and guidance wrap; period labels stay on one line. Dialog/body scroll widths equal their client widths.
+
+Fidelity review: the common period row precedes the joined Revenue/Holders Revenue selector, amount label, dollar input with USD suffix, dynamic explanation and source-sum note. The divider precedes the existing two multiple limits. Growth/holder/favorite conditions, sector and three collapsed advanced sections follow. Circulating-cap bounds automatically expand their section while active. Spacing was reduced after the first reference comparison. The new numeric input uses 16 px text and a visible mint focus outline.
+
+Production differences: the native numeric input accepts ungrouped editable numbers and decimals; the explanation formats the value with grouping. Copy explicitly limits missing-amount exclusion to an active amount condition. Existing fonts, flat theme surfaces, modal sizing and native controls are retained instead of reproducing generated letterforms or highlights. The complete interface preserves every existing filter and saved comparison setting.
+
+Interaction and calculation checks:
+
+- Revenue/Holders Revenue and period changes update the explanation and actual results. USD 100,000 is a strict threshold: equal amounts are excluded. Source period sums are compared before pagination without annualization or classification approval requirements.
+- Current 7,267-row archive: 20 combinations (two source metrics, five periods, thresholds zero/USD 100,000) have no omitted or extra rows. Local API pagination matches the archive for 30-day Revenue/USD 100,000 (235 rows, two 200-row pages), 7-day holders/USD 100,000 (31 rows), and 30-day Revenue/zero (1,112 rows, six pages).
+- A blank input disables the amount condition and restores all 7,267 rows with other conditions cleared. Zero remains an active condition and keeps positive source amounts. Missing amounts stay excluded only while the condition is active.
+- New fields persist after reload. Reset clears the amount, restores Revenue and 30 days, and preserves the FDV selection. Legacy preference/custom-column preservation, invalid values, decimals, combined multiple limits and filtering before pagination are covered by meaningful regression cases.
+- Circulating-cap inputs remain usable after moving them into their accordion; an active bound stays expanded across period changes and resets normally.
+- Escape closes the dialog and restores focus to the filter button. Final local production-build warning/error logs are empty. Temporary viewport overrides were reset.
+- Focused regressions: 29 tests in three files passed. Typecheck, production build and `git diff --check` passed. The guarded production wrapper performs the full suite and independent canonical/source readback.
+
+Korean copy was checked for meaning, units, periods, strict comparison and inactive/missing states under the active writing rules. No remaining actionable P0/P1/P2 finding.
+
+final result: passed
+
 ## Visual truth and evidence
 
 Approved source directory: `C:/Users/TAE/.codex/visualizations/2026/10/05/01a10a20-3b43-7af0-b088-97364e06cdae/tovenit-mockups/`

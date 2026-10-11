@@ -2,6 +2,7 @@ import { DEFAULT_VISIBLE_COLUMNS, SCREENER_COLUMNS, type SortKey } from "./scree
 import type { CapitalBasis } from "./valuationMetrics";
 import { AVAILABILITY_LABELS, METRIC_WINDOWS, type AvailableMetric, type CoverageWindow } from "./metricCoverage";
 import type { RevenueWindowDays } from "./revenueHistory";
+import type { ReferenceMetric } from "./referenceMetrics";
 export type UniverseView = "all" | "favorites" | "growth" | "holder" | "changes" | "issues";
 export interface WorkspacePreferences {
   layoutVersion: 9;
@@ -11,10 +12,11 @@ export interface WorkspacePreferences {
   panel: "filters" | "columns"; sidebarOpen: boolean;
   available: AvailableMetric; coverageWindow: CoverageWindow;
   minMcap: number; maxMcap: number; maxPr: number; maxPhr: number; rangeWindow: RevenueWindowDays;
+  sourceMetric: ReferenceMetric; minSourceAmount: number | null;
   hideDilution: boolean; verifiedOnly: boolean; sortKey: SortKey; sortDir: "asc" | "desc";
 }
 export const WORKSPACE_KEY = "crypto-valuation-workspace-v7";
-export const defaultPreferences = (): WorkspacePreferences => ({ layoutVersion: 9, revenueSort: "amount", growingOnly: false, holderOnly: false, columns: [...DEFAULT_VISIBLE_COLUMNS], capital: "mcap", view: "all", search: "", category: "", panel: "columns", sidebarOpen: false, available: "all", coverageWindow: "any", minMcap: 0, maxMcap: 0, maxPr: 0, maxPhr: 0, rangeWindow: 30, hideDilution: false, verifiedOnly: false, sortKey: "pr", sortDir: "asc" });
+export const defaultPreferences = (): WorkspacePreferences => ({ layoutVersion: 9, revenueSort: "amount", growingOnly: false, holderOnly: false, columns: [...DEFAULT_VISIBLE_COLUMNS], capital: "mcap", view: "all", search: "", category: "", panel: "columns", sidebarOpen: false, available: "all", coverageWindow: "any", minMcap: 0, maxMcap: 0, maxPr: 0, maxPhr: 0, rangeWindow: 30, sourceMetric: "revenue", minSourceAmount: null, hideDilution: false, verifiedOnly: false, sortKey: "pr", sortDir: "asc" });
 
 /** A hidden column must never remain the unexplained ordering of the table. */
 export function withVisibleColumns(p: WorkspacePreferences, columns: SortKey[]): WorkspacePreferences {
@@ -56,6 +58,8 @@ export function parseWorkspace(raw: string | null): WorkspacePreferences {
       coverageWindow: METRIC_WINDOWS.includes(p.coverageWindow) ? p.coverageWindow : "any",
       minMcap: finite("minMcap"), maxMcap: finite("maxMcap"), maxPr: finite("maxPr"), maxPhr: finite("maxPhr"),
       rangeWindow: METRIC_WINDOWS.includes(p.rangeWindow) ? p.rangeWindow : 30,
+      sourceMetric: p.sourceMetric === "holders" ? "holders" : "revenue",
+      minSourceAmount: typeof p.minSourceAmount === "number" && Number.isFinite(p.minSourceAmount) && p.minSourceAmount >= 0 ? p.minSourceAmount : null,
       hideDilution: p.hideDilution === true, verifiedOnly: p.verifiedOnly === true,
       sortKey: oldDefault ? "pr" : keys.has(p.sortKey) || p.sortKey === "name" ? p.sortKey : defaults.sortKey, sortDir: oldDefault ? "asc" : ["asc", "desc"].includes(p.sortDir) ? p.sortDir : defaults.sortDir };
     return withVisibleColumns(parsed, parsed.columns);

@@ -25,6 +25,10 @@ export function queryScreener(data: ScreenerResponse, prefs: WorkspacePreference
     if (prefs.view === "favorites" && !saved.has(c.slug)) return false;
     if ((prefs.growingOnly || prefs.view === "growth") && !(revenueTrend(c, prefs.rangeWindow).delta! > 0)) return false;
     if ((prefs.holderOnly || prefs.view === "holder") && !(referenceReading(c, "holders", prefs.rangeWindow).amount! > 0)) return false;
+    if (prefs.minSourceAmount !== null) {
+      const amount = referenceReading(c, prefs.sourceMetric, prefs.rangeWindow).amount;
+      if (amount === null || amount <= prefs.minSourceAmount) return false;
+    }
     if (prefs.view === "issues" && !c.opportunities.dataIssues.length) return false;
     if (prefs.category && c.category !== prefs.category) return false;
     if (prefs.hideDilution && c.highDilution) return false;
