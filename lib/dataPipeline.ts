@@ -14,13 +14,14 @@ import {marketAcquisitionReadiness,failedIdentityChanges} from "./marketReadines
 import { acquireEconomicProvenance } from "./economicDecisionSource";
 import { activeEconomicPolicy } from "./pipelineRelease";
 import {buildEconomicReview,summarizeEconomicReview,type EconomicReviewState} from "./economicReview";
+import { marketValueErrors } from "./marketSelection";
 
 export const encodeSourceBundle = (bundle: SourceBundle) => gzipSync(Buffer.from(JSON.stringify(bundle)));
 
 function derive(raw: CoinRaw[], observations: SourceObservation[], bundle: SourceBundle, rawBundleSha256: string): ScreenerResponse {
   const sources = orderedSources(observations);
   const quality = annotateDataQuality(raw, sources);
-  const normalized = bundle.pipelineSchema === 2 ? annotateFreshness(quality, bundle.asOf,bundle.acquisitionRevision===4?bundle.baseline:undefined) : quality;
+  const normalized = bundle.pipelineSchema === 2 ? annotateFreshness(quality, bundle.asOf,(bundle.acquisitionRevision??1)>=4?bundle.baseline:undefined) : quality;
   const data = assembleScreener(normalized, bundle.asOf, sources);
   if (bundle.pipelineSchema === 2) data.freshness = freshnessSummary(normalized, bundle.asOf);
   const review=buildEconomicReview(normalized,bundle.asOf,rawBundleSha256,bundle.economicReviewBaseline,bundle.baseline,objectHash);
@@ -40,7 +41,7 @@ export async function replayDataPipeline(bundle: SourceBundle, rawBundleSha256 =
 
 export async function captureDataPipeline(baseline: ScreenerResponse | null, asOf: string,
   preserve: (bundle: SourceBundle) => Promise<void>, observations: SourceObservation[] = [], schema: 1 | 2 = activeWriterSchema(),economicReviewBaseline?:EconomicReviewState,economicReviewBaselineRef?:import("./economicReviewArchive").EconomicReviewRef) {
-  const captured = await captureSourceBundle(asOf, baseline, async () => { await acquireEconomicProvenance(); return fetchCoins(observations, baseline ?? undefined); }, undefined, schema,schema===2?4:undefined,activeEconomicPolicy(),economicReviewBaseline,economicReviewBaselineRef);
+  const captured = await captureSourceBundle(asOf, baseline, async () => { await acquireEconomicProvenance(); return fetchCoins(observations, baseline ?? undefined); }, undefined, schema,schema===2?5:undefined,activeEconomicPolicy(),economicReviewBaseline,economicReviewBaselineRef);
   // Even a failed collection retains original successful and failed responses for diagnosis.
   await preserve(captured.bundle);
   if (captured.error || !captured.value) throw captured.error ?? new Error("Source collection did not produce inputs");
@@ -56,6 +57,7 @@ export async function captureDataPipeline(baseline: ScreenerResponse | null, asO
 export function assessPipelineCandidate(data: ScreenerResponse, bundle: SourceBundle, baseline: ScreenerResponse | null,
   startedAt: string, completedAt: string, replayed: ScreenerResponse, rawBytes: Uint8Array = encodeSourceBundle(bundle)) {
   const errors = [...snapshotErrors(data), ...pipelineIntegrityErrors(data), ...witnessErrors(data, witnessFromBundle(bundle))];
+  if ((bundle.acquisitionRevision ?? 1) >= 5) errors.push(...marketValueErrors(data.coins));
   if (!data.pipeline || data.pipeline.rawBundleSha256 !== contentHash(rawBytes) ||
     pipelineOutputHash(data) !== pipelineOutputHash(replayed)) errors.push("candidate_source_lineage_mismatch");
   if (objectHash(bundle.baseline) !== objectHash(baseline)) errors.push("candidate_baseline_mismatch");

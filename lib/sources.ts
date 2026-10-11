@@ -12,6 +12,7 @@ import type { MetricDefinition, RevenueKind, FeeKind } from "./fundamentals";
 import type { RevenueHistory } from "./revenueHistory";
 import { sourceDelay, sourceFetch, sourceNow, sourceObservedAt, sourceReplayActive, sourcePipelineSchema,sourceAcquisitionRevision,sourceRequestDeferred,sourceEconomicPolicy,objectHash } from "./sourceBundle";
 import { validateDirectoryRows, validateProtocolFinancialRows } from "./sourceValidation";
+import { checkedMarketRow, excludeQuoteField, resolveCmcAsset } from "./marketSelection";
 import {
   aggregateHolderValueByGroup,
   emptyHolderValueSummary,
@@ -82,7 +83,8 @@ function quoteLookup(id: string, row: Json | undefined, vendor: "gecko" | "cmc",
   return { id, status: failed ? "error" : row ? "received" : "not_returned", observedAt,
     available: (Object.keys(fields) as (keyof typeof fields)[]).filter(key => num(quote?.[fields[key]]) !== null),
     positive: (Object.keys(fields) as (keyof typeof fields)[]).filter(key => (num(quote?.[fields[key]]) ?? 0) > 0),
-    ...(Array.isArray(row?.quoteInvalidFields) && row.quoteInvalidFields.length ? {invalidFields:row.quoteInvalidFields as string[]} : {}) };
+    ...(Array.isArray(row?.quoteInvalidFields) && row.quoteInvalidFields.length ? {invalidFields:row.quoteInvalidFields as string[]} : {}),
+    ...(Array.isArray(row?.quoteExclusions) && row.quoteExclusions.length ? {exclusions:row.quoteExclusions as QuoteLookup["exclusions"]} : {}) };
 }
 
 /** Present malformed financial fields are scoped schema defects, not provider absence. */
@@ -112,7 +114,7 @@ function validateQuoteRow(row:Json,vendor:"gecko"|"cmc",url:string,observations:
     result.quoteSchemaUrl=url;
     if(report) observations.push({url,observedAt:sourceObservedAt(url),status:"withheld",reason:"schema_mismatch",quoteIds:[String(row.id)]});
   }
-  return result;
+  return sourceAcquisitionRevision() >= 5 ? checkedMarketRow(result, vendor, new Date(sourceNow()).toISOString()) : result;
 }
 
 // A provider can report zero when supply is unverified. Prefer a positive quote
@@ -399,6 +401,7 @@ export function aggregateRevenueSource(list: Json[], groupKey: (slug: string) =>
 /** Serializable acquisition result. Normalization consumes only these inputs;
  * original HTTP response bytes are retained by the enclosing source session. */
 export interface CoinInputs {
+  marketRevision?: 2;
   asOf: string;
   protocols: Json[]; fees: Json[]; revenue: Json[]; holders: Json[]; dexs: Json[];
   parents: Json[]; stablecoins: StablecoinAsset[];
@@ -470,7 +473,7 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
     histories,
   ]);
 
-  const inputs:CoinInputs = {asOf,protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,parents:config.parentProtocols,stablecoins:stablecoins.peggedAssets,
+  const inputs:CoinInputs = {asOf,...(sourceAcquisitionRevision()>=5?{marketRevision:2 as const}:{}),protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,parents:config.parentProtocols,stablecoins:stablecoins.peggedAssets,
     cmc:[...cmc.byId.values()].sort((a,b)=>Number(a.id)-Number(b.id)),cmcLookups:[...cmcLookups].sort(([a],[b])=>a-b),cmcDiscoveryComplete:cmc.discoveryComplete !== false,
     gecko:[...gecko.byId.values()].sort((a,b)=>String(a.id).localeCompare(String(b.id))),geckoLookups:[...gecko.lookups].sort(([a],[b])=>a.localeCompare(b)),
     revenueHistories,holderHistories,recoveredRevenue:[...recoveredRevenue].sort(([a],[b])=>a.localeCompare(b)),observations:[...observations],priorCmcTargets,
@@ -488,14 +491,19 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
 
 /** Pure join and financial classification; no clock, cache, or network reads. */
 export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
+  const revisedMarket = inputs.marketRevision === 2;
   const {protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,revenueHistories,holderHistories,observations}=inputs;
   const parents = new Map(inputs.parents.flatMap(p => typeof p.id === "string" ? [[p.id,p] as const] : []));
   const identityRows = [...protocols,...feesL,...revL,...hrL,...dexsL,...inputs.parents];
   const recoveredRevenue = new Map(inputs.recoveredRevenue);
   const cmc: CmcIndex = {byId:new Map(),bySlug:new Map(),byNameSymbol:new Map(),bySymbol:new Map(),discoveryComplete:inputs.cmcDiscoveryComplete};
-  indexCmcRows(cmc,inputs.cmc);
+  indexCmcRows(cmc, revisedMarket ? inputs.cmc.map(r => checkedMarketRow(r, "cmc", inputs.asOf)) : inputs.cmc);
   const cmcLookups = new Map(inputs.cmcLookups);
-  const gecko = {byId:new Map(inputs.gecko.map(row=>[String(row.id),row])),lookups:new Map(inputs.geckoLookups)};
+  const gecko = {byId:new Map(inputs.gecko.map(row=>[String(row.id), revisedMarket ? checkedMarketRow(row, "gecko", inputs.asOf) : row])),lookups:new Map(inputs.geckoLookups)};
+  if (revisedMarket) {
+    for (const [id, row] of cmc.byId) if (cmcLookups.get(id)?.status === "received") cmcLookups.set(id, quoteLookup(String(id), row, "cmc", false, cmcLookups.get(id)!.observedAt));
+    for (const [id, row] of gecko.byId) if (gecko.lookups.get(id)?.status === "received") gecko.lookups.set(id, quoteLookup(id, row, "gecko", false, gecko.lookups.get(id)!.observedAt));
+  }
   const priorCmcBySource = new Map<string,number[]>();
   for (const [id,slugs] of inputs.priorCmcTargets ?? []) for (const slug of slugs) priorCmcBySource.set(slug,[...(priorCmcBySource.get(slug) ?? []),id]);
 
@@ -553,11 +561,14 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
     const memberSymbols = new Set<string>();
     const memberCmcIds = new Set<number>();
     const parent = parents.get(k);
+    const parentWithoutToken = revisedMarket && parent?.symbol === "-" && !parent.gecko_id && !parent.cmcId;
+    const memberAddresses = new Set<string>();
     for (const m of members) {
       const t = num(m.tvl);
       if (t !== null && m !== parent) tvl = (tvl ?? 0) + t;
     }
     for (const m of [...(parent ? [parent] : []), ...(identities.get(k) ?? members)]) {
+      if (str(m.address)) memberAddresses.add(String(m.address));
       const id = typeof m.cmcId === "string" && /^\d+$/.test(m.cmcId) ? Number(m.cmcId) : num(m.cmcId);
       if (id !== null && id > 0) memberCmcIds.add(id);
       const v = num(m.mcap);
@@ -584,6 +595,7 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
 
     const isParent = k.startsWith("parent#");
     const name = isParent ? str(parent?.name) ?? prettyParent(k) : (str(rep.name) ?? k);
+    if (parentWithoutToken) { geckoId = null; symbol = null; dlMcap = null; }
 
     const fees = feesAgg.get(k);
     const rev = revAgg.get(k);
@@ -592,7 +604,9 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
     const vol = volAgg.get(k);
     // CoinGecko는 명시적 gecko_id만 사용한다. symbol-only 폴백은 동명이인 오매칭 위험 때문에 금지.
     const g = geckoId ? gecko.byId.get(geckoId) : undefined;
-    const cmcRow = findCmc({ cmcIds: [...memberCmcIds], geckoId, groupKey: k, name, symbol, cmc });
+    const cmcRow = parentWithoutToken ? undefined : revisedMarket
+      ? resolveCmcAsset([...cmc.byId.values()], [...memberCmcIds], [...memberAddresses], str(g?.name) ?? name, symbol, inputs.cmcDiscoveryComplete)
+      : findCmc({ cmcIds: [...memberCmcIds], geckoId, groupKey: k, name, symbol, cmc });
     const quote = cmcQuote(cmcRow);
     const sourceSlugs = [...new Set([k, ...members.map(m => String(m.slug))])];
     const prior=inputs.priorCmcIdentities?.find(c=>c.slug===k);
@@ -623,14 +637,26 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
       identityReason = "프로젝트명·심볼과 CMC canonical 자산이 일치";
     }
     if(continuity) {identityStatus="verified";identityReason=`이전 검증본의 CMC 자산 연결 유지 · 현재 시세 조회 실패 (${continuity.baselineAt})`;}
+    if (parentWithoutToken) { identityStatus = "review"; identityReason = "상위 프로젝트의 토큰 연결 미확인 · 구성상품의 가치로 배수 미산출"; }
 
     const gMcap = g ? num(g.market_cap) : null;
     const cmcMcap = quote ? num(quote.market_cap) : null;
 
-    const cap = marketQuote([cmcMcap, "CoinMarketCap"], [gMcap, "CoinGecko"], [dlMcap, "DefiLlama"]);
-    const price = marketQuote([num(quote?.price), "CoinMarketCap"], [num(g?.current_price), "CoinGecko"]);
-    const fdv = marketQuote([num(quote?.fully_diluted_market_cap), "CoinMarketCap"], [num(g?.fully_diluted_valuation), "CoinGecko"]);
-    const cmcId = cmcRow ? num(cmcRow.id) : memberCmcIds.size === 1 ? [...memberCmcIds][0] : continuity?.cmcId??null;
+    const cap = revisedMarket ? marketQuote([gMcap, "CoinGecko"], [cmcMcap, "CoinMarketCap"], [dlMcap, "DefiLlama"])
+      : marketQuote([cmcMcap, "CoinMarketCap"], [gMcap, "CoinGecko"], [dlMcap, "DefiLlama"]);
+    const geckoFirst = revisedMarket && (cap.source === "CoinGecko" || cap.source !== "CoinMarketCap" && (num(g?.current_price) ?? 0) > 0);
+    const price = geckoFirst ? marketQuote([num(g?.current_price), "CoinGecko"], [num(quote?.price), "CoinMarketCap"])
+      : marketQuote([num(quote?.price), "CoinMarketCap"], [num(g?.current_price), "CoinGecko"]);
+    let fdv = geckoFirst ? marketQuote([num(g?.fully_diluted_valuation), "CoinGecko"], [num(quote?.fully_diluted_market_cap), "CoinMarketCap"])
+      : marketQuote([num(quote?.fully_diluted_market_cap), "CoinMarketCap"], [num(g?.fully_diluted_valuation), "CoinGecko"]);
+    const cmcId = parentWithoutToken ? null : cmcRow ? num(cmcRow.id) : memberCmcIds.size === 1 ? [...memberCmcIds][0] : continuity?.cmcId??null;
+    const fdvConflict = revisedMarket && fdv.value !== null && (cap.value ?? 0) > 0 && fdv.value < cap.value! * .95;
+    if (fdvConflict) fdv = { value: null, source: null };
+    const currentLookup = (vendor: "cmc" | "gecko", id: string | number | null) => {
+      const lookup = id === null ? null : vendor === "cmc" ? cmcLookups.get(Number(id)) ?? null : gecko.lookups.get(String(id)) ?? null;
+      return fdvConflict ? excludeQuoteField(lookup, "fdv", "FDV가 유통 시총보다 작음") : lookup;
+    };
+    const preferredQuote = revisedMarket && price.source === "CoinGecko";
 
     const cmcListedAt = cmcRow ? Date.parse(str(cmcRow.date_added) ?? "") : NaN;
     if (Number.isFinite(cmcListedAt)) listedAt = cmcListedAt / 1000;
@@ -651,7 +677,7 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
       chains: [...new Set(members.flatMap(m => Array.isArray(m.chains) ? m.chains.filter((v): v is string => typeof v === "string") : []))],
       geckoId,
       cmcId,
-      cmcSlug: cmcRow ? str(cmcRow.slug) : continuity?.cmcSlug??(identityStatus === "verified" ? CMC_SLUG_OVERRIDES[k] ?? null : null),
+      cmcSlug: cmcRow ? str(cmcRow.slug) : continuity?.cmcSlug??(!revisedMarket && identityStatus === "verified" ? CMC_SLUG_OVERRIDES[k] ?? null : null),
       logo: str(parent?.logo) ?? str(rep.logo),
       listedAt,
       isParent,
@@ -676,24 +702,24 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
         mcap: cap.source,
         price: price.source,
         fdv: fdv.source,
-        gecko: geckoId ? gecko.lookups.get(geckoId) ?? null : null,
-        cmc: cmcId !== null ? !cmcRow && cmc.byId.has(cmcId) && cmcLookups.get(cmcId)?.status === "received" ? { ...cmcLookups.get(cmcId)!, status: "identity_mismatch" } : cmcLookups.get(cmcId) ?? null : null,
+        gecko: geckoId ? currentLookup("gecko", geckoId) : null,
+        cmc: cmcId !== null ? !cmcRow && cmc.byId.has(cmcId) && cmcLookups.get(cmcId)?.status === "received" ? { ...cmcLookups.get(cmcId)!, status: "identity_mismatch" } : currentLookup("cmc", cmcId) : null,
         requests: {
-          gecko:[...memberGeckoIds].sort().flatMap(id=>gecko.lookups.has(id) ? [gecko.lookups.get(id)!] : []),
-          cmc:requestedCmcIds.flatMap(id=>cmcLookups.has(id) ? [cmcLookups.get(id)!] : []),
+          gecko:[...memberGeckoIds].sort().flatMap(id=>gecko.lookups.has(id) ? [id === geckoId ? currentLookup("gecko", id)! : gecko.lookups.get(id)!] : []),
+          cmc:requestedCmcIds.flatMap(id=>cmcLookups.has(id) ? [id === cmcId ? currentLookup("cmc", id)! : cmcLookups.get(id)!] : []),
         },
       },
       tvl,
-      change1d: num(quote?.percent_change_24h) ?? num(g?.price_change_percentage_24h),
-      change7d: num(quote?.percent_change_7d) ?? num(g?.price_change_percentage_7d_in_currency),
+      change1d: preferredQuote ? num(g?.price_change_percentage_24h) : num(quote?.percent_change_24h) ?? num(g?.price_change_percentage_24h),
+      change7d: preferredQuote ? num(g?.price_change_percentage_7d_in_currency) : num(quote?.percent_change_7d) ?? num(g?.price_change_percentage_7d_in_currency),
       price: price.value,
-      marketCapRank: cmcRow ? num(cmcRow.cmc_rank) : g ? num(g.market_cap_rank) : null,
-      totalVolume: num(quote?.volume_24h) ?? num(g?.total_volume),
+      marketCapRank: preferredQuote ? num(g?.market_cap_rank) : cmcRow ? num(cmcRow.cmc_rank) : g ? num(g.market_cap_rank) : null,
+      totalVolume: preferredQuote ? num(g?.total_volume) : num(quote?.volume_24h) ?? num(g?.total_volume),
       numMarketPairs: cmcRow ? num(cmcRow.num_market_pairs) : null,
-      marketDataUpdatedAt: str(quote?.last_updated) ?? str(g?.last_updated),
-      priceChange7d: num(quote?.percent_change_7d) ?? num(g?.price_change_percentage_7d_in_currency),
+      marketDataUpdatedAt: preferredQuote ? str(g?.last_updated) : str(quote?.last_updated) ?? str(g?.last_updated),
+      priceChange7d: preferredQuote ? num(g?.price_change_percentage_7d_in_currency) : num(quote?.percent_change_7d) ?? num(g?.price_change_percentage_7d_in_currency),
       priceChange14d: g ? num(g.price_change_percentage_14d_in_currency) : null,
-      priceChange30d: num(quote?.percent_change_30d) ?? num(g?.price_change_percentage_30d_in_currency),
+      priceChange30d: preferredQuote ? num(g?.price_change_percentage_30d_in_currency) : num(quote?.percent_change_30d) ?? num(g?.price_change_percentage_30d_in_currency),
       priceChange60d: quote ? num(quote.percent_change_60d) : null,
       priceChange90d: quote ? num(quote.percent_change_90d) : null,
       priceChange1y: g ? num(g.price_change_percentage_1y_in_currency) : null,
@@ -727,8 +753,8 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
 
       fdv: fdv.value,
       circulatingSupply: cap.source === "CoinGecko" ? num(g?.circulating_supply) : num(cmcRow?.circulating_supply) ?? num(g?.circulating_supply),
-      totalSupply: num(cmcRow?.total_supply) ?? num(g?.total_supply),
-      maxSupply: num(cmcRow?.max_supply) ?? num(g?.max_supply),
+      totalSupply: geckoFirst ? num(g?.total_supply) ?? num(cmcRow?.total_supply) : num(cmcRow?.total_supply) ?? num(g?.total_supply),
+      maxSupply: geckoFirst ? num(g?.max_supply) ?? num(cmcRow?.max_supply) : num(cmcRow?.max_supply) ?? num(g?.max_supply),
     });
   }
 

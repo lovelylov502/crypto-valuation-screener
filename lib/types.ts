@@ -198,6 +198,7 @@ export interface QuoteLookup {
   available: ("mcap" | "price" | "fdv")[];
   positive?: ("mcap" | "price" | "fdv")[];
   invalidFields?: string[];
+  exclusions?: { field: "mcap" | "price" | "fdv"; reason: string }[];
 }
 
 export interface ScreenerResponse {

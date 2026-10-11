@@ -3,7 +3,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { collectionCoverage, collectionErrors } from "../lib/collectionQuality";
 import { revenueReading } from "../lib/revenueReading";
-import { referenceMultiples } from "../lib/referenceMetrics";
+import { referenceMultiples, referenceReading, referenceMultiple } from "../lib/referenceMetrics";
+import { eligibleCapital } from "../lib/capitalEligibility";
+import { marketValueErrors } from "../lib/marketSelection";
 import { fundamentalErrors } from "../lib/fundamentalContract";
 import { DEPLOY_CONTRACT } from "./deploy-contract.mjs";
 import type { CoinScored, ScreenerResponse } from "../lib/types";
@@ -54,7 +56,15 @@ async function read(url: string): Promise<any> {
 
 export function referenceApiErrors(page: ScreenerPage): string[] {
   const expected = Object.fromEntries(page.coins.map(c => [c.slug, referenceMultiples(c, page.coverage.capital)]));
-  return objectHash(page.referenceMultiples ?? null) === objectHash(expected) ? [] : ["source_reference_values_changed"];
+  const errors = objectHash(page.referenceMultiples ?? null) === objectHash(expected) ? [] : ["source_reference_values_changed"];
+  // Use an independent arithmetic expression for both capital bases and every source window.
+  for (const c of page.coins) for (const basis of ["mcap", "fdv"] as const) for (const metric of ["revenue", "holders"] as const) for (const days of [1, 7, 30, 90, 365] as const) {
+    const reading = referenceReading(c, metric, days), actual = referenceMultiple(c, metric, days, basis);
+    const expected = eligibleCapital(c) && c[basis]! > 0 && reading.amount! > 0 && reading.basis !== "provider_partial"
+      ? c[basis]! * days / reading.amount! / 365 : null;
+    if (expected !== null && Number.isFinite(expected) && expected > 0 && (actual === null || Math.abs(actual - expected) > expected * 1e-12)) errors.push(`${c.slug}: reference arithmetic ${basis}/${metric}/${days}`);
+  }
+  return errors;
 }
 
 async function allPages() {
@@ -100,6 +110,7 @@ export async function auditArchivedPipeline(archived: ScreenerResponse, publishe
   const bundle = JSON.parse(gunzipSync(rawBytes, { maxOutputLength: 500_000_000 }).toString("utf8")) as SourceBundle;
   const replayed = await replayDataPipeline(bundle, sha256(rawBytes));
   const errors = [...pipelineIntegrityErrors(archived), ...pipelineIntegrityErrors(replayed), ...scopedSourceErrors(archived.sources, archived.coins)];
+  if ((bundle.acquisitionRevision ?? 1) >= 5) errors.push(...marketValueErrors(archived.coins));
   if (bundle.asOf !== archived.updatedAt || pipelineOutputHash(replayed) !== pipelineOutputHash(archived) ||
     objectHash(replayed.pipeline) !== objectHash(archived.pipeline)) errors.push("archived source replay differs from published snapshot");
   if (objectHash(witnessFromBundle(bundle)) !== objectHash(witness)) errors.push("archived witness differs from original source bundle");

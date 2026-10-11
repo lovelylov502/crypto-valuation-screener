@@ -31,6 +31,8 @@ export function collectionErrors(coins: CoinRaw[]): string[] {
 export function marketDataReason(c: CoinRaw, field: "mcap" | "fdv" | "price") {
   if (c[field] !== null) return c.marketSources?.[field] ?? "출처 미확인";
   const lookups = [c.marketSources?.gecko, c.marketSources?.cmc].filter(v => v != null);
+  const exclusion = lookups.flatMap(v => v.exclusions ?? []).find(e => e.field === field);
+  if (exclusion) return `${exclusion.reason} · 금액 보류`;
   if (lookups.some(v => v.status === "error")) return "시세 조회 실패 · 재수집 필요";
   if (lookups.some(v => v.status === "identity_mismatch")) return "시장 자산 식별정보 불일치";
   if (lookups.some(v => v.status === "received")) return "제공처 응답에 해당 금액 없음";

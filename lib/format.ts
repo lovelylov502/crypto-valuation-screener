@@ -18,6 +18,7 @@ export function fmtPrice(v: number | null | undefined): string {
 // 멀티플 (12.3x)
 export function fmtMult(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "–";
+  if (v > 0 && v < .01) return "<0.01x";
   if (v >= 1000) return `${(v / 1000).toFixed(1)}Kx`;
   if (v >= 100) return `${v.toFixed(0)}x`;
   if (v >= 10) return `${v.toFixed(1)}x`;
