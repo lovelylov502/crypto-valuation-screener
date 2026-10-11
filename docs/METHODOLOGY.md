@@ -1,5 +1,7 @@
 # 재발견 후보 점수 방법론
 
+기본 표의 P/R·P/HR은 [DefiLlama 원천 참고 배수](./SOURCE_REFERENCE_MULTIPLES.md)다. 화면에 표시한 원천 금액으로 계산하며, 수익 분류와 검토 상태는 별도로 표시한다. 아래 검토 기반 적격성 규칙은 보관된 실험 점수와 검토 지표에 적용한다.
+
 > Current contract: [SCREENER_V8.md](./SCREENER_V8.md), `research-v8-coverage-and-holder-types`. The sections below preserve the historical v3 baseline. V8 includes reviewed native fee burns and conditional staking/lock/voter distributions with explicit conditions; its eligibility, sales/revenue distinction and dated-window rules supersede conflicting statements below.
 
 목표는 단순히 멀티플이 낮은 코인이 아니라 **토큰에 귀속되는 펀더멘털은 개선되지만 가격에는 아직 충분히 반영되지 않은 프로젝트**를 찾는 것이다.

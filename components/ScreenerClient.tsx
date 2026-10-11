@@ -8,7 +8,7 @@ import { fmtKstMinute, fmtMult, fmtUsd } from "@/lib/format";
 import { parseFavoriteSlugs, serializeFavoriteSlugs } from "@/lib/screenerFilters";
 import { DEFAULT_VISIBLE_COLUMNS, SCREENER_COLUMNS as COLS, REVENUE_COLUMN_DAYS, columnBand, type SortKey } from "@/lib/screenerColumns";
 import { defaultPreferences, parseWorkspace, resetWorkspaceFilters, withVisibleColumns, workspaceMigrationNotice, WORKSPACE_KEY, type WorkspacePreferences } from "@/lib/workspacePreferences";
-import { protocolMultiple, protocolReason, holderMultiple, holderReason } from "@/lib/valuationMetrics";
+import { referenceMultiple, referenceReason, referenceReading, referenceMultiples } from "@/lib/referenceMetrics";
 import { renderCell } from "./ScreenerCells";
 import { UsdRangeFilter } from "./RangeFilters";
 import { Pagination } from "./Pagination";
@@ -97,15 +97,17 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
       const trend = revenueTrend(c, revenueDays);
       const reading = revenueReading(c, revenueDays);
       const provider = reading.basis === "provider_total" || reading.basis === "provider_partial";
-      const note = reading.amount === null ? "자료 부족" : !businessRevenue(c) ? reading.kindLabel : provider ? reading.basis === "provider_partial" ? "부분 집계" : "제공처 집계" : prefs.revenueSort === "delta" ? signedUsd(trend.delta) : trend.delta === null ? "" : growthLabel(trend);
-      return <span className="revenue-reading" title={`${reading.kindLabel} · ${reading.basisLabel} · 직전 ${windowLabel(revenueDays)} ${fmtUsd(trend.previous)} · 증가액 ${signedUsd(trend.delta)}`}><strong>{fmtUsd(reading.amount)}</strong>{note && <small className={provider ? "source-badge" : tone(trend.delta)}>{note}</small>}{provider && !businessRevenue(c) && <small className="source-badge">{reading.basis === "provider_partial" ? "부분 집계" : "제공처 집계"}</small>}</span>;
+      const note = reading.amount === null ? "자료 부족" : provider ? reading.basis === "provider_partial" ? "부분 집계" : "제공처 집계" : !businessRevenue(c) ? prefs.revenueSort === "amount" ? "" : reading.kindLabel : prefs.revenueSort === "delta" ? signedUsd(trend.delta) : trend.delta === null ? "" : growthLabel(trend);
+      return <span className="revenue-reading" title={`${reading.kindLabel} · ${reading.basisLabel} · 직전 ${windowLabel(revenueDays)} ${fmtUsd(trend.previous)} · 증가액 ${signedUsd(trend.delta)}`}><strong>{fmtUsd(reading.amount)}</strong>{note && <small className={provider ? "source-badge" : tone(trend.delta)}>{note}</small>}</span>;
     }
     const days = METRIC_COLUMN_DAYS[key];
     if (days) {
       const holder = key.startsWith("phr");
-      const value = holder ? holderMultiple(c, days, prefs.capital) : protocolMultiple(c, days, prefs.capital);
-      const reason = holder ? holderReason(c, days, prefs.capital) : protocolReason(c, days, prefs.capital);
-      return <span className={value === null ? "unavailable-metric" : "ratio-reading"} title={reason}>{fmtMult(value)}{value === null && <><small>{metricStatus(reason)}</small><span className="sr-only"> · {reason}</span></>}</span>;
+      const metric = holder ? "holders" : "revenue";
+      const value = referenceMultiple(c, metric, days, prefs.capital);
+      const reason = referenceReason(c, metric, days, prefs.capital);
+      const reading = referenceReading(c, metric, days);
+      return <span className={value === null ? "unavailable-metric" : "ratio-reading"} title={reason}>{fmtMult(value)}{value === null ? <><small>{metricStatus(reason)}</small><span className="sr-only"> · {reason}</span></> : reading.basis === "provider_total" && <small className="source-badge">{days === 365 ? "원천 1년" : "제공처 집계"}</small>}</span>;
     }
     return renderCell(c, key, prefs.capital);
   };
@@ -122,7 +124,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
         at = next.updatedAt; coins.push(...next.coins);
         if (coins.length >= next.pagination.filtered) break;
       }
-      const url = URL.createObjectURL(new Blob([JSON.stringify({ updatedAt: at, preferences: prefs, coins })], { type: "application/json" }));
+      const url = URL.createObjectURL(new Blob([JSON.stringify({ updatedAt: at, preferences: prefs, coins, referenceMultiples: Object.fromEntries(coins.map(c => [c.slug, referenceMultiples(c, prefs.capital)])) })], { type: "application/json" }));
       const a = document.createElement("a"); a.href = url; a.download = "tovenit-results.json"; a.click(); URL.revokeObjectURL(url);
       setStatus(`${coins.length}개 검색 결과를 내보냈습니다.`);
     } catch (e) { setStatus(e instanceof Error ? e.message : "내보내기 실패"); }
@@ -147,7 +149,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
     {error && <div className="workspace-status" role="alert">{error} {data && "기존 결과를 표시하고 있습니다."}<button className="text-button" onClick={refresh}>다시 시도</button></div>}
     {storageError && <p className="notice">브라우저 저장소를 사용할 수 없어 설정·관심종목이 유지되지 않을 수 있습니다.</p>}
     {migrationNotice && <div className="migration-notice" role="status"><Info size={15}/><span>{migrationNotice}</span><button className="icon-button" aria-label="설정 변경 안내 닫기" onClick={() => setMigrationNotice(null)}><X size={16}/></button></div>}
-    <div className="scan-heading"><h2 aria-label="DefiLlama 전체 종목">전체 종목</h2><p>프로토콜 수익과 홀더 환원을 같은 기준으로 비교합니다.</p></div>
+    <div className="scan-heading"><h2 aria-label="DefiLlama 전체 종목">전체 종목</h2><p>DefiLlama 원천 금액으로 참고 배수를 계산합니다. 수익 분류와 검토 상태는 따로 확인하세요.</p></div>
     <div className="scan-toolbar">
       <label className="search-box"><Search size={18}/><input aria-label="코인 또는 심볼 검색" placeholder="코인 또는 심볼 검색…" value={prefs.search} onChange={e => update("search", e.target.value)}/>{prefs.search && <button aria-label="검색 지우기" onClick={() => update("search", "")}><X size={15}/></button>}</label>
       <button className="icon-button watchlist-toggle" aria-label="관심종목만 보기" aria-pressed={prefs.view === "favorites"} title="관심종목만 보기" onClick={() => update("view", prefs.view === "favorites" ? "all" : "favorites")}><Star size={17} fill={prefs.view === "favorites" ? "currentColor" : "none"}/>{favorites.size > 0 && <small>{favorites.size}</small>}</button>
@@ -161,7 +163,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
       {activeFilters > 0 && <button className="text-button" onClick={resetFilters}>조건 {activeFilters}개 해제<X size={12}/></button>}
     </div>
     <div ref={tableRef} className="table-scroll scan-table-scroll thin-scroll" role="region" aria-label="프로토콜 비교 표 · 가로 스크롤 가능" tabIndex={0} aria-busy={refreshing}>
-      <table className="screener-table scan-table"><caption className="sr-only">프로토콜 수익 배수, 수익 성장, 홀더 환원 비교. 종목을 누르면 행 아래 상세를 엽니다. 빈 값은 0이 아닙니다.</caption>
+      <table className="screener-table scan-table"><caption className="sr-only">DefiLlama 원천 참고 배수, 수익 분류와 검토 상태 비교. 종목을 누르면 행 아래 상세를 엽니다. 빈 값은 0이 아닙니다.</caption>
         <thead><tr><th className="coin-column" rowSpan={2} scope="col" aria-sort={prefs.sortKey === "name" ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort("name")}>종목 · {capitalName}{sortIcon("name")}</button></th>{bands.map((band, i) => <th key={i} colSpan={band.count} scope="colgroup" className="band-heading">{band.label}{(band.label.includes("P/R") || band.label.includes("P/HR")) && <span className="band-basis"> ({capitalName} 기준)</span>}{selectedCols[band.start].key in REVENUE_COLUMN_DAYS && <select aria-label="수익 정렬 기준" value={prefs.revenueSort} onChange={e => { setPrefs(p => ({ ...p, revenueSort: e.target.value as WorkspacePreferences["revenueSort"], sortKey: p.sortKey in REVENUE_COLUMN_DAYS ? p.sortKey : selectedCols.find(c => c.key in REVENUE_COLUMN_DAYS)!.key, sortDir: "desc" })); setPage(1); }}><option value="amount">금액</option><option value="percent">증가율</option><option value="delta">증가액</option></select>}</th>)}</tr>
           <tr>{selectedCols.map((col, i) => { const days = METRIC_COLUMN_DAYS[col.key] ?? REVENUE_COLUMN_DAYS[col.key as keyof typeof REVENUE_COLUMN_DAYS]; return <th key={col.key} className={`${bands.some(b => b.start === i) ? "band-start " : ""}${prefs.sortKey === col.key ? "active-sort" : ""}`} scope="col" title={col.title} aria-sort={prefs.sortKey === col.key ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort(col.key)} aria-label={col.label + " 정렬"}>{days ? windowLabel(days) : col.label}{sortIcon(col.key)}</button></th>; })}</tr>
         </thead>
@@ -176,21 +178,21 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
     </div>
     {!rows.length && <div className="empty-state"><Search size={26}/><h3>{!data ? "자료를 준비하고 있습니다" : prefs.view === "favorites" && !favorites.size ? "별표로 관심종목을 모아 보세요" : "조건에 맞는 종목이 없습니다"}</h3><p>{!data ? "공개 자료 응답을 기다립니다." : "검색어 또는 필터 조건을 조절하세요."}</p><button className="button" onClick={!data ? refresh : resetFilters}>{!data ? "다시 확인" : "조건 초기화"}</button></div>}
     <div className="table-legend"><span><b className="source-badge">제공처 집계</b> 제공처 기간 집계 · 완료일 이력과 구분</span><span><b>자료 부족</b> 기간 이력 미확보</span><span><b>미연결</b> 원천 자료 미연결</span></div>
-    <div className="scan-footer"><p>24시간은 완료된 UTC 하루 · 1·7·30·90일 배수는 연환산 · 1년은 365일 합계</p><Pagination total={total} page={currentPage} size={pageSize} position="top" onPage={goPage} onSize={s => { setPageSize(s); setPage(1); }}/></div>
+    <div className="scan-footer"><p>원천 참고 배수 · 짧은 기간은 연환산 · 제공처 집계와 원천 1년 금액은 별도 표시</p><Pagination total={total} page={currentPage} size={pageSize} position="top" onPage={goPage} onSize={s => { setPageSize(s); setPage(1); }}/></div>
     <span className="sr-only" role="status" aria-live="polite">{status}</span>
 
     {popup === "columns" && <SettingsDialog title="열 표시" wide onClose={() => setPopup(null)} headerAction={<button className="text-button" onClick={() => { setPrefs(p => withVisibleColumns(p, [...DEFAULT_VISIBLE_COLUMNS])); setStatus("기본 열을 복원했습니다."); }}><RotateCcw size={15}/>기본 열 복원</button>}><DisplaySettings columns={prefs.columns} onChange={columns => setPrefs(p => withVisibleColumns(p, columns))} onStatus={setStatus}/><button className="button export-results" disabled={exporting || !data} onClick={() => void exportResults()}><Download size={15}/>{exporting ? "전체 결과 준비 중…" : "검색 결과 전체 내보내기"}</button><p role="status">{exporting || status.includes("내보") ? status : ""}</p></SettingsDialog>}
     {popup === "filters" && <SettingsDialog title="필터" onClose={() => setPopup(null)} headerAction={<button className="text-button" onClick={resetFilters}><RotateCcw size={15}/>초기화</button>}><div className="sidebar-body" aria-label="필터 설정">
       <p className="sidebar-hint">조건은 전체 프로젝트에 적용합니다. 가격 하락만으로 종목을 제외하지 않습니다.</p>
       <fieldset className="filter-section"><legend>배수·성장·환원 조회 기간</legend><div className="choice-buttons period-buttons" role="group" aria-label="배수 범위 기간">{METRIC_WINDOWS.map(days => <button key={days} aria-pressed={prefs.rangeWindow === days} onClick={() => update("rangeWindow", days)}>{windowLabel(days)}</button>)}</div><div className="multiple-range"><label>P/R 최대 배수<span><input aria-label="P/R 최대 배수" type="number" min="0" placeholder="제한 없음" value={prefs.maxPr || ""} onChange={e => update("maxPr", Math.max(0, Number(e.target.value)))}/><span>배</span></span></label><label>P/HR 최대 배수<span><input aria-label="P/HR 최대 배수" type="number" min="0" placeholder="제한 없음" value={prefs.maxPhr || ""} onChange={e => update("maxPhr", Math.max(0, Number(e.target.value)))}/><span>배</span></span></label></div></fieldset>
-      <fieldset className="filter-section"><legend>함께 적용할 조건</legend><label className="inline-check"><input type="checkbox" checked={prefs.growingOnly} onChange={e => update("growingOnly", e.target.checked)}/>직전 동일 기간보다 수익 증가</label><label className="inline-check"><input type="checkbox" checked={prefs.holderOnly} onChange={e => update("holderOnly", e.target.checked)}/>해당 기간의 적격 환원액 있음</label><label className="inline-check"><input type="checkbox" checked={prefs.view === "favorites"} onChange={e => update("view", e.target.checked ? "favorites" : "all")}/>관심종목만</label></fieldset>
+      <fieldset className="filter-section"><legend>함께 적용할 조건</legend><label className="inline-check"><input type="checkbox" checked={prefs.growingOnly} onChange={e => update("growingOnly", e.target.checked)}/>직전 동일 기간보다 수익 증가</label><label className="inline-check"><input type="checkbox" checked={prefs.holderOnly} onChange={e => update("holderOnly", e.target.checked)}/>해당 기간의 원천 홀더 금액 있음</label><label className="inline-check"><input type="checkbox" checked={prefs.view === "favorites"} onChange={e => update("view", e.target.checked ? "favorites" : "all")}/>관심종목만</label></fieldset>
       {prefs.view === "issues" && <p>기존 ‘자료 확인 필요’ 조건 적용 중 <button className="text-button" onClick={() => update("view", "all")}>해제</button></p>}
       <label className="sidebar-label">섹터<select aria-label="섹터" value={prefs.category} onChange={e => update("category", e.target.value)}><option value="">모든 섹터</option>{data?.categories.map(c => <option key={c} value={c}>{c}</option>)}</select></label>
       <UsdRangeFilter label="유통 시총" minUsd={prefs.minMcap} maxUsd={prefs.maxMcap} onMinChange={v => update("minMcap", v)} onMaxChange={v => update("maxMcap", v)}/>
       <details className="filter-details" open={prefs.available !== "all"}><summary>자료 유무로 좁히기</summary><div className="choice-buttons period-buttons" role="group" aria-label="자료 확인 기간">{(["any", ...METRIC_WINDOWS] as const).map(days => <button key={days} aria-pressed={prefs.coverageWindow === days} onClick={() => update("coverageWindow", days)}>{days === "any" ? "기간 중 하나" : windowLabel(days)}</button>)}</div><div className="choice-buttons availability-buttons" role="group" aria-label="확인 가능한 지표">{(Object.keys(AVAILABILITY_LABELS) as AvailableMetric[]).filter(k => k !== "sales").map(key => <button key={key} aria-pressed={prefs.available === key} onClick={() => update("available", key)}>{AVAILABILITY_LABELS[key]}</button>)}</div></details>
       <details className="filter-details" open={prefs.verifiedOnly || prefs.hideDilution}><summary>토큰 연결 · 희석</summary><label className="inline-check"><input type="checkbox" checked={prefs.verifiedOnly} onChange={e => update("verifiedOnly", e.target.checked)}/>토큰 연결 확인된 종목만</label><label className="inline-check"><input type="checkbox" checked={prefs.hideDilution} onChange={e => update("hideDilution", e.target.checked)}/>FDV가 시총의 3.33배 초과인 종목 제외</label></details>
     </div></SettingsDialog>}
-    {popup === "coverage" && <SettingsDialog title="수집 범위와 계산 가능 범위" onClose={() => setPopup(null)} footerNote="프로젝트 수와 고유 토큰 수는 다릅니다."><p>DefiLlama 프로토콜 목록·상위 프로젝트·수수료·수익·환원·DEX 목록을 합칩니다. 같은 상위 프로젝트의 제품은 한 행으로 묶습니다. 시총이나 수익 자료가 없어도 목록에 남습니다.</p><dl className="coverage-summary"><div><dt>전체 프로젝트</dt><dd>{data?.pagination.total}개</dd></div><div><dt>연결 확인한 고유 투자 토큰</dt><dd>{data?.universe.linkedTokens}개</dd></div><div><dt>현재 표시 지표 중 배수 계산 가능 · 검색 결과</dt><dd>{data?.visibleCoverage.unique} / {total}개</dd></div></dl><p>전체 프로젝트 · {capitalName} · {windowLabel(prefs.coverageWindow)}</p><dl className="coverage-summary"><div><dt>배수 산출 가능</dt><dd>{coverage?.unique}개</dd></div><div><dt>원천 자료 있음 · 배수 보류</dt><dd>{coverage?.review}개</dd></div><div><dt>해당 기간 자료 미확보</dt><dd>{coverage?.missing}개</dd></div></dl><p>자료 미확보는 수익 0을 뜻하지 않습니다. P/R과 P/HR 집계는 서로 겹치며, 각 배수의 보류 사유는 행 아래 상세에서 확인할 수 있습니다.</p></SettingsDialog>}
+    {popup === "coverage" && <SettingsDialog title="수집 범위와 계산 가능 범위" onClose={() => setPopup(null)} footerNote="프로젝트 수와 고유 토큰 수는 다릅니다."><p>DefiLlama 프로토콜 목록·상위 프로젝트·수수료·수익·환원·DEX 목록을 합칩니다. 같은 상위 프로젝트의 제품은 한 행으로 묶습니다. 시총이나 수익 자료가 없어도 목록에 남습니다.</p><dl className="coverage-summary"><div><dt>전체 프로젝트</dt><dd>{data?.pagination.total}개</dd></div><div><dt>연결 확인한 고유 투자 토큰</dt><dd>{data?.universe.linkedTokens}개</dd></div><div><dt>현재 표시 지표 중 배수 계산 가능 · 검색 결과</dt><dd>{data?.visibleCoverage.unique} / {total}개</dd></div></dl><p>전체 프로젝트 · {capitalName} · {windowLabel(prefs.coverageWindow)}</p><dl className="coverage-summary"><div><dt>배수 산출 가능</dt><dd>{coverage?.unique}개</dd></div><div><dt>원천 자료 있음 · 배수 미산출</dt><dd>{coverage?.review}개</dd></div><div><dt>해당 기간 자료 미확보</dt><dd>{coverage?.missing}개</dd></div></dl><p>자료 미확보는 수익 0을 뜻하지 않습니다. P/R과 P/HR 집계는 서로 겹치며, 각 배수의 보류 사유는 행 아래 상세에서 확인할 수 있습니다.</p></SettingsDialog>}
     {sourceOpen && <DataGuide onClose={() => setSourceOpen(false)} data={data} checkedAt={checkedAt}/>}
   </main>;
 }

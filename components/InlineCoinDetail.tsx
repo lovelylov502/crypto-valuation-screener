@@ -4,14 +4,15 @@ import { useEffect,useState } from "react";
 import type { CoinScored } from "@/lib/types";
 import { fmtKstMinute, fmtMult, fmtPct, fmtPrice, fmtUsd } from "@/lib/format";
 import { growthLabel, revenueTrend } from "@/lib/revenueTrend";
-import { holderAmount, holderMultiple, holderReason, protocolMultiple, protocolReason, type CapitalBasis } from "@/lib/valuationMetrics";
+import type { CapitalBasis } from "@/lib/valuationMetrics";
+import { referenceMultiple, referenceReason, referenceReading, referenceReview, referenceClassification } from "@/lib/referenceMetrics";
 import { holderConditionSummary, holderTypeSummary } from "./ScreenerCells";
 import { defiLlamaUrl, marketLink } from "@/lib/coinLinks";
 import { koreanDetailDescription } from "@/lib/protocolDescriptions";
 import { metricStatus } from "@/lib/metricStatus";
 import { protocolResearch } from "@/lib/protocolResearch";
 import { holderEconomicTypeLabel } from "@/lib/holderLabels";
-import { REVENUE_WINDOWS, revenueAmount } from "@/lib/revenueHistory";
+import { REVENUE_WINDOWS } from "@/lib/revenueHistory";
 import { completedUtcDate,freshnessReason } from "@/lib/datedFreshness";
 import { windowLabel } from "@/lib/metricCoverage";
 import { ValuationEvidence } from "./ValuationEvidence";
@@ -29,8 +30,8 @@ export function InlineCoinDetail({ coin: c, capital, onClose }: { coin: CoinScor
   const month = revenueTrend(c, 30);
   const research = protocolResearch(c);
   const capName = capital === "mcap" ? "유통 시총" : "FDV";
-  const pr30 = protocolMultiple(c, 30, capital), phr30 = holderMultiple(c, 30, capital);
-  const reading30 = revenueReading(c, 30), returned30 = holderAmount(c, 30);
+  const pr30 = referenceMultiple(c, "revenue", 30, capital), phr30 = referenceMultiple(c, "holders", 30, capital);
+  const reading30 = revenueReading(c, 30), holderReading30 = referenceReading(c, "holders", 30), returned30 = holderReading30.amount;
   const end = c.revenueHistory?.periods[1]?.end;
   const market = marketLink(c), llama = defiLlamaUrl(c);
   const introduction = koreanDetailDescription(c.description) ?? c.descriptionKo;
@@ -52,44 +53,49 @@ export function InlineCoinDetail({ coin: c, capital, onClose }: { coin: CoinScor
       <ul>{c.dataQuality.issues.map(issue => <li key={`${issue.scope}:${issue.code}:${issue.source}`}>{dataQualityReason(issue)} · <a href={issue.source} target="_blank" rel="noreferrer">원천 확인 ↗</a></li>)}</ul>
     </div>}
     <section className="detail-summary" aria-label="핵심 지표">
-      <div className="detail-section-title"><h4>핵심 지표</h4><span>배수 기준 {capName} · 수익·환원 최근 30일</span></div>
+      <div className="detail-section-title"><h4>핵심 지표</h4><span>원천 참고 배수 · {capName} · 최근 30일</span></div>
       <dl className="summary-grid">
         <div><dt>현재 가격</dt><dd>{c.price === null ? "미확인" : fmtPrice(c.price)}</dd><div className="summary-changes"><span>24시간 <b className={tone(c.change1d)}>{fmtPct(c.change1d)}</b></span><span>7일 <b className={tone(c.priceChange7d)}>{fmtPct(c.priceChange7d)}</b></span></div></div>
         <div><dt>{capital === "fdv" ? "완전 희석 가치 · FDV" : "유통 시총"}</dt><dd>{c[capital] === null ? "미확인" : fmtUsd(c[capital])}</dd><p>{capital === "fdv" ? "유통 시총" : "FDV"} <b>{fmtUsd(c[capital === "fdv" ? "mcap" : "fdv"])}</b>{c.mcap && c.fdv ? ` · ${(c.fdv / c.mcap).toFixed(2)}배` : ""}</p><small>{marketDataReason(c, capital)}</small></div>
-        <div><dt>{reading30.kindLabel} · 30일</dt><dd>{reading30.amount === null ? "자료 부족" : fmtUsd(reading30.amount)}</dd>{reading30.basis.startsWith("provider") && <span className="source-badge">{reading30.basis === "provider_partial" ? "부분 집계" : "제공처 집계"}</span>}<p title={protocolReason(c, 30, capital)}>P/R <b>{pr30 === null ? metricStatus(protocolReason(c, 30, capital)) : fmtMult(pr30)}</b></p><p>직전 30일 대비 <b className={tone(month.delta)}>{month.delta === null ? "비교 불가" : growthLabel(month)}</b></p></div>
-        <div><dt>홀더 환원액 · 30일</dt><dd>{returned30 === null ? "자료 부족" : fmtUsd(returned30)}</dd><p title={holderReason(c, 30, capital)}>P/HR <b>{phr30 === null ? metricStatus(holderReason(c, 30, capital)) : fmtMult(phr30)}</b></p><small>{research?.holder?.summary ?? research?.holder?.route ?? holderTypeSummary(c, true)}</small></div>
+        <div><dt>Revenue 원천 · 30일</dt><dd>{reading30.amount === null ? "자료 부족" : fmtUsd(reading30.amount)}</dd>{reading30.basis.startsWith("provider") && <span className="source-badge">{reading30.basis === "provider_partial" ? "부분 집계" : "제공처 집계"}</span>}<p title={referenceReason(c, "revenue", 30, capital)}>P/R 참고 <b>{pr30 === null ? metricStatus(referenceReason(c, "revenue", 30, capital)) : fmtMult(pr30)}</b></p><p>직전 30일 대비 <b className={tone(month.delta)}>{month.delta === null ? "비교 불가" : growthLabel(month)}</b></p></div>
+        <div><dt>Holders Revenue 원천 · 30일</dt><dd>{returned30 === null ? "자료 부족" : fmtUsd(returned30)}</dd>{holderReading30.basis === "provider_total" && <span className="source-badge">제공처 집계</span>}<p title={referenceReason(c, "holders", 30, capital)}>P/HR 참고 <b>{phr30 === null ? metricStatus(referenceReason(c, "holders", 30, capital)) : fmtMult(phr30)}</b></p><small>{research?.holder?.summary ?? research?.holder?.route ?? holderTypeSummary(c)}</small></div>
       </dl>
       <dl className="market-secondary"><div><dt>유통량</dt><dd>{supply(c.circulatingSupply)} {c.symbol}</dd></div><div><dt>총발행량</dt><dd>{supply(c.totalSupply)} {c.symbol}</dd></div><div><dt>24시간 거래대금</dt><dd>{fmtUsd(c.totalVolume)}</dd></div><div><dt>시세 출처</dt><dd>{marketDataReason(c, "price")}</dd></div></dl>
+    </section>
+    <section className="detail-source-review" aria-label="수익 분류와 검토">
+      <div className="detail-section-title"><h4>수익 분류와 검토</h4><span>참고 배수와 별도로 표시</span></div>
+      <dl className="market-secondary"><div><dt>Revenue 분류</dt><dd>{referenceClassification(c)}</dd></div><div><dt>Revenue 검토</dt><dd>{referenceReview(c, "revenue")}</dd></div><div><dt>Holders Revenue 검토</dt><dd>{referenceReview(c, "holders")}</dd></div></dl>
+      <p className="detail-note">참고 배수는 위에 표시한 원천 금액과 토큰 가치로 계산합니다. 분류 검토 대기 중에도 계산하며, 직접 지급·소각·조건부 분배 여부는 아래에서 확인할 수 있습니다.</p>
     </section>
     <section className="detail-comparison" aria-label="기간별 비교">
       <div className="detail-section-title"><h4>기간별 비교</h4><span>{end ? `계산 목표 ${end} UTC · ` : ""}변화는 직전 같은 기간과 비교</span><span className="comparison-basis">배수 기준 {capName}</span></div>
       {c.freshness && <div className="detail-note">{(["revenue","holders"] as const).map(metric=><p key={metric}>{metric==="revenue"?"수익":"환원"} · {freshnessReason(c.freshness![metric])} · 마지막 완전 관측 {c.freshness![metric].latestCompleteDate??"미확인"} UTC · 목표 {c.freshness![metric].targetDate} UTC{c.freshness![metric].coverageBasis==="exact_parent"?" · 동일 구성의 부모 합산 원천으로 확인":""}{targetDate!==c.freshness![metric].targetDate?` · 새 목표 ${targetDate} UTC 미확인`:""}{c.freshness![metric].missingRecentDates.length?` · 최근 30일 누락 ${c.freshness![metric].missingRecentDates.join(", ")}`:""}</p>)}</div>}
       <div className="comparison-scroll" role="region" aria-label="기간별 수익과 환원 비교 · 가로 스크롤 가능" tabIndex={0}>
-        <table className="period-comparison"><caption className="sr-only">기간별 수익, 수익 변화, P/R, 홀더 환원액, P/HR</caption><thead><tr><th scope="col">기간</th><th scope="col">{reading30.kindLabel}</th><th scope="col">수익 변화</th><th scope="col">P/R</th><th scope="col">홀더 환원액</th><th scope="col">P/HR</th></tr></thead>
+        <table className="period-comparison"><caption className="sr-only">기간별 수익, 수익 변화, P/R, 홀더 환원액, P/HR</caption><thead><tr><th scope="col">기간</th><th scope="col">Revenue 원천</th><th scope="col">수익 변화</th><th scope="col">P/R 참고</th><th scope="col">Holders Revenue 원천</th><th scope="col">P/HR 참고</th></tr></thead>
           <tbody>{REVENUE_WINDOWS.map(days => {
             const reading = revenueReading(c, days), trend = revenueTrend(c, days);
-            const pr = protocolMultiple(c, days, capital), phr = holderMultiple(c, days, capital), returned = holderAmount(c, days);
+            const pr = referenceMultiple(c, "revenue", days, capital), phr = referenceMultiple(c, "holders", days, capital), holderReading = referenceReading(c, "holders", days), returned = holderReading.amount;
             const period = c.revenueHistory?.periods[days], provider = reading.basis.startsWith("provider");
             return <tr key={days} className={days === 30 ? "comparison-highlight" : ""}>
               <th scope="row">{windowLabel(days)}</th>
               <td>{reading.amount === null ? <span className="detail-unavailable">자료 부족<small>{period ? `${period.reportedDays} / ${days}일 확보` : "기간 자료 미확보"}</small></span> : <><strong>{fmtUsd(reading.amount)}</strong>{provider && <span className="source-badge" title={reading.basisLabel}>{reading.basis === "provider_partial" ? "부분 집계" : "제공처 집계"}</span>}</>}</td>
               <td title={`직전 ${windowLabel(days)} ${fmtUsd(trend.previous)} · 증가액 ${signedUsd(trend.delta)}`}><span className={tone(trend.delta)}>{trend.delta === null ? "비교 불가" : growthLabel(trend)}</span></td>
-              <td>{pr === null ? unavailable(protocolReason(c, days, capital)) : fmtMult(pr)}</td>
-              <td>{returned === null ? unavailable(holderReason(c, days, capital)) : <strong>{fmtUsd(returned)}</strong>}</td>
-              <td>{phr === null ? unavailable(holderReason(c, days, capital)) : fmtMult(phr)}</td>
+              <td>{pr === null ? unavailable(referenceReason(c, "revenue", days, capital)) : fmtMult(pr)}</td>
+              <td>{returned === null ? unavailable(referenceReason(c, "holders", days, capital)) : <><strong>{fmtUsd(returned)}</strong>{holderReading.basis === "provider_total" && <span className="source-badge" title={holderReading.basisLabel}>{days === 365 ? "원천 1년" : "제공처 집계"}</span>}</>}</td>
+              <td>{phr === null ? unavailable(referenceReason(c, "holders", days, capital)) : fmtMult(phr)}</td>
             </tr>;
           })}</tbody>
         </table>
       </div>
-      {providerPeriods.length > 0 && <p className="comparison-notice"><Info size={15}/><span>{providerPeriods.map(days => `${windowLabel(days)} ${fmtUsd(revenueReading(c, days).amount)}`).join(" · ")}는 제공처 집계입니다. 기간별 이력이 부족하거나 일부 구성요소만 확보한 금액은 배수와 증가율 계산에 사용하지 않습니다.</span></p>}
-      <p className="detail-footnote">24시간은 완료된 UTC 하루 · 1·7·30·90일 배수는 연환산 · 1년은 365일 합계</p>
+      {providerPeriods.length > 0 && <p className="comparison-notice"><Info size={15}/><span>{providerPeriods.map(days => `${windowLabel(days)} ${fmtUsd(revenueReading(c, days).amount)}`).join(" · ")}는 제공처 집계입니다. 일별 이력이 부족해도 제공처의 전체 기간 합계로 참고 배수를 계산합니다. 일부 구성요소만 확보한 합계는 계산에서 제외하며, 증가율은 검토된 동일 기간 자료가 필요합니다.</span></p>}
+      <p className="detail-footnote">원천 참고 배수 · 1·7·30·90일은 연환산 · 완료 UTC 이력과 제공처 기간 집계를 구분합니다. 원천 1년 집계는 365일 확보를 보장하지 않습니다.</p>
     </section>
     <section className="detail-holder" aria-label="홀더 환원 방식">
       <div className="detail-section-title"><h4>홀더에게 어떻게 돌아가나요?</h4><span>최근 30일</span></div>
       <div className="holder-grid">
-        <div className="holder-total"><span>홀더 환원액 합계</span><strong>{returned30 === null ? "자료 부족" : fmtUsd(returned30)}</strong><small>{returned30 === null ? holderReason(c, 30, capital) : research?.holder?.routes ? "두 방식의 합계 · 방식별 금액 미구분" : "적격 환원 방식의 합계"}</small></div>
+        <div className="holder-total"><span>홀더 환원액 합계</span><strong>{returned30 === null ? "자료 부족" : fmtUsd(returned30)}</strong><small>{returned30 === null ? referenceReason(c, "holders", 30, capital) : research?.holder?.routes ? "두 방식의 합계 · 방식별 금액 미구분" : "DefiLlama 원천 합계 · 수령 조건은 별도 확인"}</small></div>
         {research?.holder?.routes ? research.holder.routes.map(route => <div className="holder-route" key={route.label}><strong>{route.label}</strong><p>{route.description}</p><small>{route.condition}</small></div>) : <>
-          <div className="holder-route"><strong>환원 방식</strong><p>{research?.holder?.route ?? (c.holderValue.components.length ? holderTypeSummary(c, true) : "환원 자료 미연결")}</p><small>{research?.holder?.asset ?? "지급·소각 자산은 원천 설명에서 확인합니다."}</small></div>
+          <div className="holder-route"><strong>환원 방식</strong><p>{research?.holder?.route ?? (c.holderValue.components.length ? holderTypeSummary(c) : "환원 자료 미연결")}</p><small>{research?.holder?.asset ?? "지급·소각 자산은 원천 설명에서 확인합니다."}</small></div>
           <div className="holder-route"><strong>수령 조건</strong><p>{research?.holder?.condition ?? holderConditionSummary(c)}</p>{research?.holder?.recipient && <small>{research.holder.recipient}</small>}</div>
         </>}
       </div>
@@ -99,15 +105,15 @@ export function InlineCoinDetail({ coin: c, capital, onClose }: { coin: CoinScor
     <details className="inline-evidence"><summary>계산 근거 · 집계 범위 · 자료 상태</summary>
       <p>가격 변화 · 24시간 {fmtPct(c.change1d)} · 7일 {fmtPct(c.priceChange7d)} · 30일 {fmtPct(c.priceChange30d)}. 최근 7일 수익 중 가장 큰 하루의 비중 {c.revenueHistory?.peakDayShare7d == null ? "미확인" : `${c.revenueHistory.peakDayShare7d.toFixed(1)}%`}.</p>
       {research && <p>{research.description} <a href={research.source} target="_blank" rel="noreferrer">검토 자료</a> · {research.scope}</p>}
-      <p>{pr30 !== null ? <>30일 P/R = {fmtUsd(c[capital])} ÷ ({fmtUsd(revenueAmount(c, 30))} × 365/30) = <b>{fmtMult(pr30)}</b> · {capName}</> : <>30일 P/R · {protocolReason(c, 30, capital)}</>}</p>
+      <p>{pr30 !== null ? <>30일 P/R = {fmtUsd(c[capital])} ÷ ({fmtUsd(reading30.amount)} × 365/30) = <b>{fmtMult(pr30)}</b> · {capName}</> : <>30일 P/R · {referenceReason(c, "revenue", 30, capital)}</>}</p>
       <p>{c.identityReason}{c.capitalExclusionReason && ` · ${c.capitalExclusionReason}`}</p>
-      <p>제공처 기간 집계 참고 · 24h {fmtUsd(c.revenue24h)} · 7일 {fmtUsd(c.revenue7d)} · 30일 {fmtUsd(c.revenue30d)}. 완료일 이력과 범위가 다를 수 있어 이력이 부족한 배수의 대체값으로 쓰지 않습니다.</p>
-      <div className="inline-periods">{REVENUE_WINDOWS.map(days => <div key={days}><b>{windowLabel(days)}</b><span>{c.revenueHistory?.periods[days]?.start ?? "–"} ~ {c.revenueHistory?.periods[days]?.end ?? "–"} UTC</span><span>P/R · {protocolReason(c, days, capital)}</span><span>P/HR · {holderReason(c, days, capital)}</span></div>)}</div>
-      <p>수익과 환원은 DefiLlama 자료입니다. 완료된 UTC 하루는 한국 시간 오전 9시부터 다음 날 오전 9시까지입니다. 1년은 365일 합계이며, 증가율은 직전 동일 길이 기간과 비교합니다. 단기 연환산은 해당 기간의 속도를 비교하는 값이며 향후 수익 예측이 아닙니다.</p>
+      <p>제공처 기간 집계 참고 · 24h {fmtUsd(c.revenue24h)} · 7일 {fmtUsd(c.revenue7d)} · 30일 {fmtUsd(c.revenue30d)}. 완료일 이력과 범위가 다를 수 있어 제공처 집계로 표시하고 참고 배수에 사용합니다.</p>
+      <div className="inline-periods">{REVENUE_WINDOWS.map(days => <div key={days}><b>{windowLabel(days)}</b><span>{c.revenueHistory?.periods[days]?.start ?? "–"} ~ {c.revenueHistory?.periods[days]?.end ?? "–"} UTC</span><span>P/R · {referenceReason(c, "revenue", days, capital)}</span><span>P/HR · {referenceReason(c, "holders", days, capital)}</span></div>)}</div>
+      <p>수익과 환원은 DefiLlama 자료입니다. 완료된 UTC 하루는 한국 시간 오전 9시부터 다음 날 오전 9시까지입니다. 일별 이력의 1년은 365일 합계이며, 제공처 1년 집계는 확보 일수를 보장하지 않습니다. 증가율은 검토된 직전 동일 길이 기간과 비교합니다. 단기 연환산은 해당 기간의 속도를 비교하는 값이며 향후 수익 예측이 아닙니다.</p>
       <p>수익 수집 {c.revenueHistory ? fmtKstMinute(c.revenueHistory.observedAt) : "이력 미확보"} · 환원 수집 {c.holderHistory ? fmtKstMinute(c.holderHistory.observedAt) : "이력 미확보"}</p>
       <p className="evidence-source-links">{[...new Set(REVENUE_WINDOWS.map(days => revenueReading(c, days).source))].map((url, i) => <a key={url} href={url} target="_blank" rel="noreferrer">수익 집계 원본 {i + 1}<ExternalLink size={12}/></a>)}{c.holderHistory && <a href={c.holderHistory.source} target="_blank" rel="noreferrer">환원 집계 원본<ExternalLink size={12}/></a>}</p>
       {c.fundamentals.revenue.components.map(p => <p key={p.slug}><b>{p.slug} · {p.status === "matched" ? "정의 확인" : "정의 재검토 필요"}</b><br/>{p.definition ?? "정의 미확보"}{p.reviewNote && <><br/>{p.reviewNote}</>}</p>)}
-      {c.holderValue.components.map(p => <p key={p.slug}><b>{p.name} · {holderEconomicTypeLabel(p.economicType)} · {p.eligible ? "P/HR 포함" : "P/HR 제외"}</b><br/>{p.reason} · {p.condition}</p>)}
+      {c.holderValue.components.map(p => <p key={p.slug}><b>{p.name} · {holderEconomicTypeLabel(p.economicType)} · {p.eligible ? "환원 방식 검토 완료" : "수령 대상·재원 확인 필요"}</b><br/>{p.reason} · {p.condition}</p>)}
       {c.sales && <ValuationEvidence coin={c} capital={capital}/>}
     </details>
   </section>;

@@ -18,7 +18,7 @@ export function ValuationEvidence({ coin: c, capital }: { coin: CoinScored; capi
         <p className="detail-note muted">이 추정치로 7·30·90일 실적을 역산하지 않습니다. 비교 가능한 기간별 매출 자료가 있어야 해당 P/S를 계산할 수 있습니다.</p>
       </> : <div className="missing-evidence"><strong>사업 매출 자료를 확보하지 못했습니다.</strong><p>아래 프로토콜 수익·환원 집계는 별도로 비교할 수 있습니다. 수수료, 선불 결제, 소각액을 사업 매출로 대신 사용하지 않습니다.</p></div>}
     </section>
-    <section className="detail-section"><div className="section-title"><h3>P/HR · 홀더 환원</h3><span>현재 {capName} {fmtUsd(c[capital])}</span></div>
+    <section className="detail-section"><div className="section-title"><h3>검토된 환원 구성 · P/HR</h3><span>현재 {capName} {fmtUsd(c[capital])}</span></div>
       <div className="revenueMultiple-periods">{([365,90,30,7] as RevenueWindowDays[]).map(days => {
         const h = c.holderHistory?.periods[days], total = holderAmount(c, days);
         return <div className={"revenueMultiple-period " + (days === 30 ? "primary-period" : "")} key={days}><span>{days === 365 ? "1년 · 365일 합계" : days + "일 연환산"}</span><strong>{fmtMult(holderMultiple(c,days,capital))}</strong><small>환원액 {fmtUsd(total)}</small><small>{capital === "fdv" ? "시총" : "FDV"} 기준 {fmtMult(holderMultiple(c,days,capital === "fdv" ? "mcap" : "fdv"))}</small>{h && <small>{h.start} ~ {h.end} UTC</small>}<small>{holderReason(c,days,capital)}</small>{total !== null && days !== 365 && <small>연환산 분모 {fmtUsd(total * 365 / days)}</small>}</div>;
@@ -29,7 +29,7 @@ export function ValuationEvidence({ coin: c, capital }: { coin: CoinScored; capi
       {c.holderHistory && <a className="detail-note" href={c.holderHistory.source} target="_blank" rel="noreferrer">환원 일별 원자료 ↗</a>}
       {c.holderHistory?.supplementalSources?.map(url=><p className="detail-note" key={url}><a href={url} target="_blank" rel="noreferrer">구성요소별 환원 이력 · {decodeURIComponent(new URL(url).pathname.split("/").at(-1)!)} ↗</a></p>)}
     </section>
-    <section className="detail-section"><h3>P/R · 프로토콜 귀속 수익</h3>
+    <section className="detail-section"><h3>검토된 프로토콜 귀속 수익 · P/R</h3>
       {["protocol_revenue","service_sales"].includes(c.fundamentals.revenue.kind) ? <div className="detail-table-wrap"><table className="detail-table"><thead><tr><th>기간</th><th>기간 수익</th><th>P/R · {capName}</th><th>P/R · {capital === "fdv" ? "유통 시총" : "FDV"}</th></tr></thead><tbody>{([365,90,30,7] as RevenueWindowDays[]).map(days=><tr key={days}><th>{days === 365 ? "365일 합계" : days + "일 연환산"}</th><td>{fmtUsd(revenueAmount(c,days))}</td><td>{fmtMult(protocolMultiple(c,days,capital))}<small className="block muted">{protocolMultiple(c,days,capital) === null ? protocolReason(c,days,capital) : ""}</small></td><td>{fmtMult(protocolMultiple(c,days,capital === "fdv" ? "mcap" : "fdv"))}</td></tr>)}</tbody></table></div> : <p className="muted">이 종목의 Revenue는 프로토콜 귀속 수익으로 확인된 자료가 아닙니다. 원천 정의는 아래에서 확인할 수 있습니다.</p>}
       <p className="detail-note muted">프로토콜 귀속 수익 또는 확인된 서비스 매출 집계입니다. 전체 회사 매출·순이익과 범위가 다르며, 미확인 구성요소를 임의로 빼고 전체 배수를 만들지 않습니다.</p>
     </section>

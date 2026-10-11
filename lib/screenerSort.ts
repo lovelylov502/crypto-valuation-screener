@@ -5,14 +5,16 @@ import { revenueReading } from "./revenueReading";
 import { protocolResearch } from "./protocolResearch";
 import { holderEconomicTypeLabel } from "./holderLabels";
 import { knownRevenue } from "./fundamentals";
-import { salesMultiple, protocolMultiple, holderMultiple, datedHolderValue, type CapitalBasis } from "./valuationMetrics";
+import { salesMultiple, datedHolderValue, type CapitalBasis } from "./valuationMetrics";
+import { referenceMultiple, referenceClassification, referenceReview } from "./referenceMetrics";
 import { METRIC_COLUMN_DAYS as METRIC_DAYS } from "./metricCoverage";
 
 export function sortValue(c: CoinScored, key: SortKey, basis: CapitalBasis = "mcap"): number | string | null {
   if (key === "psSales") return salesMultiple(c, basis);
-  if (key.startsWith("phr")) return holderMultiple(c, METRIC_DAYS[key] ?? 30, basis);
-  if (key === "pr24h" || key === "pr" || key.startsWith("pr7") || key.startsWith("pr90") || key === "pr1y") return protocolMultiple(c, METRIC_DAYS[key] ?? 30, basis);
+  if (key.startsWith("phr")) return referenceMultiple(c, "holders", METRIC_DAYS[key] ?? 30, basis);
+  if (key === "pr24h" || key === "pr" || key.startsWith("pr7") || key.startsWith("pr90") || key === "pr1y") return referenceMultiple(c, "revenue", METRIC_DAYS[key] ?? 30, basis);
   switch (key) {
+    case "revenueReview": return `${referenceClassification(c)} ${referenceReview(c, "revenue")}`;
     case "price": return c.price;
     case "change1d": return c.change1d;
     case "multiple7d": return researchMultiple(c, 7);

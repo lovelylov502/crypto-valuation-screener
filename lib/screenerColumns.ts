@@ -4,6 +4,7 @@ export type SortKey =
   | "pr24h"
   | "phr24h"
   | "revenue24h"
+  | "revenueReview"
   | "pr7d"
   | "pr90d"
   | "pr1y"
@@ -73,17 +74,18 @@ export const COLUMN_GROUP_LABELS: Record<ColumnGroup, string> = {
 };
 
 export const SCREENER_COLUMNS: ScreenerColumn[] = [
-  { key: "pr24h", label: "P/R · 24시간", title: "현재 토큰 가치 ÷ (최근 완료 UTC 하루 수익 × 365). 하루 급증에 민감합니다", group: "valuation" },
-  { key: "phr24h", label: "P/HR · 24시간", title: "현재 토큰 가치 ÷ (최근 완료 UTC 하루 적격 환원액 × 365)", group: "valuation" },
+  { key: "pr24h", label: "P/R · 24시간", title: "원천 참고 배수: 현재 토큰 가치 ÷ (표시한 DefiLlama Revenue 하루 금액 × 365). 제공처 집계는 별도 표시", group: "valuation" },
+  { key: "phr24h", label: "P/HR · 24시간", title: "원천 참고 배수: 현재 토큰 가치 ÷ (표시한 DefiLlama Holders Revenue 하루 금액 × 365)", group: "valuation" },
   { key: "revenue24h", label: "수익 · 24시간", title: "DefiLlama Revenue 원본. 완료 UTC 하루 또는 별도 표시한 제공처 집계. 변화율은 검토된 동일 기간끼리 비교", group: "fundamentals" },
-  { key: "pr1y", label: "P/R · 1년", title: "현재 토큰 가치 ÷ 프로토콜 귀속 수익 365일 합계. 이력이 부족하면 보류", group: "valuation" },
-  { key: "pr90d", label: "P/R · 90일", title: "현재 토큰 가치 ÷ (프로토콜 귀속 수익 90일 × 365/90)", group: "valuation" },
-  { key: "pr", label: "P/R · 30일", title: "현재 토큰 가치 ÷ (프로토콜 귀속 수익 30일 × 365/30). 회사 전체 매출·순이익과 다릅니다", group: "valuation" },
-  { key: "pr7d", label: "P/R · 7일", title: "현재 토큰 가치 ÷ (프로토콜 귀속 수익 7일 × 365/7)", group: "valuation" },
-  { key: "phr1y", label: "P/HR · 1년", title: "현재 토큰 가치 ÷ 적격 환원액 365일 합계. 정확히 365일의 이력이 필요합니다", group: "valuation" },
-  { key: "phr90d", label: "P/HR · 90일", title: "현재 토큰 가치 ÷ (적격 환원액 90일 × 365/90)", group: "valuation" },
-  { key: "phr", label: "P/HR · 30일", title: "현재 토큰 가치 ÷ (적격 최근 30일 환원액 × 365/30). 현금 분배·시장매입과 소각을 구분하며 낮은 배수만으로 저평가를 판단하지 않습니다", group: "valuation" },
-  { key: "phr7d", label: "P/HR · 7일", title: "현재 토큰 가치 ÷ (적격 환원액 7일 × 365/7). 일회성 매입에 민감합니다", group: "valuation" },
+  { key: "pr1y", label: "P/R · 1년", title: "원천 참고 배수: 현재 토큰 가치 ÷ 표시한 Revenue 1년 금액. 제공처 1년 집계는 365일 확보를 보장하지 않습니다", group: "valuation" },
+  { key: "pr90d", label: "P/R · 90일", title: "원천 참고 배수: 현재 토큰 가치 ÷ (표시한 Revenue 90일 금액 × 365/90)", group: "valuation" },
+  { key: "pr", label: "P/R · 30일", title: "원천 참고 배수: 현재 토큰 가치 ÷ (표시한 Revenue 30일 금액 × 365/30). 분류·검토와 독립적으로 계산", group: "valuation" },
+  { key: "pr7d", label: "P/R · 7일", title: "원천 참고 배수: 현재 토큰 가치 ÷ (표시한 Revenue 7일 금액 × 365/7)", group: "valuation" },
+  { key: "phr1y", label: "P/HR · 1년", title: "원천 참고 배수: 현재 토큰 가치 ÷ 표시한 Holders Revenue 1년 금액. 제공처 1년 집계는 365일 확보를 보장하지 않습니다", group: "valuation" },
+  { key: "phr90d", label: "P/HR · 90일", title: "원천 참고 배수: 현재 토큰 가치 ÷ (전체 Holders Revenue 90일 금액 × 365/90)", group: "valuation" },
+  { key: "phr", label: "P/HR · 30일", title: "원천 참고 배수: 현재 토큰 가치 ÷ (표시한 Holders Revenue 30일 금액 × 365/30). 수령 조건·실행 검토는 별도 표시", group: "valuation" },
+  { key: "phr7d", label: "P/HR · 7일", title: "원천 참고 배수: 현재 토큰 가치 ÷ (전체 Holders Revenue 7일 금액 × 365/7). 일회성 집계에 민감합니다", group: "valuation" },
+  { key: "revenueReview", label: "수익 분류·검토", title: "원천 수익의 분류와 검토 상태. 원천 참고 배수의 산출 여부와 별도로 표시", group: "fundamentals" },
   { key: "signals", label: "포착 신호", title: "실적 개선 · 현재 홀더 배분 · 관측 흐름 전환. 여러 신호가 함께 나타날 수 있습니다", group: "research" },
   { key: "revenueGrowth", label: "집계액 변화", title: "동일 구성요소 최근 30일 / 직전 30일 변화", group: "fundamentals" },
   { key: "holderGrowth", label: "홀더 변화", title: "적격 홀더 금액 최근 30일 / 직전 30일 변화. 0과 누락을 구분", group: "fundamentals" },
@@ -113,7 +115,7 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
   { key: "change1d", label: "24시간 %", title: "토큰 가격의 24시간 변화. 포착 조건에는 반영하지 않습니다", group: "performance" },
   { key: "revenue7d", label: "수익 · 7일", title: "DefiLlama 7일 Revenue 원본 · 집계 성격과 제공처 기간 집계 여부를 별도 표시", group: "fundamentals" },
   { key: "revenue90d", label: "수익 · 90일", title: "DefiLlama Revenue의 완료 UTC 90일 원본 합계", group: "fundamentals" },
-  { key: "revenue1y", label: "수익 · 1년", title: "DefiLlama Revenue 원본 · 365일 미확인 제공처 집계는 별도 표시하고 연간 배수에서 제외", group: "fundamentals" },
+  { key: "revenue1y", label: "수익 · 1년", title: "DefiLlama Revenue 원본 · 365일 미확인 제공처 집계는 원천 1년 참고값으로 별도 표시", group: "fundamentals" },
   { key: "holderRoute", label: "환원 방식", title: "공식 문서 확인 경로 우선. 미확인 종목은 원천 설명의 자동 분류를 구분해 표시", group: "fundamentals" },
   { key: "payoutAsset", label: "지급 자산", title: "보유자가 받는 자산 또는 소각 대상. 금액만으로 추정하지 않습니다", group: "fundamentals" },
   { key: "holderCondition", label: "수령 대상", title: "일반 보유자·스테이커·락업·투표자 등 공식 확인 대상", group: "fundamentals" },
@@ -121,14 +123,14 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
 
 export const DEFAULT_VISIBLE_COLUMNS: SortKey[] = [
   "pr24h", "pr7d", "pr", "pr90d", "pr1y",
-  "revenue24h", "revenue7d", "revenue30d", "revenue90d", "revenue1y",
+  "revenueReview", "revenue24h", "revenue7d", "revenue30d", "revenue90d", "revenue1y",
   "phr24h", "phr7d", "phr", "phr90d", "phr1y", "holderRoute",
 ];
 
 export const REVENUE_COLUMN_DAYS = { revenue24h: 1, revenue7d: 7, revenue30d: 30, revenue90d: 90, revenue1y: 365 } as const;
 export function columnBand(key: SortKey): string {
-  if (["pr24h", "pr7d", "pr", "pr90d", "pr1y"].includes(key)) return "수익 배수 P/R";
-  if (key in REVENUE_COLUMN_DAYS) return "프로토콜 수익";
-  if (["phr24h", "phr7d", "phr", "phr90d", "phr1y"].includes(key)) return "홀더 배수 P/HR";
+  if (["pr24h", "pr7d", "pr", "pr90d", "pr1y"].includes(key)) return "원천 참고 P/R";
+  if (key in REVENUE_COLUMN_DAYS) return "Revenue 원천 금액";
+  if (["phr24h", "phr7d", "phr", "phr90d", "phr1y"].includes(key)) return "원천 참고 P/HR";
   return "추가 지표";
 }

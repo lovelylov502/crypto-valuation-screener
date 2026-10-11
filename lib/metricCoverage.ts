@@ -1,17 +1,18 @@
 import type { CoinRaw } from "./types";
-import { salesMultiple, protocolMultiple, holderMultiple, type CapitalBasis } from "./valuationMetrics";
+import { salesMultiple, type CapitalBasis } from "./valuationMetrics";
+import { referenceMultiple } from "./referenceMetrics";
 import type { RevenueWindowDays } from "./revenueHistory";
 import { SCREENER_COLUMNS, type SortKey } from "./screenerColumns";
 
 export const METRIC_WINDOWS = [1, 7, 30, 90, 365] as const;
 export type CoverageWindow = RevenueWindowDays | "any";
 export type AvailableMetric = "all" | "any" | "sales" | "revenue" | "holder" | "review" | "missing";
-export const AVAILABILITY_LABELS: Record<AvailableMetric, string> = { all: "전체", any: "배수 산출 가능", sales: "P/S", revenue: "P/R", holder: "P/HR", review: "원천 자료 있음 · 배수 보류", missing: "해당 기간 원천 자료 없음" };
+export const AVAILABILITY_LABELS: Record<AvailableMetric, string> = { all: "전체", any: "참고 배수 산출 가능", sales: "P/S", revenue: "P/R 참고", holder: "P/HR 참고", review: "원천 자료 있음 · 배수 미산출", missing: "해당 기간 원천 자료 없음" };
 export function windowLabel(window: CoverageWindow): string { return window === "any" ? "확보된 기간 중 하나" : window === 1 ? "24시간" : window === 365 ? "1년" : `${window}일`; }
 
 export function metricAvailable(c: CoinRaw, metric: "sales" | "revenue" | "holder", basis: CapitalBasis, window: CoverageWindow): boolean {
   if (metric === "sales") return salesMultiple(c, basis) !== null;
-  return (window === "any" ? METRIC_WINDOWS : [window]).some(days => (metric === "revenue" ? protocolMultiple(c, days, basis) : holderMultiple(c, days, basis)) !== null);
+  return (window === "any" ? METRIC_WINDOWS : [window]).some(days => referenceMultiple(c, metric === "revenue" ? "revenue" : "holders", days, basis) !== null);
 }
 /** Source presence includes reported zero and negative values. It never asserts positive earnings. */
 export function hasSourceData(c: CoinRaw, window: CoverageWindow): boolean {

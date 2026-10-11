@@ -41,7 +41,8 @@ export function parseWorkspace(raw: string | null): WorkspacePreferences {
     if (!p || typeof p !== "object" || Array.isArray(p)) return defaults;
     const keys = new Set<string>(SCREENER_COLUMNS.map(c => c.key));
     const oldDefault = p.layoutVersion !== 9 && JSON.stringify(p.columns) === JSON.stringify(["price", "change1d", "mcap", "pr", "phr"]);
-    const columns = oldDefault ? defaults.columns : Array.isArray(p.columns) ? [...new Set<SortKey>(p.columns.filter((k: unknown) => typeof k === "string" && keys.has(k)))] : [];
+    const previousDefault = JSON.stringify(p.columns) === JSON.stringify(DEFAULT_VISIBLE_COLUMNS.filter(k => k !== "revenueReview"));
+    const columns = oldDefault || previousDefault ? defaults.columns : Array.isArray(p.columns) ? [...new Set<SortKey>(p.columns.filter((k: unknown) => typeof k === "string" && keys.has(k)))] : [];
     const finite = (k: string) => typeof p[k] === "number" && Number.isFinite(p[k]) && p[k] >= 0 ? p[k] : 0;
     const parsed: WorkspacePreferences = { ...defaults, columns: columns.length ? columns : defaults.columns,
       revenueSort: ["percent", "delta"].includes(p.revenueSort) ? p.revenueSort : "amount",

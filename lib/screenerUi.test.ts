@@ -20,13 +20,15 @@ describe("holder-value screener columns", () => {
     expect(DEFAULT_VISIBLE_COLUMNS).not.toContain("captureScore");
   });
 
-  it("offers raw TTM separately and explains P/HR with eligible current semantics", () => {
+  it("labels source-reference P/HR separately from the reviewed holder run-rate", () => {
     const ttm = SCREENER_COLUMNS.find((column) => column.key === "holderValueTtm");
     const phr = SCREENER_COLUMNS.find((column) => column.key === "phr");
 
     expect(ttm).toMatchObject({ label: "홀더 원천 1년" });
     expect(ttm?.title).toContain("제외 유형 포함");
-    expect(phr?.title).toContain("적격 최근 30일");
+    expect(phr?.title).toContain("원천 참고 배수");
+    expect(phr?.title).toContain("검토는 별도 표시");
+    expect(DEFAULT_VISIBLE_COLUMNS).toContain("revenueReview");
     expect(SCREENER_COLUMNS.map((column) => column.title).join(" ")).not.toContain(
       "실질 배당",
     );

@@ -9,7 +9,8 @@ import type { SortKey } from "@/lib/screenerColumns";
 import { ScoreBadge } from "./ScoreBadge";
 import { TriangleAlert } from "lucide-react";
 import { multipleLabel, feeLabel, knownRevenue } from "@/lib/fundamentals";
-import { salesMultiple, salesReason, protocolMultiple, protocolReason, holderMultiple, holderReason, datedHolderValue, type CapitalBasis } from "@/lib/valuationMetrics";
+import { salesMultiple, salesReason, datedHolderValue, type CapitalBasis } from "@/lib/valuationMetrics";
+import { referenceMultiple, referenceReason, referenceClassification, referenceReview } from "@/lib/referenceMetrics";
 import type { RevenueWindowDays } from "@/lib/revenueHistory";
 import { METRIC_COLUMN_DAYS } from "@/lib/metricCoverage";
 
@@ -88,13 +89,14 @@ export function renderCell(c: CoinScored, key: SortKey, basis: CapitalBasis = "m
   if (key === "psSales") return metricReading(salesMultiple(c,basis),salesReason(c,basis),basis,salesMultiple(c),c.sales?.basis === "annualized_estimate" ? "외부 매출 추정" : "보고 매출");
   if (key.startsWith("phr")) {
     const days=METRIC_DAYS[key] ?? 30;
-    return metricReading(holderMultiple(c,days,basis),holderReason(c,days,basis)+" · "+holderConditionSummary(c),basis,holderMultiple(c,days),holderTypeSummary(c,true) + (holderConditionSummary(c).includes("락업") ? " · 락업" : holderConditionSummary(c).includes("스테이킹") ? " · 스테이킹" : "") + (c.holderValue.availability === "mixed" ? " · 확인분" : ""));
+    return metricReading(referenceMultiple(c,"holders",days,basis),referenceReason(c,"holders",days,basis),basis,referenceMultiple(c,"holders",days),"원천 참고");
   }
   if (["pr24h","pr","pr7d","pr90d","pr1y"].includes(key)) {
     const days=METRIC_DAYS[key] ?? 30;
-    return metricReading(protocolMultiple(c,days,basis),protocolReason(c,days,basis),basis,protocolMultiple(c,days),c.fundamentals.revenue.kind === "service_sales" ? "서비스 매출 집계" : undefined);
+    return metricReading(referenceMultiple(c,"revenue",days,basis),referenceReason(c,"revenue",days,basis),basis,referenceMultiple(c,"revenue",days),"원천 참고");
   }
   switch (key) {
+    case "revenueReview": return <span className="route-cell">{referenceClassification(c)}<small>{referenceReview(c, "revenue")}</small></span>;
     case "price": return fmtPrice(c.price);
     case "change1d": return <span className={changeClass(c.change1d)}>{fmtPct(c.change1d)}</span>;
     case "multiple1y": return fmtMult(researchMultiple(c, 365));

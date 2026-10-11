@@ -59,12 +59,12 @@ export function CollectionStatus({ data, publication, error, refreshing, checked
           <div><dt>이 브라우저의 서버 확인</dt><dd>{checkedAt ? time(checkedAt) : "아직 확인되지 않음"}</dd></div>
           {health.firstFailureAt && <div><dt>이번 자료의 첫 실패 관측</dt><dd>{fmtKstMinute(health.firstFailureAt)}</dd></div>}
         </dl>
-        <p className="collection-note">가격·시총·배수는 저장된 수집본의 값입니다. 수익은 위 UTC 날짜까지의 완전한 일별 자료로 계산하며, 원천 금액의 별도 집계 범위와 누락일은 종목 상세에 표시합니다. 예약 실행은 지연될 수 있습니다.</p>
+        <p className="collection-note">가격·시총·원천 금액은 저장된 수집본의 값이며, 참고 배수는 표시한 원천 금액으로 계산합니다. 완료 UTC 이력과 제공처 기간 합계의 범위·누락일은 종목 상세에 표시합니다. 예약 실행은 지연될 수 있습니다.</p>
         <div className="collection-counts"><h3>경제적 귀속 검토</h3>
         {economic?<><p>전체 {count(economic.summary.sourceMetrics)}개 원천·지표 · 검토 대기 {count(economic.summary.pending)} · 증거 조회 미확인 {count(economic.summary.evidenceUnavailable)} · 검토 후 비적용 {count(economic.summary.reviewedUnavailable)}</p><p>검토 원장에 대기로 기록된 종목 {count(economic.summary.affectedProjects)}개 · 가장 오래된 관측 {time(economic.summary.oldestPendingAt)}</p><p>검토 기록 시작 {time(economic.trackingStartedAt)} · 이전 자료에서 확인한 첫 관측은 원천별로 보존합니다.</p>{p?.economicReviewRef&&<p><a href={p.economicReviewRef.url} target="_blank" rel="noreferrer">전체 원천별 검토 기록</a></p>}</>:<p>이 자료에는 지표별 경제 검토 원장이 없습니다. 종목 상세의 기존 정의 검토 사유를 확인해 주세요.</p>}
-          <p className="collection-note">검토 대기는 원천 조회 오류와 별도로 집계합니다. 홀더 환원 실행 검토는 해당 P/HR 계산에 반영됩니다.</p>
+          <p className="collection-note">검토 대기는 원천 조회 오류와 별도로 집계합니다. 수익·환원 분류 검토는 참고 배수를 막지 않으며, 검토 상태와 수령 조건을 별도로 표시합니다.</p>
         </div>
-        {coverage&&<div className="collection-counts"><h3>현재 기준의 배수 산출 범위</h3><p>{coverage.capital==="fdv"?"FDV":"유통 시총"} · {coverage.window==="any"?"확보된 기간 중 하나":`${coverage.window}일`}</p><p>전체 {count(coverage.total)}개 종목 · P/R {count(coverage.revenue)} · P/HR {count(coverage.holder)} · 하나 이상 산출 {count(coverage.unique)}</p><p>원천 자료 있음·배수 보류 {count(coverage.review)} · 해당 기간 원천 자료 없음 {count(coverage.missing)}</p><p className="collection-note">현재 선택한 시총 기준과 기간으로 계산한 전체 종목 수입니다. 검색 결과와 별도로 집계하며, 다른 기간의 확보 범위는 달라질 수 있습니다.</p></div>}
+        {coverage&&<div className="collection-counts"><h3>현재 기준의 참고 배수 산출 범위</h3><p>{coverage.capital==="fdv"?"FDV":"유통 시총"} · {coverage.window==="any"?"확보된 기간 중 하나":`${coverage.window}일`}</p><p>전체 {count(coverage.total)}개 종목 · P/R {count(coverage.revenue)} · P/HR {count(coverage.holder)} · 하나 이상 산출 {count(coverage.unique)}</p><p>원천 자료 있음·배수 미산출 {count(coverage.review)} · 해당 기간 원천 자료 없음 {count(coverage.missing)}</p><p className="collection-note">현재 선택한 시총 기준과 기간으로 계산한 전체 종목 수입니다. 검색 결과와 별도로 집계하며, 다른 기간의 확보 범위는 달라질 수 있습니다.</p></div>}
         {p && <div className="collection-counts">
           <h3>공개·장애 기록</h3>
           <p>이력 기록 시작: {time(p.trackingStartedAt)}</p>
@@ -93,7 +93,7 @@ export function CollectionStatus({ data, publication, error, refreshing, checked
         </div>}
         {p?.attempt.collection && <p>최근 시도: CoinGecko 조회 실패 {count(p.attempt.collection.gecko?.failed)}개 · CoinMarketCap 조회 실패 {count(p.attempt.collection.cmc?.failed)}개</p>}
         {health.firstFailureAt && <p className="collection-note">첫 실패 관측은 이번 수집 안에서의 기록입니다. 실제 장애가 언제 시작됐는지는 이 기록만으로 확정할 수 없습니다.</p>}
-        <p className="collection-note">‘수집 정상’은 위 수집·검사 범위의 상태입니다. 원천 미제공, 토큰 연결·정의 검토, 기간 이력 부족으로 계산할 수 없는 지표는 종목 상세에서 확인할 수 있습니다.</p>
+        <p className="collection-note">‘수집 정상’은 위 수집·검사 범위의 상태입니다. 원천 금액 미제공, 토큰 미연결, 분자 미확인과 부분 집계로 계산할 수 없는 지표는 종목 상세에서 확인할 수 있습니다. 분류 검토 대기는 따로 표시합니다.</p>
         <button className="button" disabled={refreshing} onClick={onRefresh}>{refreshing ? "서버 확인 중…" : "다시 확인"}</button>
       </div>
     </SettingsDialog>}

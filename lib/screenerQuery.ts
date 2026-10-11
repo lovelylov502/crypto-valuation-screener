@@ -1,7 +1,7 @@
 import type { ScreenerResponse } from "./types";
 import { defaultPreferences, type WorkspacePreferences } from "./workspacePreferences";
 import { compareTableValues, matchesRange } from "./screenerFilters";
-import { holderAmount, holderMultiple, protocolMultiple } from "./valuationMetrics";
+import { referenceMultiple, referenceMultiples, referenceReading } from "./referenceMetrics";
 import { matchesAvailability, metricCoverage, visibleMetricCoverage } from "./metricCoverage";
 import { sortValue } from "./screenerSort";
 import { REVENUE_COLUMN_DAYS } from "./screenerColumns";
@@ -9,6 +9,7 @@ import { revenueTrend } from "./revenueTrend";
 import { revenueReading } from "./revenueReading";
 
 export interface ScreenerPage extends ScreenerResponse {
+  referenceMultiples: Record<string, ReturnType<typeof referenceMultiples>>;
   pagination: { page: number; size: number; total: number; filtered: number; favorites: number };
   coverage: ReturnType<typeof metricCoverage>&{capital:WorkspacePreferences["capital"];window:WorkspacePreferences["coverageWindow"]};
   visibleCoverage: ReturnType<typeof visibleMetricCoverage>;
@@ -23,15 +24,15 @@ export function queryScreener(data: ScreenerResponse, prefs: WorkspacePreference
     if (q && !`${c.name} ${c.symbol ?? ""} ${c.slug}`.toLocaleLowerCase().includes(q)) return false;
     if (prefs.view === "favorites" && !saved.has(c.slug)) return false;
     if ((prefs.growingOnly || prefs.view === "growth") && !(revenueTrend(c, prefs.rangeWindow).delta! > 0)) return false;
-    if ((prefs.holderOnly || prefs.view === "holder") && !(holderAmount(c, prefs.rangeWindow)! > 0)) return false;
+    if ((prefs.holderOnly || prefs.view === "holder") && !(referenceReading(c, "holders", prefs.rangeWindow).amount! > 0)) return false;
     if (prefs.view === "issues" && !c.opportunities.dataIssues.length) return false;
     if (prefs.category && c.category !== prefs.category) return false;
     if (prefs.hideDilution && c.highDilution) return false;
     if (prefs.verifiedOnly && c.identityStatus !== "verified") return false;
     if (!matchesAvailability(c, prefs.available, prefs.capital, prefs.coverageWindow, false)) return false;
     return matchesRange(c.mcap, prefs.minMcap, prefs.maxMcap)
-      && matchesRange(protocolMultiple(c, prefs.rangeWindow, prefs.capital), 0, prefs.maxPr)
-      && matchesRange(holderMultiple(c, prefs.rangeWindow, prefs.capital), 0, prefs.maxPhr);
+      && matchesRange(referenceMultiple(c, "revenue", prefs.rangeWindow, prefs.capital), 0, prefs.maxPr)
+      && matchesRange(referenceMultiple(c, "holders", prefs.rangeWindow, prefs.capital), 0, prefs.maxPhr);
   });
   const days = REVENUE_COLUMN_DAYS[prefs.sortKey as keyof typeof REVENUE_COLUMN_DAYS];
   const value = (c: typeof rows[number]) => {
@@ -52,7 +53,9 @@ export function queryScreener(data: ScreenerResponse, prefs: WorkspacePreference
     const gecko = c.geckoId ?? cmcGecko.get(c.cmcId);
     return gecko ? [`gecko:${gecko}`] : c.cmcId ? [`cmc:${c.cmcId}`] : [];
   }));
-  return { ...data, coins: rows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+  const pageRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  return { ...data, coins: pageRows,
+    referenceMultiples: Object.fromEntries(pageRows.map(c => [c.slug, referenceMultiples(c, prefs.capital)])),
     pagination: { page: currentPage, size: pageSize, total: data.coins.length, filtered: rows.length, favorites: data.coins.filter(c => saved.has(c.slug)).length },
     coverage, visibleCoverage: visibleMetricCoverage(rows, prefs.capital, prefs.columns),
     universe: { projects: data.coins.length, linkedTokens: tokens.size, withRevenue: coverage.revenue, withHolder: coverage.holder },

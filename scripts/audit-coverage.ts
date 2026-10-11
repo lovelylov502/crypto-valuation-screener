@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { collectionCoverage, collectionErrors } from "../lib/collectionQuality";
 import { revenueReading } from "../lib/revenueReading";
+import { referenceMultiples } from "../lib/referenceMetrics";
 import { fundamentalErrors } from "../lib/fundamentalContract";
 import { DEPLOY_CONTRACT } from "./deploy-contract.mjs";
 import type { CoinScored, ScreenerResponse } from "../lib/types";
@@ -51,13 +52,20 @@ async function read(url: string): Promise<any> {
   }
 }
 
+export function referenceApiErrors(page: ScreenerPage): string[] {
+  const expected = Object.fromEntries(page.coins.map(c => [c.slug, referenceMultiples(c, page.coverage.capital)]));
+  return objectHash(page.referenceMultiples ?? null) === objectHash(expected) ? [] : ["source_reference_values_changed"];
+}
+
 async function allPages() {
   for (let attempt = 0; attempt < 3; attempt++) {
     const first = await read(`${base}/api/screener?size=200&page=1`) as ScreenerPage;
+    if (referenceApiErrors(first).length) throw new Error("API reference ratios differ from displayed source amounts");
     const coins = [...first.coins];
     let changed = false;
     for (let page = 2; coins.length < first.pagination.total; page++) {
       const next = await read(`${base}/api/screener?size=200&page=${page}`) as ScreenerPage;
+      if (referenceApiErrors(next).length) throw new Error("API reference ratios differ from displayed source amounts");
       if (next.updatedAt !== first.updatedAt || next.pagination.total !== first.pagination.total || next.publication?.published?.id !== first.publication?.published?.id) { changed = true; break; }
       if (objectHash(next.publication?.published ?? null) !== objectHash(first.publication?.published ?? null) || objectHash(next.pipeline ?? null) !== objectHash(first.pipeline ?? null)) throw new Error("API proof changed within the same publication");
       if (next.scoreVersion !== first.scoreVersion || objectHash(next.sources) !== objectHash(first.sources) || objectHash(next.collection ?? null) !== objectHash(first.collection ?? null)) throw new Error("API source accounting changed within the same publication");
@@ -70,14 +78,14 @@ async function allPages() {
 }
 
 export function apiArchiveErrors(first: ScreenerPage, coins: CoinScored[], archived: ScreenerResponse): string[] {
-  const errors: string[] = [];
+  const errors: string[] = referenceApiErrors(first);
   const archivedCoins = new Map(archived.coins.map(c => [c.slug, c]));
   if (archived.updatedAt !== first.updatedAt || archived.coins.length !== coins.length) errors.push("published archive identity differs from API");
   for (const coin of coins) if (objectHash(coin) !== objectHash(archivedCoins.get(coin.slug) ?? null)) errors.push(`published bytes changed:${coin.slug}`);
   if (objectHash(first.sources) !== objectHash(archived.sources) || objectHash(first.collection ?? null) !== objectHash(archived.collection ?? null)) errors.push("API source accounting differs from archive");
   if (archived.pipeline || first.pipeline) {
     if (objectHash(first.pipeline ?? null) !== objectHash(archived.pipeline ?? null)) errors.push("API pipeline proof differs from archive");
-    const { pagination, coverage, visibleCoverage, universe, publication, ...page } = first;
+    const { pagination, coverage, visibleCoverage, universe, publication, referenceMultiples: references, ...page } = first;
     const reconstructed = { ...page, coins } as ScreenerResponse;
     errors.push(...pipelineIntegrityErrors(reconstructed), ...scopedSourceErrors(first.sources, coins));
     if (pipelineOutputHash(reconstructed) !== pipelineOutputHash(archived)) errors.push("API snapshot differs from replay-bound archive");
