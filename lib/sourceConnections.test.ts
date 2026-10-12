@@ -55,7 +55,7 @@ it("counts missing holder components while excluding explicitly double-counted r
   expect(periods?.[7]).toEqual({ total: 10, reported: 1, expected: 2 });
   expect(periods?.[365]).toEqual({ total: null, reported: 0, expected: 2 });
 });
-it("captures and replays registry connections and raw holder windows only in revision 7", async () => {
+it("captures and replays source connections according to their acquisition revision", async () => {
   vi.useFakeTimers(); vi.setSystemTime(at);
   const i = chainInputs(), chain = i.revenue[0];
   const network = () => vi.stubGlobal("fetch", async (input: string | URL | Request) => {
@@ -68,7 +68,7 @@ it("captures and replays registry connections and raw holder windows only in rev
       : { protocols: u.pathname.includes("dexs") ? [{ slug: "unrelated", name: "Unrelated" }] : [{ ...chain, total7d: 70 }], totalDataChartBreakdown: [] };
     return Response.json(body);
   });
-  for (const revision of [6, 7, 8] as const) {
+  for (const revision of [6, 7, 8, 9] as const) {
     network();
     const pending = captureSourceBundle(at, null, () => collectCoinInputs(), undefined, 2, revision);
     await vi.runAllTimersAsync();
@@ -77,6 +77,7 @@ it("captures and replays registry connections and raw holder windows only in rev
     expect(captured.value?.providerHolderWindows).toBe(revision >= 7 ? true : undefined);
     expect(captured.value?.chainIdentities?.[0]?.gecko_id).toBe(revision >= 7 ? "near" : undefined);
     expect(captured.value?.recoveredHolders).toEqual(revision >= 8 ? [] : undefined);
+    expect(captured.value?.sourceIdentitiesOnly).toBe(revision >= 9 ? true : undefined);
     vi.stubGlobal("fetch", () => { throw new Error("Offline only"); });
     expect(await replaySourceBundle(captured.bundle, () => collectCoinInputs())).toEqual(captured.value);
     const c = normalizeCoinInputs(captured.value!).find(c => c.slug === "near")!;

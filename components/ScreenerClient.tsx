@@ -28,8 +28,24 @@ import { CollectionStatus } from "./CollectionStatus";
 import { publicationComparisonSummary } from "@/lib/collectionHealth";
 import { ThemeSwitch } from "./ThemeSwitch";
 import { metricStatus } from "@/lib/metricStatus";
+import { version as APP_VERSION } from "@/package.json";
 
 const FAVORITES_KEY = "crypto-valuation-favorites-v1";
+
+function MaximumMultipleInput({ value, label, onChange }: { value: number; label: string; onChange: (value: number) => void }) {
+  const display = (n: number) => n > 0 ? String(n) : "";
+  const [text, setText] = useState(() => display(value));
+  useEffect(() => { setText(display(value)); }, [value]);
+  return <input aria-label={label} type="number" inputMode="decimal" step="any" min="0" placeholder="제한 없음" value={text}
+    onChange={e => {
+      setText(e.target.value);
+      if (e.target.validity.badInput) return;
+      const next = e.target.valueAsNumber;
+      onChange(Number.isFinite(next) && next > 0 ? next : 0);
+    }}
+    onBlur={() => setText(display(value))}
+  />;
+}
 
 export function ScreenerClient({ initialData }: { initialData: ScreenerPage | null }) {
   const [prefs, setPrefs] = useState(defaultPreferences);
@@ -179,7 +195,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
     </div>
     {!rows.length && <div className="empty-state"><Search size={26}/><h3>{!data ? "자료를 준비하고 있습니다" : prefs.view === "favorites" && !favorites.size ? "별표로 관심종목을 모아 보세요" : "조건에 맞는 종목이 없습니다"}</h3><p>{!data ? "공개 자료 응답을 기다립니다." : "검색어 또는 필터 조건을 조절하세요."}</p><button className="button" onClick={!data ? refresh : resetFilters}>{!data ? "다시 확인" : "조건 초기화"}</button></div>}
     <div className="table-legend"><span><b className="source-badge">제공처 집계</b> 제공처 기간 집계 · 완료일 이력과 구분</span><span><b>자료 부족</b> 기간 이력 미확보</span><span><b>미연결</b> 원천 자료 미연결</span></div>
-    <div className="scan-footer"><p>원천 참고 배수 · 짧은 기간은 연환산 · 제공처 집계와 원천 1년 금액은 별도 표시</p><Pagination total={total} page={currentPage} size={pageSize} position="top" onPage={goPage} onSize={s => { setPageSize(s); setPage(1); }}/></div>
+    <div className="scan-footer"><p>원천 참고 배수 · 짧은 기간은 연환산 · 제공처 집계와 원천 1년 금액은 별도 표시 · <span aria-label="앱 버전">{`v${APP_VERSION}`}</span></p><Pagination total={total} page={currentPage} size={pageSize} position="top" onPage={goPage} onSize={s => { setPageSize(s); setPage(1); }}/></div>
     <span className="sr-only" role="status" aria-live="polite">{status}</span>
 
     {popup === "columns" && <SettingsDialog title="열 표시" wide onClose={() => setPopup(null)} headerAction={<button className="text-button" onClick={() => { setPrefs(p => withVisibleColumns(p, [...DEFAULT_VISIBLE_COLUMNS])); setStatus("기본 열을 복원했습니다."); }}><RotateCcw size={15}/>기본 열 복원</button>}><DisplaySettings columns={prefs.columns} onChange={columns => setPrefs(p => withVisibleColumns(p, columns))} onStatus={setStatus}/><button className="button export-results" disabled={exporting || !data} onClick={() => void exportResults()}><Download size={15}/>{exporting ? "전체 결과 준비 중…" : "검색 결과 전체 내보내기"}</button><p role="status">{exporting || status.includes("내보") ? status : ""}</p></SettingsDialog>}
@@ -192,7 +208,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
         <p id="source-amount-hint" className="source-amount-hint">{prefs.minSourceAmount === null ? "금액을 입력하면 선택한 기간의 원천 수익으로 좁힙니다." : `최근 ${windowLabel(prefs.rangeWindow)} ${prefs.sourceMetric === "holders" ? "Holders Revenue" : "Revenue"}가 $${prefs.minSourceAmount.toLocaleString("en-US", { maximumFractionDigits: 20 })}를 초과하는 종목만 표시합니다.`}</p>
         <p id="source-amount-note" className="source-amount-note">선택 기간의 원천 합계 기준 · 금액 조건 적용 시 미확인 종목 제외</p>
       </fieldset>
-      <div className="multiple-range"><label>P/R 최대 배수<span><input aria-label="P/R 최대 배수" type="number" min="0" placeholder="제한 없음" value={prefs.maxPr || ""} onChange={e => update("maxPr", Math.max(0, Number(e.target.value)))}/><span>배</span></span></label><label>P/HR 최대 배수<span><input aria-label="P/HR 최대 배수" type="number" min="0" placeholder="제한 없음" value={prefs.maxPhr || ""} onChange={e => update("maxPhr", Math.max(0, Number(e.target.value)))}/><span>배</span></span></label></div>
+      <div className="multiple-range"><label>P/R 최대 배수<span><MaximumMultipleInput label="P/R 최대 배수" value={prefs.maxPr} onChange={n => update("maxPr", n)}/><span>배</span></span></label><label>P/HR 최대 배수<span><MaximumMultipleInput label="P/HR 최대 배수" value={prefs.maxPhr} onChange={n => update("maxPhr", n)}/><span>배</span></span></label></div>
       <fieldset className="filter-section"><legend>함께 적용할 조건</legend><label className="inline-check"><input type="checkbox" checked={prefs.growingOnly} onChange={e => update("growingOnly", e.target.checked)}/>직전 동일 기간보다 수익 증가</label><label className="inline-check"><input type="checkbox" checked={prefs.holderOnly} onChange={e => update("holderOnly", e.target.checked)}/>해당 기간의 원천 홀더 금액 있음</label><label className="inline-check"><input type="checkbox" checked={prefs.view === "favorites"} onChange={e => update("view", e.target.checked ? "favorites" : "all")}/>관심종목만</label></fieldset>
       {prefs.view === "issues" && <p>기존 ‘자료 확인 필요’ 조건 적용 중 <button className="text-button" onClick={() => update("view", "all")}>해제</button></p>}
       <label className="sidebar-label">섹터<select aria-label="섹터" value={prefs.category} onChange={e => update("category", e.target.value)}><option value="">모든 섹터</option>{data?.categories.map(c => <option key={c} value={c}>{c}</option>)}</select></label>

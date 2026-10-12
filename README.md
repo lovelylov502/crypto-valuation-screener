@@ -8,6 +8,8 @@ DefiLlama 원천 금액과 토큰 시총으로 참고 배수를 계산하고, �
 **🌐 라이브: https://crypto-valuation-screener.vercel.app**
 데이터: [DefiLlama](https://defillama.com) · [CoinMarketCap Keyless](https://coinmarketcap.com/api/documentation/pro-api-reference/keyless-public-api) · [CoinGecko](https://coingecko.com)
 
+앱 버전: **v0.2.0**. 변경 내역은 [CHANGELOG.md](./CHANGELOG.md)에 기록한다. 화면 하단과 `/api/status`의 `appVersion`은 `package.json`의 같은 버전을 사용한다. 데이터 공개본 ID·수집 revision·계산 규칙 버전은 각각 별도로 보존한다.
+
 ## Current product and data engine
 
 - The checked-in economic release is a compatible paused reader: pipeline/journal 1/2 and legacy acquisition replay remain supported, with economic writing inactive until a separately verified reader deployment authorizes activation. The existing four-slot scheduler and historical Phase-A proof remain preserved. [PUBLICATION.md](./docs/PUBLICATION.md) owns scheduling; [economic implementation evidence](./docs/ECONOMIC_DECISION_IMPLEMENTATION_2026-10-08.md) separates local tests, conditional source assessment and the required future 72-hour operating observation.
@@ -29,6 +31,7 @@ DefiLlama 원천 금액과 토큰 시총으로 참고 배수를 계산하고, �
 - The union of protocol directory, parent metadata, fees, revenue, holder and DEX lists is retained without a market-cap cutoff. Parent token metadata recovers AERO. Details show an independent DefiLlama link and a market link. CMC takes priority for the market link; an exact CoinGecko ID is the fallback. Missing identities stay explicitly unlinked. Verified URLs remain usable independently of a transient quote failure.
 - Every explicit CoinGecko ID is queried in batches, regardless of market-cap rank; canonical CMC IDs missing from its discovery list are queried directly. Lookup outcomes and field sources distinguish provider omissions, identity conflicts and request failures. Partially reported group amounts remain visible with component counts, without entering multiples.
 - Market acquisition revision 5 verifies CMC contracts or unique full names rather than equating vendor slugs. It prefers the identified CoinGecko quote, uses the provider of a positive market cap for price and supply, and retains verified CMC fallback. Inactive, stale and inconsistent quote fields are excluded with reasons; original earlier captures retain their exact replay semantics. See [source reference multiples](docs/SOURCE_REFERENCE_MULTIPLES.md).
+- Revision 9 requires a source CMC ID or matching source contract for new CMC links. Full-name matches alone cannot supply capital. Failed CMC requests retain a previously verified ID only within unchanged, source-backed identity scope; current quote failures never reuse old prices. Parent continuity uses the parent's token rather than unrelated product IDs. Revision 8 and earlier archives still replay exactly.
 - Every response accounts for source membership, every requested quote ID, available provider amounts and financial invariants. Original daily history and source-reference arithmetic are independent of economic approval; unknown definitions remain labeled and do not enter reviewed scoring. Supplementary request deferrals remain explicit.
 - The homepage is a static shell and never waits for upstream collection. The API reads a persisted, hash-verified snapshot; scheduled/manual GitHub Actions share one publication gate and permanent Release journal. Failed candidates cannot replace the last verified snapshot. Original timestamps remain visible during failures and UTC rollover. The browser polls a small status endpoint every ten minutes while visible and loads new rows when the published ID changes. See [PUBLICATION.md](./docs/PUBLICATION.md).
 - `npm run audit:coverage` verifies every live row against the persisted archive and financial contracts. New pipeline releases are reproduced from their hashed original source bundle, without later source queries changing the evidence. Legacy releases retain their witness/live-check paths. Protected historical operation is explicitly distinguished from fresh recovery. `SCREENER_BASE_URL` and `SCREENER_AUDIT_DIR` select the server and evidence directory.
@@ -60,6 +63,10 @@ npm run deploy:production
 ```
 
 이 명령은 canonical 실경로·Git fetch/push 원격·로컬 Vercel 연결, clean `main`과 `origin/main` 일치, 인증된 원격 project/team을 먼저 검사하고 테스트·타입 검사·프로덕션 빌드를 통과한 뒤 배포한다. 마지막에는 canonical `/`와 `/api/screener`를 다시 읽어 고급 UI와 API 계약을 확인한다. 전체 정책과 배포 없는 점검 명령은 [프로덕션 배포 안전 규칙](./docs/DEPLOYMENT.md)에 있다.
+
+## 버전 기록
+
+기능·오류 수정은 별도 브랜치에서 재현 검사와 변경 내역을 작성하고 커밋한다. 출시할 때 `npm version <버전> --no-git-tag-version --ignore-scripts`로 패키지 버전을 함께 올린다. 검증한 커밋을 `main`에 반영·푸시하고 위 배포 절차를 통과한 뒤, 같은 커밋에 `v<버전>` 태그를 붙여 푸시한다. 시세 연결이나 수집 방식을 바꿨다면 새 공개본의 원천 재현과 실제 화면까지 확인한다. 과거 데이터 태그 `data-*`를 앱 버전 태그로 대체하지 않는다.
 
 ## 면책
 

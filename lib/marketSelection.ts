@@ -10,7 +10,7 @@ export const addressKey = (v: unknown) => {
 };
 
 /** Vendor slugs are not asset IDs. A contract match outranks name matches and stale directory IDs. */
-export function resolveCmcAsset(rows: Row[], ids: number[], addresses: string[], name: string, symbol: string | null, discoveryComplete: boolean): Row | undefined {
+export function resolveCmcAsset(rows: Row[], ids: number[], addresses: string[], name: string, symbol: string | null, discoveryComplete: boolean, allowNameMatch = true): Row | undefined {
   if (ids.length > 1) return undefined;
   const keys = new Set(addresses.map(addressKey).filter(Boolean));
   const candidates = rows.filter(r => !symbol || text(r.symbol).toUpperCase() === symbol.toUpperCase());
@@ -21,7 +21,7 @@ export function resolveCmcAsset(rows: Row[], ids: number[], addresses: string[],
   if (exactContracts.length > 1) return undefined;
   const numeric = candidates.find(r => r.id === ids[0]);
   if (numeric && compatible(numeric)) return numeric;
-  if (!discoveryComplete) return undefined;
+  if (!discoveryComplete || !allowNameMatch) return undefined;
   const named = candidates.filter(r => nameKey(r.name) === nameKey(name) && compatible(r));
   return named.length === 1 ? named[0] : undefined;
 }

@@ -91,3 +91,25 @@ it("transport identity loss or mismatch cannot be auto-reviewed, while currentpo
  c.cmcId=2;c.marketSources!.cmc={...c.marketSources!.cmc!,id:"2",status:"received",available:["price"]};c.marketSources!.requests!.cmc=[c.marketSources!.cmc];
  expect(failedIdentityChanges(input([c]),old,[{slug:c.slug,issue:"identity_changed"}])).toEqual([]);
 });
+it("withdraws an unsupported name guess without disguising a failed source-proved connection",()=>{
+ const old=input([row(1)]),c=row(1,true);c.cmcId=null;c.identityStatus="review";
+ c.cmcIdentity={basis:"unconfirmed",address:null,sourceIdentifiersPresent:false};
+ expect(failedIdentityChanges(input([c]),old,[{slug:c.slug,issue:"identity_changed"}])).toEqual([]);
+ c.cmcIdentity.sourceIdentifiersPresent=true;
+ expect(failedIdentityChanges(input([c]),old,[{slug:c.slug,issue:"identity_changed"}])).toHaveLength(1);
+ c.cmcIdentity.sourceIdentifiersPresent=false;
+ old.coins[0].cmcIdentity={basis:"source-id",address:null,sourceIdentifiersPresent:true};
+ expect(failedIdentityChanges(input([c]),old,[{slug:c.slug,issue:"identity_changed"}])).toHaveLength(1);
+});
+it("accepts a current same-scope contract correction despite a failed old CMC lookup",()=>{
+ const old=input([row(1)]),c=row(1,true);c.cmcId=2;
+ c.cmcIdentity={basis:"contract",address:"0x1111111111111111111111111111111111111111",sourceIdentifiersPresent:true};
+ const current={id:"2",status:"received" as const,observedAt:at,available:["price" as const]};
+ c.marketSources!.requests!.cmc=[c.marketSources!.cmc!,current];c.marketSources!.cmc=current;
+ const changes=[{slug:c.slug,issue:"identity_changed"}];
+ expect(failedIdentityChanges(input([c]),old,changes)).toEqual([]);
+ c.geckoId="different";
+ expect(failedIdentityChanges(input([c]),old,changes)).toHaveLength(1);
+ c.geckoId=null;c.cmcIdentity.address=null;
+ expect(failedIdentityChanges(input([c]),old,changes)).toHaveLength(1);
+});

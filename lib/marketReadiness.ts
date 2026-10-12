@@ -80,6 +80,11 @@ export function failedIdentityChanges(data:ScreenerResponse,baseline:ScreenerRes
  return changes.filter(change=>{
   if(change.issue!=="identity_changed")return false;
   const old=baseline?.coins.find(c=>c.slug===change.slug),c=data.coins.find(c=>c.slug===change.slug);
+  // New captures withdraw guesses without erasing a source-proved token. A current
+  // contract match can correct an old vendor ID even if that old quote failed.
+  if(old&&c&&!old.cmcIdentity&&c.cmcIdentity?.basis==="unconfirmed"&&!c.cmcIdentity.sourceIdentifiersPresent&&old.geckoId===null&&c.cmcId===null&&c.identityStatus==="review")return false;
+  if(old&&c&&c.cmcIdentity?.basis==="contract"&&!!c.cmcIdentity.address&&c.identityStatus==="verified"&&c.geckoId===old.geckoId&&c.marketSources?.cmc?.status==="received"&&
+    JSON.stringify([...(c.sourceSlugs??[c.slug])].sort())===JSON.stringify([...(old.sourceSlugs??[old.slug])].sort()))return false;
   return !!old&&!!c&&(["cmc","gecko"] as const).some(vendor=>{
    const id=old.marketSources?.[vendor]?.id;if(!id)return false;
    const current=c.marketSources?.[vendor];

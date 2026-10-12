@@ -5,6 +5,7 @@ import economicIdentityV1 from "../lib/economic-policy-v1.identity.json" with {t
 import economicIdentityV2 from "../lib/economic-policy-v2.identity.json" with {type:"json"};
 import economicIdentityV3 from "../lib/economic-policy-v3.identity.json" with {type:"json"};
 import {readJsonText,jsonTransportErrors} from "../lib/jsonTransport.mjs";
+import packageJson from "../package.json" with {type:"json"};
 
 const ADVANCED_UI_MARKERS = ["화면 모드", "tovenit-theme", "밝게", "어둡게", "DefiLlama 전체 종목", "열 표시", "필터", "연결 토큰", "배수 분자", "P/R · 24시간", "P/HR · 24시간", "P/R · 30일", "P/HR · 30일", "지표 안내", "최신 자료 확인", "page-size-top", "scan-table", "수익 정렬 기준", "수익 분류·검토", "원천 참고 P/R"];
 const LEGACY_UI_MARKERS = ["저평가 80+", "고평가 20 이하", "P/S 참고선", "P/S · 30일", "P/S · 사업 매출", 'aria-label="결과 정렬"'];
@@ -199,10 +200,11 @@ export async function verifyProduction() {
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
       const api = await readPath("/api/screener", attempt);
-      const [home, named, fwa] = await Promise.all([
+      const [home, named, fwa, status] = await Promise.all([
         readPath("/", attempt),
         readPath("/api/screener?prefs=" + encodeURIComponent(JSON.stringify({ search: "venice" })), attempt),
         readPath("/api/screener?prefs=" + encodeURIComponent(JSON.stringify({ search: "fwa" })), attempt),
+        readPath("/api/status", attempt),
       ]);
       const apiInspection = inspectApi(api);
       // The static shell has no data payload; all rows now come from one persisted API snapshot.
@@ -210,6 +212,7 @@ export async function verifyProduction() {
       const namedInspection = inspectApi(named, false);
       const fwaInspection = inspectApi(fwa, false);
       lastErrors = [...homeInspection.errors, ...apiInspection.errors, ...namedInspection.errors, ...fwaInspection.errors];
+      if (status.status !== 200 || JSON.parse(status.body)?.appVersion !== packageJson.version || !home.body.includes(`v${packageJson.version}`)) lastErrors.push("published app version differs from package.json");
       const publication = apiInspection.data?.publication;
       if (!publication?.published || publication.published.dataAt !== apiInspection.data?.updatedAt || publication.storeError) lastErrors.push("verified publication identity unavailable");
       for (const result of [namedInspection, fwaInspection]) if (publicationProofKey(result.data) !== publicationProofKey(apiInspection.data)) lastErrors.push("API queries use different publication proofs");
@@ -219,6 +222,7 @@ export async function verifyProduction() {
       if (lastErrors.length === 0) {
         console.log(JSON.stringify({
           path: "/",
+          appVersion: packageJson.version,
           status: home.status,
           bytes: home.bytes,
           cache: home.cache,

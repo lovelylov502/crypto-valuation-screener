@@ -403,6 +403,7 @@ export function aggregateRevenueSource(list: Json[], groupKey: (slug: string) =>
  * original HTTP response bytes are retained by the enclosing source session. */
 export interface CoinInputs {
   marketRevision?: 2 | 3;
+  sourceIdentitiesOnly?: true;
   chainIdentities?: Json[];
   providerHolderWindows?: true;
   recoveredHolders?: [string, string][];
@@ -414,7 +415,7 @@ export interface CoinInputs {
   revenueHistories: Record<string, RevenueHistory>; holderHistories: Record<string, RevenueHistory>;
   recoveredRevenue: [string,string][]; observations: SourceObservation[];
   priorCmcTargets: [number,string[]][];
-  priorCmcIdentities?: {slug:string;sourceSlugs:string[];name:string;symbol:string|null;geckoId:string|null;cmcId:number;cmcSlug:string|null;baselineAt:string}[];
+  priorCmcIdentities?: {slug:string;sourceSlugs:string[];name:string;symbol:string|null;geckoId:string|null;cmcId:number;cmcSlug:string|null;baselineAt:string;address?:string|null}[];
 }
 
 /** Only the registry's own token belongs to an explicitly identified chain fee row. */
@@ -500,12 +501,13 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
   ]);
 
   const inputs:CoinInputs = {asOf,...(sourceAcquisitionRevision()>=6?{marketRevision:3 as const}:sourceAcquisitionRevision()>=5?{marketRevision:2 as const}:{}),protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,parents:config.parentProtocols,stablecoins:stablecoins.peggedAssets,
+    ...(sourceAcquisitionRevision()>=9?{sourceIdentitiesOnly:true as const}:{}),
     ...(sourceAcquisitionRevision()>=7?{chainIdentities,providerHolderWindows:true as const}:{}),
     ...(sourceAcquisitionRevision()>=8?{recoveredHolders:[...recoveredHolders].sort(([a],[b])=>a.localeCompare(b))}:{}),
     cmc:[...cmc.byId.values()].sort((a,b)=>Number(a.id)-Number(b.id)),cmcLookups:[...cmcLookups].sort(([a],[b])=>a-b),cmcDiscoveryComplete:cmc.discoveryComplete !== false,
     gecko:[...gecko.byId.values()].sort((a,b)=>String(a.id).localeCompare(String(b.id))),geckoLookups:[...gecko.lookups].sort(([a],[b])=>a.localeCompare(b)),
     revenueHistories,holderHistories,recoveredRevenue:[...recoveredRevenue].sort(([a],[b])=>a.localeCompare(b)),observations:[...observations],priorCmcTargets,
-    ...(sourceAcquisitionRevision()>=2?{priorCmcIdentities:(baseline?.coins??[]).flatMap(c=>c.identityStatus==="verified"&&c.cmcId!==null?[{slug:c.slug,sourceSlugs:c.sourceSlugs??[c.slug],name:c.name,symbol:c.symbol,geckoId:c.geckoId,cmcId:c.cmcId,cmcSlug:c.cmcSlug,baselineAt:baseline!.updatedAt}]:[])}:{})};
+    ...(sourceAcquisitionRevision()>=2?{priorCmcIdentities:(baseline?.coins??[]).flatMap(c=>c.identityStatus==="verified"&&c.cmcId!==null?[{slug:c.slug,sourceSlugs:c.sourceSlugs??[c.slug],name:c.name,symbol:c.symbol,geckoId:c.geckoId,cmcId:c.cmcId,cmcSlug:c.cmcSlug,baselineAt:baseline!.updatedAt,...(sourceAcquisitionRevision()>=9?{address:c.cmcIdentity?.address??null}:{})}]:[])}:{})};
   // A broad discovery row outside this source universe cannot taint its rows.
   const linkedCmcIds=new Set(normalizeCoinInputs(inputs).flatMap(c=>c.marketSources?.requests?.cmc.map(q=>q.id) ?? []));
   for(const row of inputs.cmc) if(linkedCmcIds.has(String(row.id)) && Array.isArray(row.quoteInvalidFields) && row.quoteInvalidFields.length && typeof row.quoteSchemaUrl === "string" && row.quoteSchemaUrl.includes("/listings/latest")) {
@@ -636,9 +638,11 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
 
     const isParent = k.startsWith("parent#");
     const name = isParent ? str(parent?.name) ?? prettyParent(k) : (str(rep.name) ?? k);
+    let continuityMembers = identityMembers;
     if (parentWithoutToken) { geckoId = null; symbol = null; dlMcap = null; }
     if (declaredParent) {
       const matching = identityMembers.filter(m => m === parent || parentGeckoId && str(m.gecko_id) === parentGeckoId || parentAddress && addressKey(m.address) === parentAddress);
+      if (inputs.sourceIdentitiesOnly) continuityMembers = matching;
       const childIds = new Set(matching.flatMap(m => str(m.gecko_id) ? [String(m.gecko_id)] : []));
       const candidate = parentGeckoId ?? (childIds.size === 1 ? [...childIds][0] : null);
       const row = candidate ? gecko.byId.get(candidate) : undefined;
@@ -655,16 +659,26 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
     const vol = volAgg.get(k);
     // CoinGecko는 명시적 gecko_id만 사용한다. symbol-only 폴백은 동명이인 오매칭 위험 때문에 금지.
     const g = geckoId ? gecko.byId.get(geckoId) : undefined;
+    const cmcIds = declaredParent ? parentCmcId! > 0 ? [parentCmcId!] : [] : [...memberCmcIds];
+    const addresses = declaredParent ? parentAddress ? [parentAddress] : [] : [...memberAddresses];
     const cmcRow = parentWithoutToken ? undefined : parentAgreement ? declaredCmc : revisedMarket
       ? resolveCmcAsset(inputs.marketRevision === 3 && symbol ? cmc.bySymbol.get(symbol.toLowerCase()) ?? [] : cmcRows,
-        declaredParent ? parentCmcId! > 0 ? [parentCmcId!] : [] : [...memberCmcIds], declaredParent ? parentAddress ? [parentAddress] : [] : [...memberAddresses],
-        str(g?.name) ?? name, symbol, inputs.cmcDiscoveryComplete)
+        cmcIds, addresses, str(g?.name) ?? name, symbol, inputs.cmcDiscoveryComplete, !inputs.sourceIdentitiesOnly)
       : findCmc({ cmcIds: [...memberCmcIds], geckoId, groupKey: k, name, symbol, cmc });
     const quote = cmcQuote(cmcRow);
     const sourceSlugs = [...new Set([k, ...members.map(m => String(m.slug))])];
     const prior=inputs.priorCmcIdentities?.find(c=>c.slug===k);
-    const continuity=!cmcRow&&prior&&normalize(prior.name)===normalize(name)&&prior.geckoId===geckoId&&memberGeckoIds.size<=1&&memberCmcIds.size<=1&&
-      (!memberCmcIds.size||memberCmcIds.has(prior.cmcId))&&memberSymbols.size<=1&&(!symbol||symbol.toUpperCase()===prior.symbol?.toUpperCase())&&(!str(g?.symbol)||str(g?.symbol)!.toUpperCase()===prior.symbol?.toUpperCase())&&
+    const continuityGeckoIds = inputs.sourceIdentitiesOnly ? new Set(declaredParent ? geckoId?[geckoId]:[] : continuityMembers.flatMap(m=>str(m.gecko_id)?[String(m.gecko_id)]:[])) : memberGeckoIds;
+    const continuityCmcIds = inputs.sourceIdentitiesOnly && declaredParent ? new Set([...cmcIds,...continuityMembers.flatMap(m=>parentAddress&&addressKey(m.address)===parentAddress&&Number(m.cmcId)>0?[Number(m.cmcId)]:[])]) : memberCmcIds;
+    const continuitySymbols = inputs.sourceIdentitiesOnly && declaredParent ? new Set(parentSymbol?[parentSymbol]:continuityMembers.flatMap(m=>str(m.symbol)&&m.symbol!=="-"?[String(m.symbol).toUpperCase()]:[])) : memberSymbols;
+    const sourceIdentifiersPresent = !!(continuityGeckoIds.size || cmcIds.length || addresses.length);
+    const unchangedAddress = !inputs.sourceIdentitiesOnly || !prior?.address || !addresses.length || addresses.map(addressKey).includes(prior.address);
+    // Older verified snapshots have no stored contract. Retain within one current
+    // source contract and unchanged scope, then record the address for future checks.
+    const currentIdentityProof = !inputs.sourceIdentitiesOnly || prior && (continuityCmcIds.has(prior.cmcId) || !!geckoId && geckoId===prior.geckoId || !!prior.address && addresses.map(addressKey).includes(prior.address)
+      || !prior.address && new Set(addresses.map(addressKey).filter(Boolean)).size===1);
+    const continuity=!cmcRow&&(!inputs.sourceIdentitiesOnly||!parentWithoutToken)&&unchangedAddress&&currentIdentityProof&&prior&&normalize(prior.name)===normalize(name)&&prior.geckoId===geckoId&&continuityGeckoIds.size<=1&&continuityCmcIds.size<=1&&
+      (!continuityCmcIds.size||continuityCmcIds.has(prior.cmcId))&&continuitySymbols.size<=1&&(!symbol||symbol.toUpperCase()===prior.symbol?.toUpperCase())&&(!str(g?.symbol)||str(g?.symbol)!.toUpperCase()===prior.symbol?.toUpperCase())&&
       JSON.stringify([...prior.sourceSlugs].sort())===JSON.stringify([...sourceSlugs].sort())&&cmcLookups.get(prior.cmcId)?.status==="error"?prior:undefined;
     if(continuity&&!symbol)symbol=continuity.symbol;
 
@@ -690,7 +704,7 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
       identityReason = "DefiLlama gecko_id로 토큰 연결";
     } else if (!isParent && cmcRow) {
       identityStatus = "verified";
-      identityReason = "프로젝트명·심볼과 CMC canonical 자산이 일치";
+      identityReason = inputs.sourceIdentitiesOnly ? "원천 토큰 식별자와 CMC 자산 연결 확인" : "프로젝트명·심볼과 CMC canonical 자산이 일치";
     }
     if(continuity) {identityStatus="verified";identityReason=`이전 검증본의 CMC 자산 연결 유지 · 현재 시세 조회 실패 (${continuity.baselineAt})`;}
     if (parentWithoutToken) { identityStatus = "review"; identityReason = "상위 프로젝트의 토큰 연결 미확인 · 구성상품의 가치로 배수 미산출"; }
@@ -705,7 +719,7 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
       : marketQuote([num(quote?.price), "CoinMarketCap"], [num(g?.current_price), "CoinGecko"]);
     let fdv = geckoFirst ? marketQuote([num(g?.fully_diluted_valuation), "CoinGecko"], [num(quote?.fully_diluted_market_cap), "CoinMarketCap"])
       : marketQuote([num(quote?.fully_diluted_market_cap), "CoinMarketCap"], [num(g?.fully_diluted_valuation), "CoinGecko"]);
-    const cmcId = parentWithoutToken ? null : cmcRow ? num(cmcRow.id) : declaredParent ? parentCmcId! > 0 ? parentCmcId : null : memberCmcIds.size === 1 ? [...memberCmcIds][0] : continuity?.cmcId??null;
+    const cmcId = parentWithoutToken ? null : cmcRow ? num(cmcRow.id) : inputs.sourceIdentitiesOnly&&continuity ? continuity.cmcId : declaredParent ? parentCmcId! > 0 ? parentCmcId : null : memberCmcIds.size === 1 ? [...memberCmcIds][0] : continuity?.cmcId??null;
     const fdvConflict = revisedMarket && fdv.value !== null && (cap.value ?? 0) > 0 && fdv.value < cap.value! * .95;
     if (fdvConflict) fdv = { value: null, source: null };
     const currentLookup = (vendor: "cmc" | "gecko", id: string | number | null) => {
@@ -739,6 +753,8 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
       isParent,
       identityStatus,
       identityReason,
+      ...(inputs.sourceIdentitiesOnly?{cmcIdentity:{basis:cmcRow?(!!addressKey((cmcRow.platform as Json|undefined)?.token_address)&&addresses.map(addressKey).includes(addressKey((cmcRow.platform as Json|undefined)?.token_address))?"contract" as const:"source-id" as const):continuity?"retained" as const:"unconfirmed" as const,
+        address:cmcRow?addressKey((cmcRow.platform as Json|undefined)?.token_address)||null:continuity?.address??(continuity?addresses.map(addressKey).find(Boolean)??null:null),sourceIdentifiersPresent}}:{}),
       ...(continuity?{identityContinuity:{provider:"CoinMarketCap" as const,id:continuity.cmcId,baselineAt:continuity.baselineAt,baselineSlug:continuity.slug}}:{}),
       capitalExclusionReason: capitalExclusion(geckoId ?? (cmcRow ? str(cmcRow.slug) : continuity?.cmcSlug??null), (cmcRow ? str(cmcRow.symbol) : g ? str(g.symbol) : null) ?? symbol, inputs.stablecoins),
       description: str(parent?.description) ?? str(rep.description),

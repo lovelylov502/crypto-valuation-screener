@@ -26,6 +26,7 @@ export interface CoinRaw {
   identityStatus: IdentityStatus;
   identityReason: string;
   identityContinuity?: {provider:"CoinMarketCap";id:number;baselineAt:string;baselineSlug:string};
+  cmcIdentity?: { basis: "source-id" | "contract" | "retained" | "unconfirmed"; address: string | null; sourceIdentifiersPresent: boolean };
   capitalExclusionReason?: string | null;
   description?: string | null;
   descriptionKo?: string | null;
