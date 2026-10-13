@@ -78,6 +78,7 @@
 .scan-workspace .scan-table > tbody > tr > td { padding:14px 8px; height:82px; min-width:66px; border-bottom:1px solid var(--color-border); text-align:center; }
 .scan-workspace .scan-table > tbody > tr > th { height:82px; border-bottom:1px solid var(--color-border); }
 .scan-workspace .scan-table > tbody > tr > .band-start { border-left:1px solid var(--color-border); }
+.scan-workspace .scan-table > tbody > .coin-row { cursor:pointer; }
 .scan-workspace .scan-table > tbody > tr:hover > :is(td,th) { background:var(--color-panel-2); }
 .scan-workspace .scan-table > tbody > .selected-coin > :is(td,th) { background:var(--color-selected); }
 .scan-workspace .coin-identity { gap:0; }

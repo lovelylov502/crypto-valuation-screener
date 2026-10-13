@@ -8,7 +8,7 @@ import type { CapitalBasis } from "@/lib/valuationMetrics";
 import { referenceMultiple, referenceReason, referenceReading, referenceReview, referenceClassification } from "@/lib/referenceMetrics";
 import { holderConditionSummary, holderTypeSummary } from "./ScreenerCells";
 import { defiLlamaUrl, marketLink } from "@/lib/coinLinks";
-import { koreanDetailDescription } from "@/lib/protocolDescriptions";
+import { koreanDetailDescription } from "@/lib/detailDescriptions";
 import { metricStatus } from "@/lib/metricStatus";
 import { protocolResearch } from "@/lib/protocolResearch";
 import { holderEconomicTypeLabel } from "@/lib/holderLabels";
