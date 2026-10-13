@@ -46,6 +46,7 @@ export type SortKey =
   | "priceChange14d"
   | "priceChange30d"
   | "priceChange60d"
+  | "priceChange90d"
   | "priceChange1y"
   | "athChangePercentage"
   | "atlChangePercentage"
@@ -97,10 +98,11 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
   { key: "holderValueTtm", label: "홀더 원천 1년", title: "DefiLlama total1y. 365일 확보 여부 미확인 · P/HR 제외 유형 포함", group: "fundamentals" },
   { key: "mcap", label: "시총", title: "유통 시가총액", group: "market" },
   { key: "totalVolume", label: "거래량 24h", title: "CoinMarketCap 24시간 거래량", group: "market" },
-  { key: "priceChange7d", label: "7일", title: "CoinMarketCap 7일 가격 변화율", group: "performance" },
-  { key: "priceChange30d", label: "30일", title: "CoinMarketCap 30일 가격 변화율", group: "performance" },
-  { key: "priceChange60d", label: "60일", title: "CoinMarketCap 60일 가격 변화율 — 가격 미발견 축 핵심", group: "performance" },
-  { key: "priceChange1y", label: "1년", title: "CoinGecko 1년 가격 변화율", group: "performance" },
+  { key: "priceChange7d", label: "가격 · 7일 %", title: "토큰 가격의 7일 변화율", group: "performance" },
+  { key: "priceChange30d", label: "가격 · 30일 %", title: "토큰 가격의 30일 변화율", group: "performance" },
+  { key: "priceChange60d", label: "가격 · 60일 %", title: "토큰 가격의 60일 변화율 · 가격 미발견 축 핵심", group: "performance" },
+  { key: "priceChange90d", label: "가격 · 90일 %", title: "토큰 가격의 90일 변화율", group: "performance" },
+  { key: "priceChange1y", label: "가격 · 1년 %", title: "토큰 가격의 1년 변화율", group: "performance" },
   { key: "athChangePercentage", label: "ATH 대비", title: "현재가의 사상 최고가 대비 변화율", group: "performance" },
   { key: "atlChangePercentage", label: "ATL 대비", title: "현재가의 사상 최저가 대비 변화율", group: "performance" },
   { key: "category", label: "섹터", title: "카테고리", group: "market" },
@@ -109,10 +111,10 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
   { key: "revenue30d", label: "수익 · 30일", title: "DefiLlama 30일 Revenue 원본 · 집계 성격과 제공처 기간 집계 여부를 별도 표시", group: "fundamentals" },
   { key: "fdv", label: "FDV", title: "완전희석가치 (CoinMarketCap 우선)", group: "market" },
   { key: "tvl", label: "TVL", title: "예치자산", group: "market" },
-  { key: "priceChange14d", label: "14일", title: "CoinGecko 14일 가격 변화율", group: "performance" },
+  { key: "priceChange14d", label: "가격 · 14일 %", title: "토큰 가격의 14일 변화율", group: "performance" },
   { key: "feesChange7d", label: "수수료 변화", title: "최근 7일 vs 직전 7일 수수료 변화 (30일 변화 보조 표시)", group: "fundamentals" },
   { key: "price", label: "가격", title: "현재 토큰 가격 · USD", group: "market" },
-  { key: "change1d", label: "24시간 %", title: "토큰 가격의 24시간 변화. 포착 조건에는 반영하지 않습니다", group: "performance" },
+  { key: "change1d", label: "가격 · 24시간 %", title: "토큰 가격의 24시간 변화율. 포착 조건에는 반영하지 않습니다", group: "performance" },
   { key: "revenue7d", label: "수익 · 7일", title: "DefiLlama 7일 Revenue 원본 · 집계 성격과 제공처 기간 집계 여부를 별도 표시", group: "fundamentals" },
   { key: "revenue90d", label: "수익 · 90일", title: "DefiLlama Revenue의 완료 UTC 90일 원본 합계", group: "fundamentals" },
   { key: "revenue1y", label: "수익 · 1년", title: "DefiLlama Revenue 원본 · 365일 미확인 제공처 집계는 원천 1년 참고값으로 별도 표시", group: "fundamentals" },

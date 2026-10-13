@@ -331,6 +331,12 @@ export function renderCell(c: CoinScored, key: SortKey, basis: CapitalBasis = "m
           {fmtPct(c.priceChange60d)}
         </span>
       );
+    case "priceChange90d":
+      return (
+        <span className={changeClass(c.priceChange90d)}>
+          {fmtPct(c.priceChange90d)}
+        </span>
+      );
     case "priceChange1y":
       return (
         <span className={changeClass(c.priceChange1y)}>

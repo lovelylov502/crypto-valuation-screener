@@ -77,6 +77,8 @@ export function sortValue(c: CoinScored, key: SortKey, basis: CapitalBasis = "mc
       return c.priceChange30d;
     case "priceChange60d":
       return c.priceChange60d;
+    case "priceChange90d":
+      return c.priceChange90d;
     case "priceChange1y":
       return c.priceChange1y;
     case "athChangePercentage":

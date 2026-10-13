@@ -8,7 +8,7 @@ DefiLlama 원천 금액과 토큰 시총으로 참고 배수를 계산하고, �
 **🌐 라이브: https://crypto-valuation-screener.vercel.app**
 데이터: [DefiLlama](https://defillama.com) · [CoinMarketCap Keyless](https://coinmarketcap.com/api/documentation/pro-api-reference/keyless-public-api) · [CoinGecko](https://coingecko.com)
 
-앱 버전: **v0.2.1**. 변경 내역은 [CHANGELOG.md](./CHANGELOG.md)에 기록한다. 화면 하단과 `/api/status`의 `appVersion`은 `package.json`의 같은 버전을 사용한다. 데이터 공개본 ID·수집 revision·계산 규칙 버전은 각각 별도로 보존한다.
+앱 버전: **v0.2.2**. 변경 내역은 [CHANGELOG.md](./CHANGELOG.md)에 기록한다. 화면 하단과 `/api/status`의 `appVersion`은 `package.json`의 같은 버전을 사용한다. 데이터 공개본 ID·수집 revision·계산 규칙 버전은 각각 별도로 보존한다.
 
 ## Current product and data engine
 

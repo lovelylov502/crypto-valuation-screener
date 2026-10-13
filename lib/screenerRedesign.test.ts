@@ -88,6 +88,19 @@ describe("server-side discovery", () => {
     expect(parseWorkspace(JSON.stringify({ columns: ["phr90d", "price"], sortKey: "phr90d", sortDir: "asc" })).columns).toEqual(["phr90d", "price"]);
     expect(parseWorkspace(JSON.stringify({ view: "growth" }))).toMatchObject({ view: "all", growingOnly: true });
   });
+  it("restores price-period columns and sorts by 90-day price change with missing values last", () => {
+    const saved = { ...defaultPreferences(), columns: ["priceChange30d", "priceChange90d", "priceChange1y"], sortKey: "priceChange90d", sortDir: "desc" };
+    const prefs = parseWorkspace(JSON.stringify(saved));
+    expect(prefs).toEqual(saved);
+    const full = assembleScreener([
+      sample({ slug: "declining", priceChange30d: 100, priceChange90d: -20 }),
+      sample({ slug: "missing", priceChange90d: null }),
+      sample({ slug: "unchanged", priceChange90d: 0 }),
+      sample({ slug: "rising", priceChange30d: -100, priceChange90d: 20 }),
+    ], at, []);
+    expect(queryScreener(full, prefs).coins.map(c => c.slug)).toEqual(["rising", "unchanged", "declining", "missing"]);
+    expect(queryScreener(full, { ...prefs, sortDir: "asc" }).coins.map(c => c.slug)).toEqual(["declining", "unchanged", "rising", "missing"]);
+  });
   it("combines low multiples, growth, holder flow and favorites instead of switching presets", () => {
     const c = sample({ slug: "combined", revenueHistory: history(), mcap: 10000 });
     c.holderHistory = { ...history(), definitionFingerprint: holderScope(c) };
