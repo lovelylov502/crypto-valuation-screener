@@ -1,5 +1,5 @@
 "use client";
-import { ChevronUp, ExternalLink, Info } from "lucide-react";
+import { ExternalLink, Info, X } from "lucide-react";
 import { useEffect,useState } from "react";
 import type { CoinScored } from "@/lib/types";
 import { fmtKstMinute, fmtMult, fmtPct, fmtPrice, fmtUsd } from "@/lib/format";
@@ -37,10 +37,10 @@ export function InlineCoinDetail({ coin: c, capital, onClose }: { coin: CoinScor
   const introduction = koreanDetailDescription(c.description) ?? c.descriptionKo;
   const providerPeriods = REVENUE_WINDOWS.filter(days => ["provider_total", "provider_partial"].includes(revenueReading(c, days).basis));
   const unavailable = (reason: string) => <span className="detail-unavailable" title={reason}>{metricStatus(reason)}<small>{reason}</small></span>;
-  return <section className="inline-detail" aria-label={c.name + " 상세"} onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}>
+  return <section className="inline-detail" aria-label={c.name + " 상세 내용"}>
     <header className="inline-detail-heading">
       <div className="detail-identity">{c.logo && <img src={c.logo} alt="" width={52} height={52}/>}<h3>{c.name}</h3><span>{c.symbol ?? "토큰 미연결"}{c.chains.length > 0 && ` · ${c.chains.slice(0, 3).join(", ")}`}</span></div>
-      <div className="detail-links"><a className="button" href={llama} target="_blank" rel="noreferrer">DefiLlama<ExternalLink size={14}/></a>{market ? <a className="button" href={market.url} target="_blank" rel="noreferrer">{market.label}<ExternalLink size={14}/></a> : <span className="market-link-missing">시세 페이지 미연결</span>}<button onClick={onClose} className="text-button" aria-label={c.name + " 상세 접기"}>접기<ChevronUp size={17}/></button></div>
+      <div className="detail-links"><a className="button" href={llama} target="_blank" rel="noreferrer">DefiLlama<ExternalLink size={14}/></a>{market ? <a className="button" href={market.url} target="_blank" rel="noreferrer">{market.label}<ExternalLink size={14}/></a> : <span className="market-link-missing">시세 페이지 미연결</span>}<button data-detail-close onClick={onClose} className="icon-button detail-close" aria-label={c.name + " 상세 닫기"}><X size={20}/></button></div>
     </header>
     <section className="detail-introduction" aria-label="프로젝트 소개">
       <h4>어떤 코인인가요?</h4>

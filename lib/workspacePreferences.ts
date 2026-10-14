@@ -32,7 +32,7 @@ export function workspaceMigrationNotice(raw: string | null): string | null {
     if (p?.columns?.includes("psSales") || p?.sortKey === "psSales" || p?.available === "sales" || p?.maxPs > 0) {
       return "P/S는 종목 상세로 옮겼습니다. 기존 P/S 열·필터·정렬을 정리하고 나머지 설정은 유지했습니다.";
     }
-    if (p && p.layoutVersion !== 9) return "기간별 수익 비교와 행 아래 상세로 바뀌었습니다. 관심종목·직접 설정한 열·필터는 유지됩니다. 기존 기본 열은 전 기간 보기로 바뀝니다.";
+    if (p && p.layoutVersion !== 9) return "기간별 수익 비교와 상세 팝업으로 바뀌었습니다. 관심종목·직접 설정한 열·필터는 유지됩니다. 기존 기본 열은 전 기간 보기로 바뀝니다.";
   } catch { /* Invalid storage is handled by parseWorkspace. */ }
   return null;
 }

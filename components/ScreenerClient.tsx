@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Columns3, Download, Info, RefreshCw, RotateCcw, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import type { CoinScored } from "@/lib/types";
 import type { ScreenerPage } from "@/lib/screenerQuery";
@@ -18,7 +18,8 @@ import { SettingsDialog } from "./SettingsDialog";
 import { AVAILABILITY_LABELS, METRIC_WINDOWS, METRIC_COLUMN_DAYS, windowLabel, type AvailableMetric } from "@/lib/metricCoverage";
 import { DataGuide } from "./DataGuide";
 import { DisplaySettings } from "./DisplaySettings";
-import { InlineCoinDetail, signedUsd, tone } from "./InlineCoinDetail";
+import { signedUsd, tone } from "./InlineCoinDetail";
+import { CoinDetailDialog } from "./CoinDetailDialog";
 import { pageUrl, useScreenerPage } from "./useScreenerPage";
 import { growthLabel, revenueTrend } from "@/lib/revenueTrend";
 import { revenueReading } from "@/lib/revenueReading";
@@ -83,19 +84,10 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
       localStorage.setItem(PAGE_SIZE_KEY, String(pageSize));
     } catch { setStorageError(true); }
   }, [ready, prefs, favorites, pageSize]);
-  useEffect(() => {
-    const element = tableRef.current;
-    if (!element) return;
-    const measure = () => element.style.setProperty("--table-viewport", `${element.clientWidth}px`);
-    const observer = new ResizeObserver(measure); observer.observe(element); measure();
-    return () => observer.disconnect();
-  }, [tableRef]);
-
   const update = <K extends keyof WorkspacePreferences,>(key: K, value: WorkspacePreferences[K]) => { setPrefs(p => ({ ...p, [key]: value })); setPage(1); };
   const toggleFavorite = (slug: string) => setFavorites(prev => { const next = new Set(prev); if (next.has(slug)) next.delete(slug); else next.add(slug); return next; });
   const resetFilters = () => { setPrefs(resetWorkspaceFilters); setPage(1); };
   const onSort = (key: SortKey) => { setPrefs(p => ({ ...p, sortKey: key, sortDir: p.sortKey === key ? p.sortDir === "asc" ? "desc" : "asc" : METRIC_COLUMN_DAYS[key] || key === "name" ? "asc" : "desc" })); setPage(1); };
-  const closeDetail = (slug: string) => { setSelectedSlug(null); rowButtons.current.get(slug)?.focus({ preventScroll: true }); };
   const goPage = (n: number) => { setPage(n); setSelectedSlug(null); resultsRef.current?.scrollIntoView({ block: "start" }); };
   const selectedCols = prefs.columns.map(k => COLS.find(c => c.key === k)!).filter(Boolean);
   const bands: { label: string; count: number; start: number }[] = [];
@@ -103,6 +95,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
   const activeFilters = [!!prefs.search, prefs.view !== "all", prefs.growingOnly, prefs.holderOnly, !!prefs.category, prefs.available !== "all", prefs.minMcap > 0 || prefs.maxMcap > 0, prefs.maxPr > 0, prefs.maxPhr > 0, prefs.minSourceAmount !== null, prefs.hideDilution, prefs.verifiedOnly].filter(Boolean).length;
   const capitalName = prefs.capital === "mcap" ? "유통 시총" : "FDV";
   const rows = data?.coins ?? [];
+  const selectedCoin = rows.find(c => c.slug === selectedSlug);
   const total = data?.pagination.filtered ?? 0;
   const currentPage = data?.pagination.page ?? 1;
   const coverage = data?.coverage;
@@ -148,7 +141,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
     finally { setExporting(false); }
   };
 
-  return <main className={`research-app valuation-workspace scan-workspace${selectedSlug ? " detail-open" : ""}`}>
+  return <main className="research-app valuation-workspace scan-workspace">
     <a className="skip-link" href="#screener-results">결과 표로 이동</a>
     <header className="valuation-header">
       <a className="brand-home" href="/" aria-label={`${BRAND.name} ${BRAND.koreanName} 홈`}>
@@ -180,26 +173,25 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
       {activeFilters > 0 && <button className="text-button" onClick={resetFilters}>조건 {activeFilters}개 해제<X size={12}/></button>}
     </div>
     <div ref={tableRef} className="table-scroll scan-table-scroll thin-scroll" role="region" aria-label="프로토콜 비교 표 · 가로 스크롤 가능" tabIndex={0} aria-busy={refreshing}>
-      <table className="screener-table scan-table"><caption className="sr-only">DefiLlama 원천 참고 배수, 수익 분류와 검토 상태 비교. 종목을 누르면 행 아래 상세를 엽니다. 빈 값은 0이 아닙니다.</caption>
+      <table className="screener-table scan-table"><caption className="sr-only">DefiLlama 원천 참고 배수, 수익 분류와 검토 상태 비교. 종목을 누르면 상세 팝업을 엽니다. 빈 값은 0이 아닙니다.</caption>
         <thead><tr><th className="coin-column" rowSpan={2} scope="col" aria-sort={prefs.sortKey === "name" ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort("name")}>종목 · {capitalName}{sortIcon("name")}</button></th>{bands.map((band, i) => <th key={i} colSpan={band.count} scope="colgroup" className="band-heading">{band.label}{(band.label.includes("P/R") || band.label.includes("P/HR")) && <span className="band-basis"> ({capitalName} 기준)</span>}{selectedCols[band.start].key in REVENUE_COLUMN_DAYS && <select aria-label="수익 정렬 기준" value={prefs.revenueSort} onChange={e => { setPrefs(p => ({ ...p, revenueSort: e.target.value as WorkspacePreferences["revenueSort"], sortKey: p.sortKey in REVENUE_COLUMN_DAYS ? p.sortKey : selectedCols.find(c => c.key in REVENUE_COLUMN_DAYS)!.key, sortDir: "desc" })); setPage(1); }}><option value="amount">금액</option><option value="percent">증가율</option><option value="delta">증가액</option></select>}</th>)}</tr>
           <tr>{selectedCols.map((col, i) => { const days = METRIC_COLUMN_DAYS[col.key] ?? REVENUE_COLUMN_DAYS[col.key as keyof typeof REVENUE_COLUMN_DAYS]; return <th key={col.key} className={`${bands.some(b => b.start === i) ? "band-start " : ""}${prefs.sortKey === col.key ? "active-sort" : ""}`} scope="col" title={col.title} aria-sort={prefs.sortKey === col.key ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort(col.key)} aria-label={col.label + " 정렬"}>{days ? windowLabel(days) : col.label}{sortIcon(col.key)}</button></th>; })}</tr>
         </thead>
-        <tbody>{rows.map(c => <Fragment key={c.slug}>
-          <tr className={"coin-row" + (selectedSlug === c.slug ? " selected-coin" : "")} onClick={event => {
+        <tbody>{rows.map(c => <tr key={c.slug} className={"coin-row" + (selectedSlug === c.slug ? " selected-coin" : "")} onClick={event => {
             if ((event.target as Element).closest("button, a")) return;
             setSelectedSlug(selectedSlug === c.slug ? null : c.slug);
           }}>
-            <th scope="row" className="coin-column"><div className="coin-identity"><button className={"favorite-button " + (favorites.has(c.slug) ? "saved" : "")} aria-pressed={favorites.has(c.slug)} aria-label={c.name + " 관심종목 " + (favorites.has(c.slug) ? "해제" : "추가")} onClick={() => toggleFavorite(c.slug)}><Star size={13} fill={favorites.has(c.slug) ? "currentColor" : "none"}/></button><button className="coin-open" ref={el => { if (el) rowButtons.current.set(c.slug, el); else rowButtons.current.delete(c.slug); }} aria-label={c.name + " 상세 보기"} aria-expanded={selectedSlug === c.slug} aria-controls={selectedSlug === c.slug ? `detail-${c.slug}` : undefined} onClick={() => setSelectedSlug(selectedSlug === c.slug ? null : c.slug)}>{selectedSlug === c.slug ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} {c.logo && <img src={c.logo} alt="" width={32} height={32} loading="lazy"/>}<span><strong>{c.name} <em>{c.symbol}</em></strong><small>{c[prefs.capital] === null ? `${capitalName} 미확인` : `${capitalName} ${fmtUsd(c[prefs.capital])}`}{c.identityStatus !== "verified" && " · 연결 확인"}{!!c.dataQuality?.issues.length && <span className="caution-text"> · 자료 확인</span>}</small></span></button></div></th>
+            <th scope="row" className="coin-column"><div className="coin-identity"><button className={"favorite-button " + (favorites.has(c.slug) ? "saved" : "")} aria-pressed={favorites.has(c.slug)} aria-label={c.name + " 관심종목 " + (favorites.has(c.slug) ? "해제" : "추가")} onClick={() => toggleFavorite(c.slug)}><Star size={13} fill={favorites.has(c.slug) ? "currentColor" : "none"}/></button><button className="coin-open" ref={el => { if (el) rowButtons.current.set(c.slug, el); else rowButtons.current.delete(c.slug); }} aria-label={c.name + " 상세 보기"} aria-haspopup="dialog" aria-expanded={selectedSlug === c.slug} aria-controls={selectedSlug === c.slug ? `detail-${c.slug}` : undefined} onClick={() => setSelectedSlug(selectedSlug === c.slug ? null : c.slug)}>{selectedSlug === c.slug ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} {c.logo && <img src={c.logo} alt="" width={32} height={32} loading="lazy"/>}<span><strong>{c.name} <em>{c.symbol}</em></strong><small>{c[prefs.capital] === null ? `${capitalName} 미확인` : `${capitalName} ${fmtUsd(c[prefs.capital])}`}{c.identityStatus !== "verified" && " · 연결 확인"}{!!c.dataQuality?.issues.length && <span className="caution-text"> · 자료 확인</span>}</small></span></button></div></th>
             {selectedCols.map((col, i) => <td key={col.key} className={bands.some(b => b.start === i) ? "band-start" : ""}><button className="metric-open" tabIndex={-1} aria-label={c.name + " " + col.label + " 계산 근거"} onClick={() => setSelectedSlug(selectedSlug === c.slug ? null : c.slug)}>{cell(c, col.key)}</button></td>)}
           </tr>
-          {selectedSlug === c.slug && <tr className="inline-detail-row" id={`detail-${c.slug}`}><td colSpan={selectedCols.length + 1}><InlineCoinDetail coin={c} capital={prefs.capital} onClose={() => closeDetail(c.slug)}/></td></tr>}
-        </Fragment>)}</tbody>
+        )}</tbody>
       </table>
     </div>
     {!rows.length && <div className="empty-state"><Search size={26}/><h3>{!data ? "자료를 준비하고 있습니다" : prefs.view === "favorites" && !favorites.size ? "별표로 관심종목을 모아 보세요" : "조건에 맞는 종목이 없습니다"}</h3><p>{!data ? "공개 자료 응답을 기다립니다." : "검색어 또는 필터 조건을 조절하세요."}</p><button className="button" onClick={!data ? refresh : resetFilters}>{!data ? "다시 확인" : "조건 초기화"}</button></div>}
     <div className="table-legend"><span><b className="source-badge">제공처 집계</b> 제공처 기간 집계 · 완료일 이력과 구분</span><span><b>자료 부족</b> 기간 이력 미확보</span><span><b>미연결</b> 원천 자료 미연결</span></div>
     <div className="scan-footer"><p>원천 참고 배수 · 짧은 기간은 연환산 · 제공처 집계와 원천 1년 금액은 별도 표시 · <span aria-label="앱 버전">{`v${APP_VERSION}`}</span></p><Pagination total={total} page={currentPage} size={pageSize} position="top" onPage={goPage} onSize={s => { setPageSize(s); setPage(1); }}/></div>
     <span className="sr-only" role="status" aria-live="polite">{status}</span>
+    {selectedCoin && <CoinDetailDialog key={selectedCoin.slug} coin={selectedCoin} capital={prefs.capital} onClose={() => setSelectedSlug(null)} returnFocus={rowButtons.current.get(selectedCoin.slug) ?? null}/>}
 
     {popup === "columns" && <SettingsDialog title="열 표시" wide onClose={() => setPopup(null)} headerAction={<button className="text-button" onClick={() => { setPrefs(p => withVisibleColumns(p, [...DEFAULT_VISIBLE_COLUMNS])); setStatus("기본 열을 복원했습니다."); }}><RotateCcw size={15}/>기본 열 복원</button>}><DisplaySettings columns={prefs.columns} onChange={columns => setPrefs(p => withVisibleColumns(p, columns))} onStatus={setStatus}/><button className="button export-results" disabled={exporting || !data} onClick={() => void exportResults()}><Download size={15}/>{exporting ? "전체 결과 준비 중…" : "검색 결과 전체 내보내기"}</button><p role="status">{exporting || status.includes("내보") ? status : ""}</p></SettingsDialog>}
     {popup === "filters" && <SettingsDialog title="필터" onClose={() => setPopup(null)} headerAction={<button className="text-button" onClick={resetFilters}><RotateCcw size={15}/>초기화</button>}><div className="sidebar-body filter-settings" aria-label="필터 설정">

@@ -1,0 +1,39 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import type { CoinScored } from "@/lib/types";
+import type { CapitalBasis } from "@/lib/valuationMetrics";
+import { InlineCoinDetail } from "./InlineCoinDetail";
+
+export function CoinDetailDialog({ coin, capital, onClose, returnFocus }: {
+  coin: CoinScored;
+  capital: CapitalBasis;
+  onClose: () => void;
+  returnFocus: HTMLButtonElement | null;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current, overflow = document.body.style.overflow;
+    dialog?.showModal();
+    document.body.style.overflow = "hidden";
+    dialog?.querySelector<HTMLButtonElement>("[data-detail-close]")?.focus();
+    return () => {
+      dialog?.close();
+      document.body.style.overflow = overflow;
+      returnFocus?.focus({ preventScroll: true });
+    };
+  }, [returnFocus]);
+  return <dialog ref={ref} id={`detail-${coin.slug}`} className="coin-detail-dialog" aria-label={coin.name + " 상세"} aria-describedby="coin-detail-dismiss-hint"
+    onCancel={event => { event.preventDefault(); onClose(); }}
+    onClick={event => { if (event.target === event.currentTarget) onClose(); }}
+    onKeyDown={event => {
+      if (event.key !== "Tab") return;
+      const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex="0"]')].filter(el => el.getClientRects().length && !el.closest('details:not([open]) :not(summary)'));
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }}>
+    <div className="coin-detail-surface"><InlineCoinDetail coin={coin} capital={capital} onClose={onClose}/></div>
+    <p className="coin-detail-dismiss-hint" id="coin-detail-dismiss-hint">팝업 밖을 클릭하면 닫힙니다.</p>
+  </dialog>;
+}

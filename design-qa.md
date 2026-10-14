@@ -2,6 +2,34 @@
 
 final result: passed
 
+## Coin-detail modal — 2026-10-14
+
+Scope: implement the user's selected centered detail popup in the existing app. Existing detail content, financial calculations, source qualifications, preferences and favorites are retained.
+
+Source visual truth: `C:/Users/TAE/.codex/generated_images/01a12fea-786e-7291-af88-2d4adbc3b540/exec-a182e9d5-1afd-4dd4-9cc3-54beb0799cad.png`.
+Evidence directory: `C:/Users/TAE/Documents/Codex/2026-10-14/coin-detail-modal-6130` (outside Git).
+
+- Source: 1487 × 1058. Requested desktop CSS viewport: 1487 × 1058; native screenshot: 1486 × 1058. The one-pixel host rounding difference is retained without stretching. Full-view `comparison-full-final.png` and aligned 1040 × 610 detail crops in `comparison-detail-final.png` compare both artifacts in the same image.
+- State: Quickswap, FDV, light theme, open modal, introduction visible. The reference uses October 13 example values; the implementation uses the current verified archive. Amount differences are intentional live-data differences.
+- `local-desktop-final.png` shows the final overview. `local-desktop-scrolled.png` verifies the complete five-period table and holder/source sections with the identity and close control still visible.
+- `local-mobile-light.png` verifies 390 × 844. `local-mobile-dark-320-final.png` verifies 320 × 740 after the narrow-screen fix. Page widths equal scroll widths; popup content stays inside its surface. The comparison region retains its own 650px table and horizontal overflow (323px viewport at 390px).
+
+Comparison history and fixes:
+
+- Resolved P1: initial native Tab boundaries could leave the dialog. The explicit focus loop now excludes links within closed disclosures. Browser verification confirms the calculation summary wraps forward to DefiLlama, and DefiLlama wraps backward to the calculation summary.
+- Resolved P2: the first backdrop was lighter than the selected mockup and gave the small white dismissal hint insufficient contrast. The final neutral backdrop uses 60% opacity; the close icon is unboxed to match the reference. Both final comparison images were reopened after the change.
+- Resolved P2: the 320px two-column summary broke a price across lines. Below 360px the summaries use one column. The post-fix narrow screenshot shows the full price on one line.
+
+Fidelity surfaces: existing Korean/system sans fonts and numeric hierarchy remain; the 1040px centered surface, fine dividers, four desktop summary groups, internal scroll and sticky identity header match the selected direction. Theme colors remain shared tokens, with green/red values and amber qualifications. Existing TOVENIT and source token images are retained, and the existing Lucide X replaces the old fold control. Korean captions, dismissal guidance and release copy were checked against their intended meaning.
+
+Intentional production differences: full issue links, classification explanations, freshness dates and holder conditions remain in their existing order instead of reproducing the concept's abbreviated content. They require more internal scrolling before the comparison table. No source evidence was hidden to fit the example frame. Mobile has two summary columns at 390px and one at 320px. Generated letterforms and historical example amounts are not treated as production assets or fixed values.
+
+Primary interactions: row whitespace and existing detail/metric controls open the modal; favorites remain independent. Content clicks retain it. Outside click, X and Escape close it, restore body scrolling and return focus to the original row button. The background is inert while open. Header/close controls stay reachable during internal scrolling. Final local warning/error logs are empty. Focused regressions (17 tests), typecheck and whitespace checks passed; the guarded production wrapper owns the complete release checks.
+
+No remaining actionable P0/P1/P2 finding. P3: native font rasterization and the complete production disclosure density differ from the image concept.
+
+final result: passed
+
 ## Source-amount filter option 1 — 2026-10-11
 
 Scope: apply the user's selected common-period filter mockup to the existing screener. The source metric and USD threshold share the existing ratio/growth/holder window. No new raster assets, fonts or icon libraries are needed; existing theme tokens and Lucide controls are retained.
