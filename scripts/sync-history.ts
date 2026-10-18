@@ -17,10 +17,12 @@ const arg=(name:string,fallback:string)=>{const i=argv.indexOf(name);return i<0?
 const cache=resolve(arg("--cache","snapshot-output/history-cache"));
 const maxMarket=Number(arg("--max-market","80"));
 if(!Number.isInteger(maxMarket)||maxMarket<0||maxMarket>5000)throw Error("Invalid market request budget");
+const timeBudget=Number(arg("--time-budget-seconds","2400"));
+if(!Number.isInteger(timeBudget)||timeBudget<1||timeBudget>2400)throw Error("Invalid history time budget");
 await mkdir(cache,{recursive:true});
 const db=argv.includes("--local")?createClient({url:`file:${join(cache,arg("--database","history.sqlite")).replaceAll("\\","/")}`}):connectHistory();
 const startedAt=new Date().toISOString(),runId=`history-${startedAt.replace(/[^0-9]/g,"")}`;
-const report={schema:1,runId,calculationVersion:HISTORY_VERSION,startedAt,completedAt:"",snapshot:"",assets:0,fundamentalWrites:0,marketWrites:0,valuationWrites:0,marketFetched:0,marketRequests:0,marketPending:0,storageBytes:0,status:"running",issues:[] as {scope:string;reason:string}[]};
+const report={schema:1,runId,calculationVersion:HISTORY_VERSION,startedAt,completedAt:"",snapshot:"",assets:0,fundamentalWrites:0,marketWrites:0,valuationWrites:0,marketFetched:0,marketRequests:0,marketPending:0,reconciliationPending:0,storageBytes:0,status:"running",issues:[] as {scope:string;reason:string}[]};
 const fail=(scope:string,error:unknown)=>{
   const codes:string[]=[];
   for(let cause:unknown=error,depth=0;cause&&typeof cause==="object"&&depth<5;depth++){
@@ -33,17 +35,19 @@ const archiveTag=arg("--archive-tag",runId);
 const marketArchive=`https://github.com/lovelylov502/crypto-valuation-screener/releases/download/${archiveTag}/market-sources.json.gz`;
 const captured:SourceReceipt[]=[];
 let fundamentalDay="";
+let previousFundamentalDay="";
 let phase="initialize";
 try {
   await initializeHistory(db);
   const last=await getRecord<{completedAt:string;fundamentalDay?:string;marketPending?:number}>(db,"history_fetches","sync:last");
+  previousFundamentalDay=last?.fundamentalDay??"";
   if(!argv.includes("--local")&&!argv.includes("--force")&&last&&Date.parse(startedAt)-Date.parse(last.completedAt)<5*3600_000){report.status="not-due";return;}
   await writeFile(join(cache,"history-report.json"),JSON.stringify(report,null,2));
   phase="load-inputs";
   const {snapshot,bundle,ref}=await loadHistoryInputs(cache);
   report.snapshot=ref.id;
   fundamentalDay=snapshot.updatedAt.slice(0,10);
-  const backfillOnly=!argv.includes("--local")&&last?.fundamentalDay===fundamentalDay;
+  const backfillOnly=!argv.includes("--local")&&!argv.includes("--reconcile")&&last?.fundamentalDay===fundamentalDay;
   if(backfillOnly&&last?.marketPending===0){report.status="not-due";return;}
   phase="extract-inputs";
   const inputs=extractFundamentals(bundle,ref.rawBundleUrl!);
@@ -97,13 +101,20 @@ try {
   phase="save-sources";
   await saveSources(db,sources);
   phase="read-checkpoints";
-  const complete=new Set(backfillOnly?(await historyRead(db,"SELECT id FROM history_fetches WHERE id LIKE 'gecko:%' AND json_extract(payload,'$.state')='complete'")).rows.map(r=>String(r.id)):[]);
-  const coins=[...snapshot.coins].filter(c=>!backfillOnly||eligibleCapital(c)&&c.geckoId&&!complete.has(`gecko:${c.geckoId}`))
+  const complete=new Set((await historyRead(db,"SELECT id FROM history_fetches WHERE id LIKE 'gecko:%' AND json_extract(payload,'$.state')='complete'")).rows.map(r=>String(r.id)));
+  const reconciled=new Set(!backfillOnly&&!argv.includes("--local")?(await historyRead(db,{sql:"SELECT slug FROM history_assets WHERE json_extract(payload,'$.reconciledDay')=?",args:[fundamentalDay]})).rows.map(r=>String(r.slug)):[]);
+  const coins=[...snapshot.coins].filter(c=>!reconciled.has(c.slug)&&(!backfillOnly||eligibleCapital(c)&&c.geckoId&&!complete.has(`gecko:${c.geckoId}`)))
+    .filter(c=>inputs.series.get(c.slug)?.length||quotes.has(c.slug)||eligibleCapital(c))
     .sort((a,b)=>Number(inputs.series.has(b.slug))-Number(inputs.series.has(a.slug))||(b.mcap??0)-(a.mcap??0)||a.slug.localeCompare(b.slug));
   const provider=await getRecord<{retryAt:string}>(db,"history_fetches","provider:coingecko");
   let marketStopped=!!provider&&provider.retryAt>startedAt;
   const marketById=new Map<string,MarketDay[]>();
   for(const coin of coins) {
+    if(Date.now()-Date.parse(startedAt)>=timeBudget*1000){
+      if(!backfillOnly)report.reconciliationPending++;
+      if(eligibleCapital(coin)&&coin.geckoId&&!complete.has(`gecko:${coin.geckoId}`)&&!marketById.has(coin.geckoId))report.marketPending++;
+      continue;
+    }
     // Full source/valuation scans run once per UTC day. Other wakes only fill missing assets.
     if(backfillOnly&&(marketStopped||report.marketRequests>=maxMarket)){report.marketPending++;continue;}
     phase=`asset:${coin.slug}`;
@@ -158,7 +169,7 @@ try {
     report.valuationWrites+=await saveSeries(db,"history_valuations",coin.slug,valuations);
     await saveAsset(db,coin.slug,{slug:coin.slug,name:coin.name,symbol:coin.symbol,geckoId:coin.geckoId,cmcId:coin.cmcId,identity:historyIdentity(coin),identityStatus:coin.identityStatus,
       capitalExclusionReason:coin.capitalExclusionReason??null,sourceFrom:flows[0]?.day??null,sourceTo:flows.at(-1)?.day??null,marketFrom:marketRows[0]?.day??null,marketTo:marketRows.at(-1)?.day??null,
-      fundamentalDays:flows.length,marketDays:marketRows.length,snapshotId:ref.id,marketHistoryLimit:"CoinGecko anonymous: up to 365 days at initial acquisition; captured quotes retained indefinitely",revenueHistoryBasis:"provider-reconstructed; original receipts retained"});
+      fundamentalDays:flows.length,marketDays:marketRows.length,snapshotId:ref.id,reconciledDay:fundamentalDay,marketHistoryLimit:"CoinGecko anonymous: up to 365 days at initial acquisition; captured quotes retained indefinitely",revenueHistoryBasis:"provider-reconstructed; original receipts retained"});
     if(coin.geckoId&&marketById.has(coin.geckoId)&&!(await getRecord<{state:string}>(db,"history_fetches",`gecko:${coin.geckoId}`))?.state.includes("complete"))await setRecord(db,"history_fetches",`gecko:${coin.geckoId}`,{state:"complete",at:startedAt,limitDays:365,points:marketById.get(coin.geckoId)});
     report.assets++;
     if(report.assets%50===0){
@@ -168,8 +179,10 @@ try {
   }
   for(const entry of report.issues.filter(e=>e.scope.startsWith("archive-pending:")))await setRecord(db,"history_fetches",`archive:${entry.scope.slice(16)}`,{state:"complete",at:entry.reason});
   report.issues=report.issues.filter(e=>!e.scope.startsWith("archive-pending:"));
+  const acquired=new Set((await historyRead(db,"SELECT id FROM history_fetches WHERE id LIKE 'gecko:%' AND json_extract(payload,'$.state')='complete'")).rows.map(r=>String(r.id)));
+  report.marketPending=snapshot.coins.filter(c=>eligibleCapital(c)&&c.geckoId&&!acquired.has(`gecko:${c.geckoId}`)).length;
   report.storageBytes=await storageBytes(db);
-  report.status=marketStopped||report.marketPending||report.issues.length?"partial":"complete";
+  report.status=marketStopped||report.marketPending||report.reconciliationPending||report.issues.length?"partial":"complete";
 } catch(error) {
   report.status=error instanceof HistoryBudgetExceeded?"budget-paused":"failed";fail(`run:${phase}`,error);
 } finally {
@@ -181,7 +194,7 @@ try {
   await writeFile(join(cache,"history-report.json"),JSON.stringify(report,null,2));
   try {
     if(report.status!=="not-due")await setRecord(db,"history_runs",runId,report);
-    if(["complete","partial"].includes(report.status))await setRecord(db,"history_fetches","sync:last",{completedAt:report.completedAt,snapshot:report.snapshot,fundamentalDay,marketPending:report.marketPending});
+    if(["complete","partial"].includes(report.status))await setRecord(db,"history_fetches","sync:last",{completedAt:report.completedAt,snapshot:report.snapshot,fundamentalDay:report.reconciliationPending?(previousFundamentalDay===fundamentalDay?"":previousFundamentalDay):fundamentalDay,marketPending:report.marketPending});
   }catch{}
   db.close();console.log(JSON.stringify(report));
   if(report.status==="failed")process.exitCode=1;
