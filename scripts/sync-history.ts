@@ -21,21 +21,31 @@ await mkdir(cache,{recursive:true});
 const db=argv.includes("--local")?createClient({url:`file:${join(cache,arg("--database","history.sqlite")).replaceAll("\\","/")}`}):connectHistory();
 const startedAt=new Date().toISOString(),runId=`history-${startedAt.replace(/[^0-9]/g,"")}`;
 const report={schema:1,runId,calculationVersion:HISTORY_VERSION,startedAt,completedAt:"",snapshot:"",assets:0,fundamentalWrites:0,marketWrites:0,valuationWrites:0,marketFetched:0,marketRequests:0,marketPending:0,storageBytes:0,status:"running",issues:[] as {scope:string;reason:string}[]};
-const fail=(scope:string,error:unknown)=>report.issues.push({scope,reason:error instanceof Error?error.message:String(error)});
+const fail=(scope:string,error:unknown)=>{
+  const codes:string[]=[];
+  for(let cause:unknown=error,depth=0;cause&&typeof cause==="object"&&depth<5;depth++){
+    if("code" in cause&&typeof cause.code==="string"&&/^[A-Z0-9_]+$/.test(cause.code))codes.push(cause.code);
+    cause="cause" in cause?cause.cause:null;
+  }
+  report.issues.push({scope,reason:`${error instanceof Error?error.message:String(error)}${codes.length?` [${codes.join(" > ")}]`:""}`});
+};
 const archiveTag=arg("--archive-tag",runId);
 const marketArchive=`https://github.com/lovelylov502/crypto-valuation-screener/releases/download/${archiveTag}/market-sources.json.gz`;
 const captured:SourceReceipt[]=[];
 let fundamentalDay="";
+let phase="initialize";
 try {
   await initializeHistory(db);
   const last=await getRecord<{completedAt:string;fundamentalDay?:string;marketPending?:number}>(db,"history_fetches","sync:last");
   if(!argv.includes("--local")&&!argv.includes("--force")&&last&&Date.parse(startedAt)-Date.parse(last.completedAt)<5*3600_000){report.status="not-due";return;}
   await writeFile(join(cache,"history-report.json"),JSON.stringify(report,null,2));
+  phase="load-inputs";
   const {snapshot,bundle,ref}=await loadHistoryInputs(cache);
   report.snapshot=ref.id;
   fundamentalDay=snapshot.updatedAt.slice(0,10);
   const backfillOnly=!argv.includes("--local")&&last?.fundamentalDay===fundamentalDay;
   if(backfillOnly&&last?.marketPending===0){report.status="not-due";return;}
+  phase="extract-inputs";
   const inputs=extractFundamentals(bundle,ref.rawBundleUrl!);
   const current=new Map(snapshot.coins.map(c=>[c.slug,c]));
   const quotes=new Map<string,Map<string,MarketDay>>();
@@ -84,7 +94,9 @@ try {
       } catch(error) {fail(release.tag,error);}
     }
   }
+  phase="save-sources";
   await saveSources(db,sources);
+  phase="read-checkpoints";
   const complete=new Set(backfillOnly?(await db.execute("SELECT id FROM history_fetches WHERE id LIKE 'gecko:%' AND json_extract(payload,'$.state')='complete'")).rows.map(r=>String(r.id)):[]);
   const coins=[...snapshot.coins].filter(c=>!backfillOnly||eligibleCapital(c)&&c.geckoId&&!complete.has(`gecko:${c.geckoId}`))
     .sort((a,b)=>Number(inputs.series.has(b.slug))-Number(inputs.series.has(a.slug))||(b.mcap??0)-(a.mcap??0)||a.slug.localeCompare(b.slug));
@@ -94,6 +106,7 @@ try {
   for(const coin of coins) {
     // Full source/valuation scans run once per UTC day. Other wakes only fill missing assets.
     if(backfillOnly&&(marketStopped||report.marketRequests>=maxMarket)){report.marketPending++;continue;}
+    phase=`asset:${coin.slug}`;
     const freshFlows=inputs.series.get(coin.slug)??[];
     if(!freshFlows.length&&!quotes.has(coin.slug)&&!eligibleCapital(coin))continue;
     let flows=freshFlows;
@@ -158,7 +171,7 @@ try {
   report.storageBytes=await storageBytes(db);
   report.status=marketStopped||report.marketPending||report.issues.length?"partial":"complete";
 } catch(error) {
-  report.status=error instanceof HistoryBudgetExceeded?"budget-paused":"failed";fail("run",error);
+  report.status=error instanceof HistoryBudgetExceeded?"budget-paused":"failed";fail(`run:${phase}`,error);
 } finally {
   report.completedAt=new Date().toISOString();
   // Include every cached original, also after a partial run or a resumed local import.
