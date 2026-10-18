@@ -137,7 +137,9 @@ export function snapshotMarket(coin: CoinRaw, current: CoinRaw, source: string, 
   if (!Number.isFinite(t) || !Number.isFinite(captured) || t > captured || captured - t > 12 * 3600_000) return null;
   const same = (provider: string | null | undefined) => provider === "CoinGecko"
     ? !!coin.geckoId && coin.geckoId === current.geckoId
-    : provider === "CoinMarketCap" && !!coin.cmcId && coin.cmcId === current.cmcId && ["source-id", "contract", "retained"].includes(coin.cmcIdentity?.basis ?? "") && ["source-id", "contract", "retained"].includes(current.cmcIdentity?.basis ?? "");
+    : provider === "CoinMarketCap" && !!coin.cmcId && coin.cmcId === current.cmcId
+      && ["source-id", "contract", "retained"].includes(current.cmcIdentity?.basis ?? "")
+      && !(coin.geckoId && current.geckoId && coin.geckoId !== current.geckoId);
   const price = same(coin.marketSources?.price) ? positive(coin.price) : null;
   // The legacy snapshot timestamps its preferred price provider only. Do not
   // assign that timestamp to a fallback provider's capital observation.

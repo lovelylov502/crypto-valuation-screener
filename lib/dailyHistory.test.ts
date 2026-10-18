@@ -70,4 +70,12 @@ describe("dated source-reference valuations",()=>{
     const coin={identityStatus:"verified",geckoId:"one",marketDataUpdatedAt:"2026-01-31T12:02:00Z",marketSources:{price:"CoinGecko",mcap:"CoinGecko",fdv:"CoinGecko",gecko:{observedAt:"2026-01-31T12:03:00Z"}},price:1,mcap:100,fdv:200} as CoinRaw;
     expect(snapshotMarket(coin,coin,"s","2026-01-31T12:00:00Z")).toMatchObject({mcap:100,fdv:200,marketAt:"2026-01-31T12:02:00Z"});
   });
+  it("recovers a legacy CMC quote only with today's strong exact-ID proof and unchanged token",()=>{
+    const old={identityStatus:"verified",geckoId:"one",cmcId:1,marketDataUpdatedAt:"2026-01-31T12:00:00Z",marketSources:{price:"CoinMarketCap",mcap:"CoinMarketCap",fdv:"CoinMarketCap"},price:1,mcap:100,fdv:200} as CoinRaw;
+    const current={...old,cmcIdentity:{basis:"contract",address:"0x1",sourceIdentifiersPresent:true}} as CoinRaw;
+    expect(snapshotMarket(old,current,"s","2026-01-31T13:00:00Z")).toMatchObject({fdv:200});
+    expect(snapshotMarket(old,{...current,cmcId:2},"s","2026-01-31T13:00:00Z")).toBeNull();
+    expect(snapshotMarket(old,{...current,geckoId:"other"},"s","2026-01-31T13:00:00Z")).toBeNull();
+    expect(snapshotMarket(old,old,"s","2026-01-31T13:00:00Z")).toBeNull();
+  });
 });
