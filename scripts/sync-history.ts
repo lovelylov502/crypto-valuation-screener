@@ -4,7 +4,7 @@ import { gzipSync, gunzipSync } from "node:zlib";
 import { spawnSync } from "node:child_process";
 import { createClient } from "@libsql/client";
 import { calculateDailyValuations, extractFundamentals, historyHash, historyIdentity, mergeMarket, parseMarketChart, snapshotMarket, HISTORY_VERSION, type FundamentalDay, type HistorySource, type MarketDay } from "../lib/dailyHistory";
-import { connectHistory, getRecord, initializeHistory, readSeries, saveAsset, saveSeries, saveSources, setRecord, storageBytes, HistoryBudgetExceeded } from "../lib/historyDatabase";
+import { connectHistory, getRecord, historyRead, initializeHistory, readSeries, saveAsset, saveSeries, saveSources, setRecord, storageBytes, HistoryBudgetExceeded } from "../lib/historyDatabase";
 import { fetchHistoricalMarket, HistoryProviderDeferred, loadArchivedSnapshot, loadHistoryInputs } from "../lib/historyCollection";
 import { eligibleCapital } from "../lib/capitalEligibility";
 import { parseJournal } from "../lib/snapshotArchive";
@@ -97,7 +97,7 @@ try {
   phase="save-sources";
   await saveSources(db,sources);
   phase="read-checkpoints";
-  const complete=new Set(backfillOnly?(await db.execute("SELECT id FROM history_fetches WHERE id LIKE 'gecko:%' AND json_extract(payload,'$.state')='complete'")).rows.map(r=>String(r.id)):[]);
+  const complete=new Set(backfillOnly?(await historyRead(db,"SELECT id FROM history_fetches WHERE id LIKE 'gecko:%' AND json_extract(payload,'$.state')='complete'")).rows.map(r=>String(r.id)):[]);
   const coins=[...snapshot.coins].filter(c=>!backfillOnly||eligibleCapital(c)&&c.geckoId&&!complete.has(`gecko:${c.geckoId}`))
     .sort((a,b)=>Number(inputs.series.has(b.slug))-Number(inputs.series.has(a.slug))||(b.mcap??0)-(a.mcap??0)||a.slug.localeCompare(b.slug));
   const provider=await getRecord<{retryAt:string}>(db,"history_fetches","provider:coingecko");
