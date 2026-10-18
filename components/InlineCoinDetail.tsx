@@ -7,7 +7,7 @@ import { growthLabel, revenueTrend } from "@/lib/revenueTrend";
 import type { CapitalBasis } from "@/lib/valuationMetrics";
 import { referenceMultiple, referenceReason, referenceReading, referenceReview, referenceClassification } from "@/lib/referenceMetrics";
 import { holderConditionSummary, holderTypeSummary } from "./ScreenerCells";
-import { defiLlamaUrl, marketLink } from "@/lib/coinLinks";
+import { defiLlamaUrl, marketLink, officialWebsite } from "@/lib/coinLinks";
 import { koreanDetailDescription } from "@/lib/detailDescriptions";
 import { metricStatus } from "@/lib/metricStatus";
 import { protocolResearch } from "@/lib/protocolResearch";
@@ -24,7 +24,7 @@ export const signedUsd = (v: number | null) => v === null ? "–" : `${v > 0 ? "
 export const tone = (v: number | null) => v === null || v === 0 ? "muted" : v > 0 ? "positive" : "negative";
 const supply = (v: number | null) => v === null ? "미확인" : new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 }).format(v);
 
-export function InlineCoinDetail({ coin: c, capital, onClose }: { coin: CoinScored; capital: CapitalBasis; onClose: () => void }) {
+export function InlineCoinDetail({ coin: c, capital, onClose, hideHeader = false, openOriginal = false }: { coin: CoinScored; capital: CapitalBasis; onClose: () => void; hideHeader?: boolean; openOriginal?: boolean }) {
   const [targetDate,setTargetDate]=useState(()=>completedUtcDate(Date.now()));
   useEffect(()=>{const timer=setInterval(()=>setTargetDate(completedUtcDate(Date.now())),30_000);return()=>clearInterval(timer);},[]);
   const month = revenueTrend(c, 30);
@@ -33,20 +33,20 @@ export function InlineCoinDetail({ coin: c, capital, onClose }: { coin: CoinScor
   const pr30 = referenceMultiple(c, "revenue", 30, capital), phr30 = referenceMultiple(c, "holders", 30, capital);
   const reading30 = revenueReading(c, 30), holderReading30 = referenceReading(c, "holders", 30), returned30 = holderReading30.amount;
   const end = c.revenueHistory?.periods[1]?.end;
-  const market = marketLink(c), llama = defiLlamaUrl(c);
+  const market = marketLink(c), llama = defiLlamaUrl(c), website = officialWebsite(c);
   const introduction = koreanDetailDescription(c.description) ?? c.descriptionKo;
   const providerPeriods = REVENUE_WINDOWS.filter(days => ["provider_total", "provider_partial"].includes(revenueReading(c, days).basis));
   const unavailable = (reason: string) => <span className="detail-unavailable" title={reason}>{metricStatus(reason)}<small>{reason}</small></span>;
   return <section className="inline-detail" aria-label={c.name + " 상세 내용"}>
-    <header className="inline-detail-heading">
+    {!hideHeader && <header className="inline-detail-heading">
       <div className="detail-identity">{c.logo && <img src={c.logo} alt="" width={52} height={52}/>}<h3>{c.name}</h3><span>{c.symbol ?? "토큰 미연결"}{c.chains.length > 0 && ` · ${c.chains.slice(0, 3).join(", ")}`}</span></div>
-      <div className="detail-links"><a className="button" href={llama} target="_blank" rel="noreferrer">DefiLlama<ExternalLink size={14}/></a>{market ? <a className="button" href={market.url} target="_blank" rel="noreferrer">{market.label}<ExternalLink size={14}/></a> : <span className="market-link-missing">시세 페이지 미연결</span>}<button data-detail-close onClick={onClose} className="icon-button detail-close" aria-label={c.name + " 상세 닫기"}><X size={20}/></button></div>
-    </header>
+      <div className="detail-links">{website ? <a className="button" href={website} target="_blank" rel="noreferrer">공식 홈페이지<ExternalLink size={14}/></a> : <button className="button" disabled>공식 홈페이지 미확인</button>}<a className="button" href={llama} target="_blank" rel="noreferrer">DefiLlama<ExternalLink size={14}/></a>{market ? <a className="button" href={market.url} target="_blank" rel="noreferrer">{market.label}<ExternalLink size={14}/></a> : <span className="market-link-missing">시세 페이지 미연결</span>}<button data-detail-close onClick={onClose} className="icon-button detail-close" aria-label={c.name + " 상세 닫기"}><X size={20}/></button></div>
+    </header>}
     <section className="detail-introduction" aria-label="프로젝트 소개">
       <h4>어떤 코인인가요?</h4>
       <p>{introduction ?? research?.description ?? (c.description ? "한글 번역을 준비 중입니다. 아래에서 원문을 확인할 수 있습니다." : "프로젝트 소개 자료를 아직 확보하지 못했습니다.")}</p>
       {introduction ? <small>DefiLlama 소개 번역</small> : research && <small>공식 자료 검토 · {research.reviewedAt}</small>}
-      {c.description && <details className="description-original"><summary>영문 원문 보기</summary><p lang="en">{c.description}</p><a href={c.descriptionSource ?? llama} target="_blank" rel="noreferrer">DefiLlama 원문<ExternalLink size={12}/></a></details>}
+      {c.description && <details id="detail-description-original" className="description-original" open={openOriginal || undefined}><summary>영문 원문 보기</summary><p lang="en">{c.description}</p><a href={c.descriptionSource ?? llama} target="_blank" rel="noreferrer">DefiLlama 원문<ExternalLink size={12}/></a></details>}
     </section>
     {!!c.dataQuality?.issues.length && <div className="notice" role="status">
       <strong>자료 확인 필요</strong>

@@ -2,7 +2,7 @@
 
 ## Reader-first dated freshness migration
 
-The checked-in `lib/pipeline-release.json` selects a compatible paused economic reader (`writerSchema=2`, `schedule=paused`, economic writing inactive), retaining the prior verified Phase-A proof and four-slot scheduler for separate activation. Readers validate pipeline and journal schemas 1 and 2. A source bundle still has its independent schema 1; the optional `pipelineSchema=2` selects the new acquisition/normalization contract. An absent selector runs the original behavior, including historical retry receipt order, normalized shape and hashes. Real preserved schema-1 replay is required; accepting a version enum does not establish compatibility.
+The checked-in `lib/pipeline-release.json` selects `writerSchema=2`, `schedule=four-daily` and active economic writing under the pinned verified v3 reader proof. It retains the prior verified Phase-A proof. Readers validate pipeline and journal schemas 1 and 2. A source bundle still has its independent schema 1; the optional `pipelineSchema=2` selects the new acquisition/normalization contract. An absent selector runs the original behavior, including historical retry receipt order, normalized shape and hashes. Real preserved schema-1 replay is required; accepting a version enum does not establish compatibility.
 
 Schema-2 histories retain the exact common complete-date set used for their period totals as a 730-day hexadecimal bitmap (183 characters). Current target, latest complete date, recent exact missing dates, component coverage and source identity/definition/provenance are separate. Missing target plus a complete immediately preceding day establishes expected recent reporting. Older holes are insufficient history; missing dates never become zero. Exact-parent aggregate recovery is labeled explicitly and retains its authoritative parent URL and receipt time. Raw holder freshness includes all exact source components independently of economic eligibility; approved holder multiples still use the eligible subset.
 
@@ -40,6 +40,14 @@ Public HTTP sources
 ```
 
 The static homepage/API never collect upstream data. Browser preference keys, favorite IDs and existing valuation semantics remain intact.
+
+## Historical detail reader
+
+The verified screener publication continues to supply current rows and latest detail summaries. A separate Turso history store supplies actual dated market observations, complete trailing Revenue/Holders Revenue denominators, stored reference multiples and original source provenance through `/api/history`. It does not replace the screener's published pointer or change economic scoring rules.
+
+The history writer reconciles a new published snapshot across assets before spending the remaining work budget on paced initial market backfill. It compares all available dated input hashes/scopes, reads financial payloads for the affected span and recalculates only affected market-date/window pairs with their complete lookback. Previously observed evidence is retained. A quota-reserved `updating` marker precedes changed inputs; the final asset checkpoint follows their valuations, so an interrupted write requires a full consistency pass. The read API checks only the requested denominator window and withholds ratios during input/checkpoint changes. [DAILY_VALUATION_HISTORY.md](./DAILY_VALUATION_HISTORY.md) owns collection limits, retry rules and query details.
+
+The detail client follows ascending cursors to the full selected range and requires the response token to match the current screener identity. It refuses changed calculation/publication identities across pages. Charts project stored values, break lines at missing dates/nulls and retain independent market/FDV timestamps. Current summaries and historical charts disclose their distinct observation times. The secondary research view preserves existing financial evidence and adds history provenance; history availability never hides the current summary.
 
 ## Original evidence and replay
 
@@ -93,6 +101,8 @@ Economic decisions are metric-specific and replay-bound. `economicPolicy` select
 | `scripts/github-journal` | Resumable immutable upload and atomic publication |
 | `snapshotArchive`, persisted reader | Verified archive/cache reads |
 | `collectionHealth`, status/detail UI | Global/partial user-visible state |
+| `dailyHistory`, `historyIncremental`, `historyDatabase`, `historyCollection` | Dated source evidence, incremental reconciliation and independent history reads |
+| `detailHistory`, `CoinDetailOverview`, `DetailHistoryChart` | Token-matched chart pagination, stored series and research/provenance views |
 
 Old `assessCandidate` and dated review helpers support legacy fixtures and historical evidence. The active writer uses `assessPipelineCandidate`, without post-assembly source re-query or dated loss waivers.
 

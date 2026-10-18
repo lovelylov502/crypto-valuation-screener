@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { CoinScored } from "@/lib/types";
 import type { CapitalBasis } from "@/lib/valuationMetrics";
-import { InlineCoinDetail } from "./InlineCoinDetail";
+import { CoinDetailOverview } from "./CoinDetailOverview";
 
 export function CoinDetailDialog({ coin, capital, onClose, returnFocus }: {
   coin: CoinScored;
@@ -23,7 +23,7 @@ export function CoinDetailDialog({ coin, capital, onClose, returnFocus }: {
       returnFocus?.focus({ preventScroll: true });
     };
   }, [returnFocus]);
-  return <dialog ref={ref} id={`detail-${coin.slug}`} className="coin-detail-dialog" aria-label={coin.name + " 상세"} aria-describedby="coin-detail-dismiss-hint"
+  return <dialog ref={ref} id={`detail-${coin.slug}`} className="coin-detail-dialog coin-detail-dialog--charts" aria-label={coin.name + " 상세"} aria-describedby="coin-detail-dismiss-hint"
     onCancel={event => { event.preventDefault(); onClose(); }}
     onClick={event => { if (event.target === event.currentTarget) onClose(); }}
     onKeyDown={event => {
@@ -33,7 +33,7 @@ export function CoinDetailDialog({ coin, capital, onClose, returnFocus }: {
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }}>
-    <div className="coin-detail-surface"><InlineCoinDetail coin={coin} capital={capital} onClose={onClose}/></div>
-    <p className="coin-detail-dismiss-hint" id="coin-detail-dismiss-hint">팝업 밖을 클릭하면 닫힙니다.</p>
+    <div className="coin-detail-surface"><CoinDetailOverview coin={coin} capital={capital} onClose={onClose}/></div>
+    <p className="sr-only" id="coin-detail-dismiss-hint">팝업 밖을 클릭하거나 Escape 키를 누르면 닫힙니다.</p>
   </dialog>;
 }

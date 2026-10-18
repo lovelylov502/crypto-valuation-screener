@@ -10,7 +10,7 @@ it("reconnects a stale read once without duplicating any write",async()=>{
   const execute=vi.spyOn(db,"execute").mockRejectedValueOnce(disconnected());
   const reconnect=vi.spyOn(db,"reconnect").mockResolvedValueOnce();
   const batch=vi.spyOn(db,"batch");
-  expect(await saveSources(db,[])).toBe(0);
+  expect((await historyRead(db,"SELECT id FROM history_sources")).rows).toEqual([]);
   expect(reconnect).toHaveBeenCalledTimes(1);expect(execute).toHaveBeenCalledTimes(2);expect(batch).not.toHaveBeenCalled();
   expect(()=>historyRead(db,"DELETE FROM history_sources")).toThrow("requires SELECT");
 });

@@ -5,9 +5,17 @@ export function defiLlamaUrl(c: Pick<CoinRaw, "slug">): string {
 }
 
 export function marketLink(c: Pick<CoinRaw, "cmcSlug" | "geckoId">): { label: string; url: string } | null {
-  if (c.cmcSlug) return { label: "CoinMarketCap", url: `https://coinmarketcap.com/currencies/${encodeURIComponent(c.cmcSlug)}/` };
   if (c.geckoId) return { label: "CoinGecko", url: `https://www.coingecko.com/en/coins/${encodeURIComponent(c.geckoId)}` };
+  if (c.cmcSlug) return { label: "CoinMarketCap", url: `https://coinmarketcap.com/currencies/${encodeURIComponent(c.cmcSlug)}/` };
   return null;
+}
+
+export function officialWebsite(c: Pick<CoinRaw, "website">): string | null {
+  if (!c.website) return null;
+  try {
+    const url = new URL(c.website);
+    return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password ? url.href : null;
+  } catch { return null; }
 }
 
 export function coinUrl(c: Pick<CoinRaw, "cmcSlug" | "slug">): string {

@@ -163,13 +163,19 @@ export function mergeMarket(old: MarketDay | undefined, next: MarketDay): Market
 }
 
 /** Date D uses that day's quote and complete revenue dates ending D-1: never look ahead into D. */
-export function calculateDailyValuations(fundamentals: FundamentalDay[], markets: MarketDay[], eligible: boolean): ValuationDay[] {
+export function calculateDailyValuations(fundamentals: FundamentalDay[], markets: MarketDay[], eligible: boolean, windows: readonly number[] = REVENUE_WINDOWS): ValuationDay[] {
+  if (!markets.length || !windows.length) return [];
   const flows = new Map(fundamentals.map(p => [p.day, p]));
-  const dates=[...flows.keys(),...markets.map(p=>p.day)].sort();
-  if(!dates.length)return [];
-  const start=Math.floor(Date.parse(dates[0])/DAY_MS)-365,end=Math.floor(Date.parse(dates.at(-1)!)/DAY_MS);
+  const dates=markets.map(p=>p.day).sort();
+  const start=Math.floor(Date.parse(dates[0])/DAY_MS)-Math.max(...windows),end=Math.floor(Date.parse(dates.at(-1)!)/DAY_MS)-1;
   const prefix=(metric:"revenue"|"holders")=>{
     const sums=[0],counts=[0],conflicts=[0],boundaries=[0];let lastScope="";
+    // Scope carries through missing days. Preserve the predecessor even when
+    // only the bounded denominator lookback was loaded from the database.
+    for (const day of [...flows.keys()].sort()) {
+      if (day >= utcDay(start*DAY_MS)) break;
+      if (flows.get(day)?.[metric].scope) lastScope=flows.get(day)![metric].scope;
+    }
     for(let d=start;d<=end;d++){
       const point=flows.get(utcDay(d*DAY_MS))?.[metric],complete=point?.state==="complete"&&finite(point.value);
       sums.push(sums.at(-1)!+(complete?point.value!:0));counts.push(counts.at(-1)!+Number(complete));
@@ -181,7 +187,7 @@ export function calculateDailyValuations(fundamentals: FundamentalDay[], markets
   };
   const prefixes={revenue:prefix("revenue"),holders:prefix("holders")};
   const result: ValuationDay[] = [];
-  for (const market of markets) for (const days of REVENUE_WINDOWS) {
+  for (const market of markets) for (const days of windows) {
     const total = (metric: "revenue" | "holders") => {
       const hi=Math.floor(Date.parse(market.day)/DAY_MS)-start,lo=hi-days,p=prefixes[metric];
       const sum=p.sums[hi]-p.sums[lo],count=p.counts[hi]-p.counts[lo],conflict=p.conflicts[hi]>p.conflicts[lo];

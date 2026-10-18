@@ -2,6 +2,29 @@
 
 final result: passed
 
+## Dated valuation overview — 2026-10-18 / v0.3.0
+
+Scope: implement the approved left-hand introduction/metrics and two stacked charts, add 7D, the three external links and a package-derived version. The complete existing research view remains available.
+
+Reference: `C:/Users/TAE/.codex/generated_images/01a14e50-576c-7392-ab5f-eb85132dff82/exec-947962cb-cbb5-487e-b3b5-77c5beb05b1e.png` (1584 × 993).
+Evidence directory: `C:/Users/TAE/.codex/visualizations/2026/10/18/01a14e50-576c-7392-ab5f-eb85132dff82/release-0.3.0` (outside Git).
+
+- Source and implementation screenshots were reopened together. The reference-sized iframe uses a genuine 1584 × 993 CSS viewport and a 0.64 outer scale to fit the 1280 × 720 IAB capture; it is not a resized CSS viewport. `local-reference-viewport.png` records that comparison state. Native 1280 × 720 evidence is `local-desktop-final.png`.
+- At 1280 × 720 the dialog is 1240 × 680, its body and sidebar are 584px high with equal scroll height, the research button ends at 662px and the footer starts at 673px. Neither chart nor sidebar overlaps the footer. The reference-sized dialog is 1544 × 953 with equal scroll/client dimensions.
+- `local-mobile-top.png`, `local-mobile-charts.png` and `local-tablet.png` exercise 390 × 844 and 960 × 720. Their surfaces have equal scroll/client widths (355px and 925px respectively). Small screens retain vertical scrolling and the sticky identity/close header instead of shrinking the full desktop into unreadable text. Two chart cursors and exact-value tooltips remain usable.
+- Light and dark theme screenshots were inspected. The final production build, rather than stale development CSS, is the release verification source.
+
+Resolved findings: increased small chart/control copy to 11–12px and footnotes to 10px; corrected the resulting compact-height grid/min-content overflow; adjusted spacing without hiding research content or cutting footer controls. Large-desktop type scale follows the reference more closely. Long introductions retain an explicit full-description action.
+
+Fidelity surfaces: existing system/Korean sans typography and tabular numbers; the approved split rail/two-chart geometry and restrained dividers; shared dark/light tokens with blue price, mint market cap/P/R, amber dashed FDV and purple P/HR; existing token logos and Lucide icons; Korean labels retaining source, observation time, annualization, missing-data and classification qualifications. No example chart paths or invented historical values ship.
+
+Verified interactions: ordered 7D / 1M / 3M / YTD / 1Y / MAX; inclusive UTC 7D and January-1 YTD bounds; independent capital and denominator selectors; shared keyboard/date cursors; full monetary tooltips with source observation times and completed revenue dates; explicit missing-price/history states; original-English disclosure opens and receives focus; complete research view; modal focus loop, Escape and return focus; favorite toggle restored to its original state; persisted search and existing table controls. Link inspection confirms official site / DefiLlama / CoinGecko order; deterministic tests cover CoinMarketCap fallback and unsafe/missing official URLs.
+
+Financial validation: all 886 tests passed, plus production build/typecheck. Independent arithmetic checks covered 8,000 cases, 15,600 stored-row incremental/full comparisons (including committed-write interruption), and 13,140 local/live representative valuation fields. Missing historical FDV remains missing. These checks establish implementation and data integrity, not completion of the historical backlog or long-term natural-schedule acceptance.
+
+No remaining actionable P0/P1/P2 finding after fresh-build verification. Intentional differences from the concept: live data and dates, 7D, the approved third link, package version, complete research access, and compact-screen responsive behavior.
+
+final result: passed
 ## Coin-detail modal — 2026-10-14
 
 Scope: implement the user's selected centered detail popup in the existing app. Existing detail content, financial calculations, source qualifications, preferences and favorites are retained.
