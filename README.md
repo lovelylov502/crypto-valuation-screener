@@ -8,6 +8,8 @@ DefiLlama 원천 금액과 토큰 시총으로 참고 배수를 계산하고, �
 **🌐 라이브: https://crypto-valuation-screener.vercel.app**
 데이터: [DefiLlama](https://defillama.com) · [CoinMarketCap Keyless](https://coinmarketcap.com/api/documentation/pro-api-reference/keyless-public-api) · [CoinGecko](https://coingecko.com)
 
+날짜별 시총·FDV와 완료된 수익으로 계산한 P/R·P/HR은 Turso 이력 저장소와 `/api/history`에서 관리한다. 수집 범위, 무료 한도와 계산 기준은 [날짜별 밸류에이션 이력](./docs/DAILY_VALUATION_HISTORY.md)을 참고한다.
+
 앱 버전: **v0.2.3**. 변경 내역은 [CHANGELOG.md](./CHANGELOG.md)에 기록한다. 화면 하단과 `/api/status`의 `appVersion`은 `package.json`의 같은 버전을 사용한다. 데이터 공개본 ID·수집 revision·계산 규칙 버전은 각각 별도로 보존한다.
 
 ## Current product and data engine

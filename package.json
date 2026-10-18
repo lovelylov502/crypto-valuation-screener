@@ -1,6 +1,6 @@
 {
   "name": "crypto-valuation-research",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -17,10 +17,15 @@
     "verify:local": "npm run deploy:preflight && npm run test:deploy-preflight && npm test && npm run typecheck && npm run build && git diff --check",
     "audit:coverage": "tsx scripts/audit-coverage.ts",
     "verify:production": "node scripts/verify-production.mjs && npm run audit:coverage",
-    "deploy:production": "node scripts/deploy-production.mjs"
+    "deploy:production": "node scripts/deploy-production.mjs",
+    "history:sync": "tsx scripts/sync-history.ts",
+    "history:archive": "tsx scripts/archive-history.ts",
+    "history:publish": "tsx scripts/publish-history.ts",
+    "history:audit": "tsx scripts/audit-history.ts"
   },
   "dependencies": {
     "@babel/parser": "8.0.7",
+    "@libsql/client": "0.18.0",
     "jsonc-parser": "3.3.1",
     "lucide-react": "^1.17.0",
     "next": "^16.2.12",

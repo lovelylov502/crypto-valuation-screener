@@ -1,0 +1,116 @@
+import { createClient, type Client, type InStatement } from "@libsql/client";
+import { historyHash, HISTORY_VERSION, shiftDay, type FundamentalDay, type MarketDay, type ValuationDay, type HistorySource } from "./dailyHistory";
+
+// Keep headroom below Turso Free's 10M monthly writes / 5GB. A PK write is conservatively charged twice.
+export const HISTORY_WRITE_LIMIT = 8_000_000;
+export const HISTORY_STORAGE_LIMIT = 4_000_000_000;
+export function connectHistory() {
+  const url = process.env.TURSO_DATABASE_URL, authToken = process.env.TURSO_AUTH_TOKEN;
+  if (!url || !authToken) throw Error("History database is not configured");
+  if (!/^libsql:\/\/[a-z0-9.-]+\.turso\.io$/.test(url)) throw Error("Invalid history database URL");
+  return createClient({ url, authToken });
+}
+
+export async function initializeHistory(db: Client) {
+  await db.batch([
+    `CREATE TABLE IF NOT EXISTS history_assets (slug TEXT PRIMARY KEY, payload TEXT NOT NULL, content_hash TEXT NOT NULL) WITHOUT ROWID`,
+    `CREATE TABLE IF NOT EXISTS history_sources (id TEXT PRIMARY KEY, payload TEXT NOT NULL) WITHOUT ROWID`,
+    `CREATE TABLE IF NOT EXISTS history_fundamentals (slug TEXT NOT NULL, day TEXT NOT NULL, payload TEXT NOT NULL, content_hash TEXT NOT NULL, PRIMARY KEY(slug,day)) WITHOUT ROWID`,
+    `CREATE TABLE IF NOT EXISTS history_market (slug TEXT NOT NULL, day TEXT NOT NULL, payload TEXT NOT NULL, content_hash TEXT NOT NULL, PRIMARY KEY(slug,day)) WITHOUT ROWID`,
+    `CREATE TABLE IF NOT EXISTS history_valuations (slug TEXT NOT NULL, days INTEGER NOT NULL, day TEXT NOT NULL, payload TEXT NOT NULL, content_hash TEXT NOT NULL, PRIMARY KEY(slug,days,day)) WITHOUT ROWID`,
+    `CREATE TABLE IF NOT EXISTS history_fetches (id TEXT PRIMARY KEY, payload TEXT NOT NULL) WITHOUT ROWID`,
+    `CREATE TABLE IF NOT EXISTS history_runs (id TEXT PRIMARY KEY, payload TEXT NOT NULL) WITHOUT ROWID`,
+    `CREATE TABLE IF NOT EXISTS history_budget (month TEXT PRIMARY KEY, reserved INTEGER NOT NULL CHECK(reserved<=8000000)) WITHOUT ROWID`,
+  ], "write");
+}
+
+export class HistoryBudgetExceeded extends Error {}
+export async function storageBytes(db: Client) {
+  const [count, size] = await db.batch(["PRAGMA page_count", "PRAGMA page_size"], "read");
+  return Number(count.rows[0][0]) * Number(size.rows[0][0]);
+}
+
+/** The quota reservation and data writes commit atomically; concurrent jobs cannot overspend it. */
+export async function budgetedWrite(db: Client, statements: InStatement[], now = new Date()) {
+  if (!statements.length) return;
+  if (statements.length > 500) throw Error("History write batch exceeds 500 statements");
+  const size = await storageBytes(db);
+  const bytes = Buffer.byteLength(JSON.stringify(statements)) * 2;
+  if (size + bytes >= HISTORY_STORAGE_LIMIT) throw new HistoryBudgetExceeded("history_storage_budget");
+  const month = now.toISOString().slice(0, 7), cost = statements.length * 2 + 4;
+  try {
+    await db.batch([{sql:"INSERT INTO history_budget(month,reserved) VALUES(?,?) ON CONFLICT(month) DO UPDATE SET reserved=reserved+excluded.reserved",args:[month,cost]},...statements],"write");
+  } catch(error) {
+    if(error instanceof Error&&/CHECK constraint failed.*reserved/i.test(error.message))throw new HistoryBudgetExceeded("history_monthly_write_budget");
+    throw error;
+  }
+}
+
+async function writeChunks(db: Client, statements: InStatement[]) {
+  for (let i=0;i<statements.length;i+=500) await budgetedWrite(db,statements.slice(i,i+500));
+  return statements.length;
+}
+type SeriesTable = "history_fundamentals" | "history_market" | "history_valuations";
+export async function readSeries<T>(db: Client, table: SeriesTable, slug: string): Promise<T[]> {
+  const result = await db.execute({sql:`SELECT payload FROM ${table} WHERE slug=? ORDER BY day`, args:[slug]});
+  return result.rows.map(row=>JSON.parse(String(row.payload)) as T);
+}
+
+export async function saveSeries(db: Client, table: SeriesTable, slug: string, points: (FundamentalDay | MarketDay | ValuationDay)[]) {
+  const existing = await db.execute({sql:`SELECT day,${table === "history_valuations" ? "days," : ""}content_hash FROM ${table} WHERE slug=?`,args:[slug]});
+  const hashes = new Map(existing.rows.map(r=>[`${r.day}:${r.days ?? ""}`,String(r.content_hash)]));
+  const statements: InStatement[] = [];
+  for (const point of points) {
+    // Identical numeric evidence does not consume a write just because a new capture observed it again.
+    const content = table === "history_fundamentals" ? (()=>{const p=point as FundamentalDay;return [p.day,p.revenue.value,p.revenue.state,p.revenue.scope,p.holders.value,p.holders.state,p.holders.scope];})() : point;
+    const hash = historyHash([HISTORY_VERSION,content]), days = "days" in point ? point.days : undefined;
+    if (hashes.get(`${point.day}:${days ?? ""}`) === hash) continue;
+    const payload=JSON.stringify(point);
+    statements.push(days === undefined
+      ? {sql:`INSERT INTO ${table}(slug,day,payload,content_hash) VALUES(?,?,?,?) ON CONFLICT(slug,day) DO UPDATE SET payload=excluded.payload,content_hash=excluded.content_hash`,args:[slug,point.day,payload,hash]}
+      : {sql:`INSERT INTO ${table}(slug,days,day,payload,content_hash) VALUES(?,?,?,?,?) ON CONFLICT(slug,days,day) DO UPDATE SET payload=excluded.payload,content_hash=excluded.content_hash`,args:[slug,days,point.day,payload,hash]});
+  }
+  return writeChunks(db,statements);
+}
+
+export async function saveSources(db: Client, sources: HistorySource[]) {
+  const statements: InStatement[]=[];
+  const ids=new Set((await db.execute("SELECT id FROM history_sources")).rows.map(r=>String(r.id)));
+  for (const source of sources) {
+    if (!ids.has(source.id)) {statements.push({sql:"INSERT OR IGNORE INTO history_sources(id,payload) VALUES(?,?)",args:[source.id,JSON.stringify(source)]});ids.add(source.id);}
+  }
+  return writeChunks(db,statements);
+}
+export async function saveAsset(db: Client, slug: string, payload: unknown) {
+  const hash=historyHash(payload);
+  const row=await db.execute({sql:"SELECT content_hash FROM history_assets WHERE slug=?",args:[slug]});
+  if(row.rows[0]?.content_hash===hash)return 0;
+  await budgetedWrite(db,[{sql:"INSERT INTO history_assets(slug,payload,content_hash) VALUES(?,?,?) ON CONFLICT(slug) DO UPDATE SET payload=excluded.payload,content_hash=excluded.content_hash",args:[slug,JSON.stringify(payload),hash]}]);
+  return 1;
+}
+export async function getRecord<T>(db: Client, table:"history_fetches"|"history_runs", id:string):Promise<T|null> {
+  const r=await db.execute({sql:`SELECT payload FROM ${table} WHERE id=?`,args:[id]});
+  return r.rows.length?JSON.parse(String(r.rows[0].payload)) as T:null;
+}
+export async function setRecord(db: Client, table:"history_fetches"|"history_runs", id:string, payload:unknown) {
+  await budgetedWrite(db,[{sql:`INSERT INTO ${table}(id,payload) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload`,args:[id,JSON.stringify(payload)]}]);
+}
+
+export interface HistoryQuery { slug:string; days:number; from:string; to:string; after:string; limit:number }
+export async function queryHistory(db:Client,q:HistoryQuery) {
+  const asset=await db.execute({sql:"SELECT payload FROM history_assets WHERE slug=?",args:[q.slug]});
+  if(!asset.rows.length)return null;
+  const info=JSON.parse(String(asset.rows[0].payload));
+  const result=await db.execute({sql:`SELECT m.day,m.payload AS market,v.payload AS valuation FROM history_market m
+    LEFT JOIN history_valuations v ON v.slug=m.slug AND v.days=? AND v.day=m.day
+    WHERE m.slug=? AND m.day>=? AND m.day<=? AND m.day>? AND COALESCE(json_extract(m.payload,'$.identity'),'')=? ORDER BY m.day LIMIT ?`,args:[q.days,q.slug,q.from,q.to,q.after,info.identity??"",q.limit+1]});
+  const rows=result.rows.slice(0,q.limit);
+  const points=rows.map(r=>({...(JSON.parse(String(r.market)) as MarketDay),valuation:r.valuation?JSON.parse(String(r.valuation)):null}));
+  const flowResult=points.length?await db.execute({sql:"SELECT payload FROM history_fundamentals WHERE slug=? AND day>=? AND day<=? ORDER BY day",args:[q.slug,shiftDay(points[0].day,-q.days),shiftDay(points.at(-1)!.day,-1)]}):{rows:[]};
+  const fundamentals=flowResult.rows.map(r=>JSON.parse(String(r.payload)) as FundamentalDay);
+  const ids=[...new Set([...points.flatMap(p=>[p.marketSource,p.fdvSource]),...fundamentals.flatMap(p=>[p.revenue.source,p.holders.source])].filter((s):s is string=>!!s))];
+  const sources=ids.length?await db.execute({sql:`SELECT payload FROM history_sources WHERE id IN (${ids.map(()=>"?").join(",")})`,args:ids}):{rows:[]};
+  return {schema:1,calculationVersion:HISTORY_VERSION,asset:info,days:q.days,
+    convention:"UTC date D quote; trailing completed revenue dates end D-1. Actual quote times retained. Historical revenues may be revised by the provider.",
+    points,fundamentals,sources:sources.rows.map(r=>JSON.parse(String(r.payload))),nextCursor:result.rows.length>q.limit?String(rows.at(-1)!.day):null};
+}

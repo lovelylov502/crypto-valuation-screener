@@ -1,0 +1,60 @@
+name: Daily valuation history
+
+on:
+  workflow_run:
+    workflows: [Verified screener publication]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      max_market:
+        description: Maximum new market histories for this run
+        type: choice
+        options: ["80", "5", "0"]
+        default: "80"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-valuation-history
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      HISTORY_TAG: history-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --no-audit --no-fund
+      - name: Synchronize dated observations within the free quota
+        timeout-minutes: 48
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          FORCE_HISTORY: ${{ github.event_name == 'workflow_dispatch' && '--force' || '' }}
+          MAX_MARKET: ${{ inputs.max_market || '80' }}
+        run: npm run history:sync -- --max-market "$MAX_MARKET" --archive-tag "$HISTORY_TAG" $FORCE_HISTORY
+      - name: Preserve and verify original market receipts
+        if: always()
+        run: |
+          if test -f snapshot-output/history-cache/market-sources.json.gz; then
+            npm run history:archive -- --tag "$HISTORY_TAG"
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: history-${{ github.run_id }}-${{ github.run_attempt }}
+          path: snapshot-output/history-cache/history-report.json
+          retention-days: 30
+          if-no-files-found: ignore
