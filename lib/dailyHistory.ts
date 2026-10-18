@@ -134,10 +134,10 @@ export function snapshotMarket(coin: CoinRaw, current: CoinRaw, source: string, 
   // Use the captured response receipt time to validate the quote timestamp.
   const provider=coin.marketSources?.price === "CoinGecko" ? coin.marketSources.gecko : coin.marketSources?.price === "CoinMarketCap" ? coin.marketSources.cmc : null;
   const t = Date.parse(coin.marketDataUpdatedAt), captured = Date.parse(provider?.observedAt ?? asOf);
-  if (!Number.isFinite(t) || t > captured || captured - t > 12 * 3600_000) return null;
+  if (!Number.isFinite(t) || !Number.isFinite(captured) || t > captured || captured - t > 12 * 3600_000) return null;
   const same = (provider: string | null | undefined) => provider === "CoinGecko"
     ? !!coin.geckoId && coin.geckoId === current.geckoId
-    : provider === "CoinMarketCap" && !!coin.cmcId && coin.cmcId === current.cmcId && ["source-id", "contract", "retained"].includes(coin.cmcIdentity?.basis ?? "");
+    : provider === "CoinMarketCap" && !!coin.cmcId && coin.cmcId === current.cmcId && ["source-id", "contract", "retained"].includes(coin.cmcIdentity?.basis ?? "") && ["source-id", "contract", "retained"].includes(current.cmcIdentity?.basis ?? "");
   const price = same(coin.marketSources?.price) ? positive(coin.price) : null;
   // The legacy snapshot timestamps its preferred price provider only. Do not
   // assign that timestamp to a fallback provider's capital observation.
