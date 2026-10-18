@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { createClient, type Client } from "@libsql/client";
 import { budgetedWrite, HistoryBudgetExceeded, initializeHistory, queryHistory, saveAsset, saveSeries, saveSources, HISTORY_WRITE_LIMIT } from "./historyDatabase";
-import type { FundamentalDay, MarketDay } from "./dailyHistory";
+import { calculateDailyValuations, type FundamentalDay, type MarketDay } from "./dailyHistory";
 let db:Client;
 beforeEach(async()=>{db=createClient({url:":memory:"});await initializeHistory(db);});
 afterEach(()=>db.close());
@@ -40,4 +40,18 @@ it("returns the dated denominator evidence and rejects a replaced token's old ma
   expect(result?.points.map(p=>p.day)).toEqual(["2020-01-02"]);
   expect(result?.fundamentals[0].revenue.value).toBe(3);
   expect(result?.sources[0].id).toBe("revenue");
+});
+it("withholds a stored multiple while its market input is being updated",async()=>{
+  await saveAsset(db,"a",{identityStatus:"verified"});
+  const flow:FundamentalDay={day:"2020-01-01",revenue:{value:10,state:"complete",scope:"r",source:"r"},holders:{value:5,state:"complete",scope:"h",source:"h"}};
+  const market:MarketDay={day:"2020-01-02",price:1,mcap:3650,fdv:null,marketAt:"2020-01-02T00:00:00Z",fdvAt:null,marketSource:"m",fdvSource:null,basis:"utc_midnight"};
+  await saveSeries(db,"history_fundamentals","a",[flow]);
+  await saveSeries(db,"history_market","a",[market]);
+  await saveSeries(db,"history_valuations","a",calculateDailyValuations([flow],[market],true));
+  const q={slug:"a",days:1,from:"2020-01-01",to:"2020-01-03",after:"2019-12-31",limit:10};
+  expect((await queryHistory(db,q))?.points[0].valuation?.prMcap).toBe(1);
+  const changed={...market,mcap:7300};await saveSeries(db,"history_market","a",[changed]);
+  expect((await queryHistory(db,q))?.points[0]).toMatchObject({valuation:null,valuationState:"updating"});
+  await saveSeries(db,"history_valuations","a",calculateDailyValuations([flow],[changed],true));
+  expect((await queryHistory(db,q))?.points[0].valuation?.prMcap).toBe(2);
 });

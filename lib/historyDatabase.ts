@@ -1,5 +1,6 @@
 import { createClient, type Client, type InStatement } from "@libsql/client";
-import { historyHash, HISTORY_VERSION, shiftDay, type FundamentalDay, type MarketDay, type ValuationDay, type HistorySource } from "./dailyHistory";
+import { calculateDailyValuations, historyHash, HISTORY_VERSION, shiftDay, type FundamentalDay, type MarketDay, type ValuationDay, type HistorySource } from "./dailyHistory";
+import { eligibleCapital } from "./capitalEligibility";
 
 // Keep headroom below Turso Free's 10M monthly writes / 5GB. A PK write is conservatively charged twice.
 export const HISTORY_WRITE_LIMIT = 8_000_000;
@@ -105,9 +106,20 @@ export async function queryHistory(db:Client,q:HistoryQuery) {
     LEFT JOIN history_valuations v ON v.slug=m.slug AND v.days=? AND v.day=m.day
     WHERE m.slug=? AND m.day>=? AND m.day<=? AND m.day>? AND COALESCE(json_extract(m.payload,'$.identity'),'')=? ORDER BY m.day LIMIT ?`,args:[q.days,q.slug,q.from,q.to,q.after,info.identity??"",q.limit+1]});
   const rows=result.rows.slice(0,q.limit);
-  const points=rows.map(r=>({...(JSON.parse(String(r.market)) as MarketDay),valuation:r.valuation?JSON.parse(String(r.valuation)):null}));
+  const points=rows.map(r=>({...(JSON.parse(String(r.market)) as MarketDay),valuation:r.valuation?JSON.parse(String(r.valuation)) as ValuationDay:null,valuationState:r.valuation?"ready":"unavailable"}));
   const flowResult=points.length?await db.execute({sql:"SELECT payload FROM history_fundamentals WHERE slug=? AND day>=? AND day<=? ORDER BY day",args:[q.slug,shiftDay(points[0].day,-q.days),shiftDay(points.at(-1)!.day,-1)]}):{rows:[]};
   const fundamentals=flowResult.rows.map(r=>JSON.parse(String(r.payload)) as FundamentalDay);
+  // A batch can be observed between its market and valuation commits. Never
+  // return an old stored multiple alongside newly updated inputs.
+  const expected=new Map(calculateDailyValuations(fundamentals,points,eligibleCapital(info)).filter(v=>v.days===q.days).map(v=>[v.day,v]));
+  for(const point of points)if(point.valuation){
+    const value=expected.get(point.day)!;
+    const agrees=(Object.keys(value) as (keyof ValuationDay)[]).every(key=>{
+      const actual=point.valuation![key],wanted=value[key];
+      return typeof actual==="number"&&typeof wanted==="number"?Math.abs(actual-wanted)<=Math.max(1,Math.abs(wanted))*1e-8:actual===wanted;
+    });
+    if(!agrees){point.valuation=null;point.valuationState="updating";}
+  }
   const ids=[...new Set([...points.flatMap(p=>[p.marketSource,p.fdvSource]),...fundamentals.flatMap(p=>[p.revenue.source,p.holders.source])].filter((s):s is string=>!!s))];
   const sources=ids.length?await db.execute({sql:`SELECT payload FROM history_sources WHERE id IN (${ids.map(()=>"?").join(",")})`,args:ids}):{rows:[]};
   return {schema:1,calculationVersion:HISTORY_VERSION,asset:info,days:q.days,
