@@ -30,12 +30,12 @@ try {
   await initializeHistory(db);
   const last=await getRecord<{completedAt:string;fundamentalDay?:string;marketPending?:number}>(db,"history_fetches","sync:last");
   if(!argv.includes("--local")&&!argv.includes("--force")&&last&&Date.parse(startedAt)-Date.parse(last.completedAt)<5*3600_000){report.status="not-due";return;}
-  const backfillOnly=!argv.includes("--local")&&last?.fundamentalDay===startedAt.slice(0,10);
-  fundamentalDay=startedAt.slice(0,10);
-  if(backfillOnly&&last?.marketPending===0){report.status="not-due";return;}
   await writeFile(join(cache,"history-report.json"),JSON.stringify(report,null,2));
   const {snapshot,bundle,ref}=await loadHistoryInputs(cache);
   report.snapshot=ref.id;
+  fundamentalDay=snapshot.updatedAt.slice(0,10);
+  const backfillOnly=!argv.includes("--local")&&last?.fundamentalDay===fundamentalDay;
+  if(backfillOnly&&last?.marketPending===0){report.status="not-due";return;}
   const inputs=extractFundamentals(bundle,ref.rawBundleUrl!);
   const current=new Map(snapshot.coins.map(c=>[c.slug,c]));
   const quotes=new Map<string,Map<string,MarketDay>>();
