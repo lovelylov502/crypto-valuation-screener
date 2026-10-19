@@ -52,9 +52,9 @@ describe("source amount filters", () => {
 });
 
 describe("source amount preference persistence", () => {
-  it("keeps legacy filters and custom columns while defaulting the new condition to inactive", () => {
+  it("keeps legacy filters with the fixed columns while defaulting the new condition to inactive", () => {
     const saved = { columns: ["price", "pr7d"], capital: "fdv", maxPr: 10, rangeWindow: 7, search: "WLFI" };
-    expect(parseWorkspace(JSON.stringify(saved))).toMatchObject({ ...saved, sourceMetric: "revenue", minSourceAmount: null });
+    expect(parseWorkspace(JSON.stringify(saved))).toMatchObject({ ...saved, columns: defaultPreferences().columns, sourceMetric: "revenue", minSourceAmount: null });
     for (const value of [-1, "100000", null]) expect(parseWorkspace(JSON.stringify({ minSourceAmount: value, sourceMetric: "unknown" }))).toMatchObject({ minSourceAmount: null, sourceMetric: "revenue" });
     expect(parseWorkspace('{"minSourceAmount":1e999}').minSourceAmount).toBeNull();
   });

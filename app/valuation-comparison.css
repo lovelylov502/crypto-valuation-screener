@@ -1,0 +1,74 @@
+.fixed-valuation-workspace { --comparison-blue:#1d4ed8; --comparison-red:#b42335; max-width:2200px; }
+[data-theme="dark"] .fixed-valuation-workspace { --comparison-blue:#60a5fa; --comparison-red:#ff8592; }
+.scan-workspace .fixed-valuation-table { table-layout:fixed; min-width:1540px; }
+.fixed-coin-col { width:15.3%; }
+.fixed-metric-col { width:4.52%; }
+.fixed-history-col { width:19.75%; }
+.scan-workspace .fixed-valuation-table > :is(thead,tbody) > tr > .coin-column { width:auto; min-width:190px; max-width:none; }
+.scan-workspace .fixed-valuation-table > thead > .calculation-headings > th { padding:8px 12px; white-space:normal; }
+.calculation-headings strong { display:block; font-size:17px; font-weight:650; color:var(--color-text); line-height:1.3; }
+.calculation-headings span { display:block; margin-top:3px; font-size:12px; line-height:1.4; font-weight:400; }
+.calculation-headings small { display:block; margin-top:3px; font-size:11px; line-height:1.4; font-weight:400; }
+.scan-workspace .fixed-valuation-table > thead > tr > .band-heading { height:36px; font-size:14px; }
+.fixed-valuation-workspace .coin-open:not(:has(img)) > span { margin-left:40px; }
+.fixed-valuation-workspace .comparison-asof { margin-left:auto; }
+.scan-workspace .fixed-valuation-table .history-band-start { border-left:2px solid var(--color-border); }
+.calculation-headings .comparison-key { display:flex; justify-content:center; flex-wrap:wrap; gap:3px 12px; font-size:11px; margin-top:3px; }
+.comparison-key i { font-style:normal; }
+.comparison-blue,.comparison-below .comparison-latest strong { color:var(--comparison-blue); }
+.comparison-red,.comparison-above .comparison-latest strong { color:var(--comparison-red); }
+.scan-workspace .fixed-valuation-table > tbody > tr > td { font-size:14px; }
+.scan-workspace .fixed-valuation-table > tbody > tr > .history-cell { padding:10px 16px; }
+.history-comparison { display:flex; flex-direction:column; gap:4px; text-align:left; width:100%; color:var(--color-text); font-variant-numeric:tabular-nums; }
+.comparison-latest { display:flex; align-items:baseline; gap:9px; font-size:13px; line-height:1.25; }
+.comparison-latest strong { font-size:17px; font-weight:650; }
+.comparison-latest small { margin-left:auto; font-size:10px; color:var(--color-muted); }
+.comparison-rail { display:block; position:relative; height:3px; background:color-mix(in srgb,var(--color-muted) 42%,var(--color-panel)); margin:5px 0; border-radius:2px; }
+.comparison-segment { display:block; position:absolute; top:-1px; height:5px; background:var(--color-muted); }
+.comparison-below .comparison-segment { background:var(--comparison-blue); }
+.comparison-above .comparison-segment { background:var(--comparison-red); }
+.comparison-median { display:block; position:absolute; top:-5px; width:2px; height:13px; transform:translateX(-50%); background:var(--color-text); }
+.comparison-labels { display:flex; justify-content:space-between; gap:7px; font-size:11px; line-height:1.4; white-space:nowrap; color:var(--color-muted); }
+.comparison-labels b { color:var(--color-text); font-weight:400; }
+.comparison-insufficient,.comparison-unavailable,.comparison-unconnected,.comparison-invalid,.comparison-loading { align-items:center; text-align:center; line-height:1.5; }
+.history-comparison > strong { font-size:13px; font-weight:600; }
+.history-comparison > span:not([class]) { font-size:11px; }
+.history-comparison > small { font-size:11px; color:var(--color-muted); }
+.comparison-insufficient > strong,.comparison-unavailable > strong,.comparison-invalid > strong { color:var(--color-warning); }
+.comparison-unconnected,.comparison-loading { color:var(--color-muted); }
+.scan-workspace .history-open { min-height:56px; border-radius:4px; }
+.scan-workspace .history-open:hover strong { text-decoration:none; }
+.scan-workspace .history-open .comparison-below .comparison-latest strong { color:var(--comparison-blue); }
+.scan-workspace .history-open .comparison-above .comparison-latest strong { color:var(--comparison-red); }
+.scan-workspace .history-open .comparison-equal .comparison-latest strong { color:var(--color-text); }
+.scan-workspace .history-open :is(.comparison-insufficient,.comparison-unavailable,.comparison-invalid) > strong { color:var(--color-warning); }
+.scan-workspace .history-open :is(.comparison-unconnected,.comparison-loading) > strong { color:var(--color-muted); }
+.history-open:focus-visible { outline:2px solid var(--color-accent); outline-offset:6px; }
+.comparison-method { display:flex; flex-wrap:wrap; gap:5px 24px; padding:12px 0 4px; font-size:11px; color:var(--color-muted); line-height:1.7; }
+.comparison-method p { margin:0; }
+.comparison-method strong { color:var(--color-text); margin-right:6px; font-weight:600; }
+.fixed-valuation-table .ratio-reading .source-badge { display:block; width:max-content; margin:5px auto 0; max-width:100%; font-size:9px; padding:2px 4px; }
+.comparison-mobile-name { display:none; }
+@media (max-width:700px) {
+  .scan-workspace .fixed-valuation-table { min-width:1490px; }
+  .scan-workspace .fixed-valuation-table > :is(thead,tbody) > tr > .coin-column { position:static; min-width:170px; }
+  .fixed-coin-col { width:12%; }
+  .fixed-metric-col { width:5.1%; }
+  .fixed-history-col { width:18.5%; }
+  .calculation-headings > th > :is(strong,span,small) { position:sticky; left:0; max-width:calc(100vw - 46px); }
+  .comparison-mobile-name { display:block; text-align:left; margin-bottom:7px; color:var(--color-muted); font-size:11px; }
+  .fixed-valuation-workspace .coin-open:not(:has(img)) > span { margin-left:31px; }
+  .fixed-valuation-workspace .comparison-asof { width:100%; margin-left:0; }
+  .comparison-method { display:block; font-size:11px; }
+  .comparison-method p + p { margin-top:6px; }
+}
+@media (max-width:400px) {
+  .fixed-valuation-workspace .scan-toolbar { display:grid; grid-template-columns:44px minmax(0,1fr) 64px; grid-template-areas:"search search export" "watch basis filter"; gap:6px; }
+  .fixed-valuation-workspace .search-box { grid-area:search; width:auto; }
+  .fixed-valuation-workspace .export-trigger { grid-area:export; justify-self:end; width:44px; padding:8px; }
+  .fixed-valuation-workspace .watchlist-toggle { grid-area:watch; padding:6px; gap:3px; }
+  .fixed-valuation-workspace .capital-switch { grid-area:basis; margin:0; }
+  .fixed-valuation-workspace .capital-switch .choice-buttons { width:100%; }
+  .fixed-valuation-workspace .capital-switch button { min-width:0; flex:1; padding:7px 4px; font-size:12px; }
+  .fixed-valuation-workspace .filter-trigger { grid-area:filter; margin:0; padding:7px; gap:5px; }
+}

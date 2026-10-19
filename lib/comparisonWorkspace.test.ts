@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compareTableValues } from "./screenerFilters";
 import { metricCoverage, visibleMetricCoverage } from "./metricCoverage";
-import { defaultPreferences, parseWorkspace, resetWorkspaceFilters, withVisibleColumns, workspaceMigrationNotice } from "./workspacePreferences";
+import { defaultPreferences, parseWorkspace, resetWorkspaceFilters, withFixedColumns, workspaceMigrationNotice } from "./workspacePreferences";
 import { DEFAULT_VISIBLE_COLUMNS } from "./screenerColumns";
 import { sample } from "./testFixtures";
 
@@ -9,7 +9,7 @@ describe("table-first comparison workspace", () => {
   it("removes sales-only controls without converting their threshold into protocol revenue", () => {
     const raw=JSON.stringify({columns:["phr90d","psSales","price","pr"],capital:"fdv",search:"VVV",maxPs:20,maxPhr:90,available:"sales",sortKey:"psSales",sortDir:"asc"});
     const p=parseWorkspace(raw);
-    expect(p).toMatchObject({columns:["phr90d","price","pr"],capital:"fdv",search:"VVV",maxPr:0,maxPhr:90,rangeWindow:30,available:"all",sortKey:"pr",sortDir:"asc"});
+    expect(p).toMatchObject({columns:DEFAULT_VISIBLE_COLUMNS,capital:"fdv",search:"VVV",maxPr:0,maxPhr:90,rangeWindow:30,available:"all",sortKey:"pr",sortDir:"asc"});
     expect(p).not.toHaveProperty("maxPs");
     expect(workspaceMigrationNotice(raw)).toContain("P/S");
     expect(workspaceMigrationNotice(JSON.stringify(p))).toBeNull();
@@ -21,17 +21,18 @@ describe("table-first comparison workspace", () => {
     expect(p.sortKey).toBe("pr");
     expect(p.maxPr).toBe(0);
   });
-  it("keeps the exact valid personal order, independent filter periods and visible sorting after reload", () => {
+  it("replaces custom columns while retaining independent filter periods and visible sorting", () => {
     const p={...defaultPreferences(),columns:["phr90d","price","pr7d"] as const,sortKey:"pr7d" as const,sortDir:"asc" as const,rangeWindow:90 as const,coverageWindow:365 as const,maxPr:50,maxPhr:100,capital:"fdv" as const};
-    expect(parseWorkspace(JSON.stringify(p))).toEqual(p);
+    expect(parseWorkspace(JSON.stringify(p))).toEqual({...p,columns:DEFAULT_VISIBLE_COLUMNS});
   });
-  it("falls back to an observable sort when its column is hidden or defaults are restored", () => {
+  it("resets removed-column sorts without disturbing filters or the capital basis", () => {
     const p={...defaultPreferences(),sortKey:"phr90d" as const,sortDir:"asc" as const,search:"VVV",capital:"fdv" as const,view:"favorites" as const};
-    expect(withVisibleColumns(p,["price","mcap","pr"])).toMatchObject({sortKey:"mcap",sortDir:"desc",search:"VVV",capital:"fdv",view:"favorites"});
-    expect(withVisibleColumns(p,["price","pr"])).toMatchObject({sortKey:"name",sortDir:"asc"});
-    expect(withVisibleColumns(p,[...DEFAULT_VISIBLE_COLUMNS]).columns).not.toContain("psSales");
+    expect(withFixedColumns(p)).toMatchObject({sortKey:"phr90d",sortDir:"asc",search:"VVV",capital:"fdv",view:"favorites"});
+    expect(withFixedColumns({...p,sortKey:"revenue7d",sortDir:"desc"})).toMatchObject({sortKey:"pr",sortDir:"asc",search:"VVV",capital:"fdv",view:"favorites"});
+    expect(withFixedColumns({...p,sortKey:"name",sortDir:"desc"})).toMatchObject({sortKey:"name",sortDir:"desc"});
+    expect(withFixedColumns(p).columns).toEqual(DEFAULT_VISIBLE_COLUMNS);
   });
-  it("filter reset does not reset chosen columns or the numerator", () => {
+  it("filter reset keeps the fixed layout, visible sort and numerator", () => {
     const p=parseWorkspace(JSON.stringify({...defaultPreferences(),columns:["phr1y","price"],sortKey:"phr1y",capital:"fdv",maxPr:12,maxPhr:30}));
     expect(resetWorkspaceFilters(p)).toMatchObject({columns:p.columns,sortKey:"phr1y",capital:"fdv",maxPr:0,maxPhr:0});
   });

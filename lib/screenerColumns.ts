@@ -66,14 +66,6 @@ export interface ScreenerColumn {
   group: ColumnGroup;
 }
 
-export const COLUMN_GROUP_LABELS: Record<ColumnGroup, string> = {
-  valuation: "P/R · P/HR",
-  fundamentals: "집계액 · 홀더 환원",
-  market: "가격 · 시총 · 공급",
-  performance: "가격 변화",
-  research: "추가 분석 지표",
-};
-
 export const SCREENER_COLUMNS: ScreenerColumn[] = [
   { key: "pr24h", label: "P/R · 24시간", title: "원천 참고 배수: 현재 토큰 가치 ÷ (표시한 DefiLlama Revenue 하루 금액 × 365). 제공처 집계는 별도 표시", group: "valuation" },
   { key: "phr24h", label: "P/HR · 24시간", title: "원천 참고 배수: 현재 토큰 가치 ÷ (표시한 DefiLlama Holders Revenue 하루 금액 × 365)", group: "valuation" },
@@ -125,14 +117,7 @@ export const SCREENER_COLUMNS: ScreenerColumn[] = [
 
 export const DEFAULT_VISIBLE_COLUMNS: SortKey[] = [
   "pr24h", "pr7d", "pr", "pr90d", "pr1y",
-  "revenueReview", "revenue24h", "revenue7d", "revenue30d", "revenue90d", "revenue1y",
-  "phr24h", "phr7d", "phr", "phr90d", "phr1y", "holderRoute",
+  "phr24h", "phr7d", "phr", "phr90d", "phr1y",
 ];
 
 export const REVENUE_COLUMN_DAYS = { revenue24h: 1, revenue7d: 7, revenue30d: 30, revenue90d: 90, revenue1y: 365 } as const;
-export function columnBand(key: SortKey): string {
-  if (["pr24h", "pr7d", "pr", "pr90d", "pr1y"].includes(key)) return "원천 참고 P/R";
-  if (key in REVENUE_COLUMN_DAYS) return "Revenue 원천 금액";
-  if (["phr24h", "phr7d", "phr", "phr90d", "phr1y"].includes(key)) return "원천 참고 P/HR";
-  return "추가 지표";
-}

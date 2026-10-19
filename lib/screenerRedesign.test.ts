@@ -83,15 +83,14 @@ describe("server-side discovery", () => {
     expect(queryScreener(full, { ...p, view: "growth", rangeWindow: 7 }).coins.map(c => c.slug)).toEqual(["large-growth", "small-base"]);
     expect(queryScreener(full, { ...p, view: "favorites" }, ["unknown-104"]).coins[0].slug).toBe("unknown-104");
   });
-  it("migrates the old default while keeping custom columns and filters", () => {
+  it("migrates old column choices to the fixed layout while preserving filters and visible sorting", () => {
     expect(parseWorkspace(JSON.stringify({ columns: ["price", "change1d", "mcap", "pr", "phr"], capital: "fdv", maxPr: 10 }))).toMatchObject({ columns: defaultPreferences().columns, capital: "fdv", maxPr: 10, sortKey: "pr", sortDir: "asc" });
-    expect(parseWorkspace(JSON.stringify({ columns: ["phr90d", "price"], sortKey: "phr90d", sortDir: "asc" })).columns).toEqual(["phr90d", "price"]);
+    expect(parseWorkspace(JSON.stringify({ columns: ["phr90d", "price"], sortKey: "phr90d", sortDir: "asc" }))).toMatchObject({columns:defaultPreferences().columns,sortKey:"phr90d",sortDir:"asc"});
     expect(parseWorkspace(JSON.stringify({ view: "growth" }))).toMatchObject({ view: "all", growingOnly: true });
   });
-  it("restores price-period columns and sorts by 90-day price change with missing values last", () => {
-    const saved = { ...defaultPreferences(), columns: ["priceChange30d", "priceChange90d", "priceChange1y"], sortKey: "priceChange90d", sortDir: "desc" };
-    const prefs = parseWorkspace(JSON.stringify(saved));
-    expect(prefs).toEqual(saved);
+  it("migrates removed price sorting while preserving underlying numeric sort behavior", () => {
+    const prefs = { ...defaultPreferences(), sortKey: "priceChange90d" as const, sortDir: "desc" as const };
+    expect(parseWorkspace(JSON.stringify(prefs))).toMatchObject({columns:defaultPreferences().columns,sortKey:"pr",sortDir:"asc"});
     const full = assembleScreener([
       sample({ slug: "declining", priceChange30d: 100, priceChange90d: -20 }),
       sample({ slug: "missing", priceChange90d: null }),

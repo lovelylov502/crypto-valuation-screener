@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Columns3, Download, Info, RefreshCw, RotateCcw, Search, SlidersHorizontal, Star, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Download, Info, RefreshCw, RotateCcw, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import type { CoinScored } from "@/lib/types";
 import type { ScreenerPage } from "@/lib/screenerQuery";
 import { fmtKstMinute, fmtMult, fmtUsd } from "@/lib/format";
 import { parseFavoriteSlugs, serializeFavoriteSlugs } from "@/lib/screenerFilters";
-import { DEFAULT_VISIBLE_COLUMNS, SCREENER_COLUMNS as COLS, REVENUE_COLUMN_DAYS, columnBand, type SortKey } from "@/lib/screenerColumns";
-import { defaultPreferences, parseWorkspace, resetWorkspaceFilters, withVisibleColumns, workspaceMigrationNotice, WORKSPACE_KEY, type WorkspacePreferences } from "@/lib/workspacePreferences";
+import { DEFAULT_VISIBLE_COLUMNS, SCREENER_COLUMNS as COLS, type SortKey } from "@/lib/screenerColumns";
+import { defaultPreferences, parseWorkspace, resetWorkspaceFilters, workspaceMigrationNotice, WORKSPACE_KEY, type WorkspacePreferences } from "@/lib/workspacePreferences";
 import { referenceMultiple, referenceReason, referenceReading, referenceMultiples } from "@/lib/referenceMetrics";
-import { renderCell } from "./ScreenerCells";
 import { UsdRangeFilter } from "./RangeFilters";
 import { Pagination } from "./Pagination";
 import { PAGE_SIZE_KEY, parsePageSize } from "@/lib/pagination";
@@ -17,19 +16,17 @@ import { useWindowTableHeader } from "./useWindowTableHeader";
 import { SettingsDialog } from "./SettingsDialog";
 import { AVAILABILITY_LABELS, METRIC_WINDOWS, METRIC_COLUMN_DAYS, windowLabel, type AvailableMetric } from "@/lib/metricCoverage";
 import { DataGuide } from "./DataGuide";
-import { DisplaySettings } from "./DisplaySettings";
-import { signedUsd, tone } from "./InlineCoinDetail";
 import { CoinDetailDialog } from "./CoinDetailDialog";
 import { pageUrl, useScreenerPage } from "./useScreenerPage";
-import { growthLabel, revenueTrend } from "@/lib/revenueTrend";
-import { revenueReading } from "@/lib/revenueReading";
-import { businessRevenue } from "@/lib/fundamentals";
 import { BRAND } from "@/lib/brand";
 import { CollectionStatus } from "./CollectionStatus";
 import { publicationComparisonSummary } from "@/lib/collectionHealth";
 import { ThemeSwitch } from "./ThemeSwitch";
 import { metricStatus } from "@/lib/metricStatus";
 import { version as APP_VERSION } from "@/package.json";
+
+import { ValuationComparisonCell } from "./ValuationComparisonCell";
+import { comparisonEnvelopeValid, comparisonReading } from "@/lib/valuationComparison";
 
 const FAVORITES_KEY = "crypto-valuation-favorites-v1";
 
@@ -53,7 +50,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
   const [ready, setReady] = useState(false);
   const [storageError, setStorageError] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [popup, setPopup] = useState<"filters" | "columns" | "coverage" | null>(null);
+  const [popup, setPopup] = useState<"filters" | "coverage" | null>(null);
   const [mcapRangeOpen, setMcapRangeOpen] = useState(false);
   const [status, setStatus] = useState("");
   const [sourceOpen, setSourceOpen] = useState(false);
@@ -64,6 +61,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
   const [exporting, setExporting] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
   const rowButtons = useRef(new Map<string, HTMLButtonElement>());
+  const detailTrigger = useRef<HTMLButtonElement | null>(null);
   const tableRef = useWindowTableHeader();
   const { data, publication, refreshing, refresh, error, checkedAt } = useScreenerPage(initialData, prefs, favorites, page, pageSize, ready);
 
@@ -89,9 +87,12 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
   const resetFilters = () => { setPrefs(resetWorkspaceFilters); setPage(1); };
   const onSort = (key: SortKey) => { setPrefs(p => ({ ...p, sortKey: key, sortDir: p.sortKey === key ? p.sortDir === "asc" ? "desc" : "asc" : METRIC_COLUMN_DAYS[key] || key === "name" ? "asc" : "desc" })); setPage(1); };
   const goPage = (n: number) => { setPage(n); setSelectedSlug(null); resultsRef.current?.scrollIntoView({ block: "start" }); };
-  const selectedCols = prefs.columns.map(k => COLS.find(c => c.key === k)!).filter(Boolean);
-  const bands: { label: string; count: number; start: number }[] = [];
-  selectedCols.forEach((col, i) => { const label = columnBand(col.key); if (bands.at(-1)?.label === label) bands[bands.length - 1].count++; else bands.push({ label, count: 1, start: i }); });
+  const openDetail = (slug: string, trigger?: HTMLButtonElement) => {
+    detailTrigger.current = trigger ?? rowButtons.current.get(slug) ?? null;
+    setSelectedSlug(slug);
+  };
+  const selectedCols = DEFAULT_VISIBLE_COLUMNS.map(k => COLS.find(c => c.key === k)!);
+  const comparison = comparisonEnvelopeValid(data?.valuationComparison, prefs.capital) ? data!.valuationComparison! : null;
   const activeFilters = [!!prefs.search, prefs.view !== "all", prefs.growingOnly, prefs.holderOnly, !!prefs.category, prefs.available !== "all", prefs.minMcap > 0 || prefs.maxMcap > 0, prefs.maxPr > 0, prefs.maxPhr > 0, prefs.minSourceAmount !== null, prefs.hideDilution, prefs.verifiedOnly].filter(Boolean).length;
   const capitalName = prefs.capital === "mcap" ? "유통 시총" : "FDV";
   const rows = data?.coins ?? [];
@@ -102,14 +103,6 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
   const sortIcon = (key: SortKey) => prefs.sortKey === key ? prefs.sortDir === "asc" ? <ArrowUp size={12}/> : <ArrowDown size={12}/> : null;
 
   const cell = (c: CoinScored, key: SortKey) => {
-    const revenueDays = REVENUE_COLUMN_DAYS[key as keyof typeof REVENUE_COLUMN_DAYS];
-    if (revenueDays) {
-      const trend = revenueTrend(c, revenueDays);
-      const reading = revenueReading(c, revenueDays);
-      const provider = reading.basis === "provider_total" || reading.basis === "provider_partial";
-      const note = reading.amount === null ? "자료 부족" : provider ? reading.basis === "provider_partial" ? "부분 집계" : "제공처 집계" : !businessRevenue(c) ? prefs.revenueSort === "amount" ? "" : reading.kindLabel : prefs.revenueSort === "delta" ? signedUsd(trend.delta) : trend.delta === null ? "" : growthLabel(trend);
-      return <span className="revenue-reading" title={`${reading.kindLabel} · ${reading.basisLabel} · 직전 ${windowLabel(revenueDays)} ${fmtUsd(trend.previous)} · 증가액 ${signedUsd(trend.delta)}`}><strong>{fmtUsd(reading.amount)}</strong>{note && <small className={provider ? "source-badge" : tone(trend.delta)}>{note}</small>}</span>;
-    }
     const days = METRIC_COLUMN_DAYS[key];
     if (days) {
       const holder = key.startsWith("phr");
@@ -119,7 +112,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
       const reading = referenceReading(c, metric, days);
       return <span className={value === null ? "unavailable-metric" : "ratio-reading"} title={reason}>{fmtMult(value)}{value === null ? <><small>{metricStatus(reason)}</small><span className="sr-only"> · {reason}</span></> : reading.basis === "provider_total" && <small className="source-badge">{days === 365 ? "원천 1년" : "제공처 집계"}</small>}</span>;
     }
-    return renderCell(c, key, prefs.capital);
+    return null;
   };
 
   const exportResults = async () => {
@@ -141,7 +134,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
     finally { setExporting(false); }
   };
 
-  return <main className="research-app valuation-workspace scan-workspace">
+  return <main className="research-app valuation-workspace scan-workspace fixed-valuation-workspace">
     <a className="skip-link" href="#screener-results">결과 표로 이동</a>
     <header className="valuation-header">
       <a className="brand-home" href="/" aria-label={`${BRAND.name} ${BRAND.koreanName} 홈`}>
@@ -165,35 +158,44 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
       <button className="icon-button watchlist-toggle" aria-label="관심종목만 보기" aria-pressed={prefs.view === "favorites"} title="관심종목만 보기" onClick={() => update("view", prefs.view === "favorites" ? "all" : "favorites")}><Star size={17} fill={prefs.view === "favorites" ? "currentColor" : "none"}/>{favorites.size > 0 && <small>{favorites.size}</small>}</button>
       <div className="capital-switch"><span>배수 기준</span><div className="choice-buttons" role="group" aria-label="배수 분자"><button aria-pressed={prefs.capital === "mcap"} onClick={() => update("capital", "mcap")}>유통 시총</button><button aria-pressed={prefs.capital === "fdv"} onClick={() => update("capital", "fdv")}>FDV</button></div></div>
       <button className="button filter-trigger" aria-label="필터" title="필터" onClick={() => { setMcapRangeOpen(prefs.minMcap > 0 || prefs.maxMcap > 0); setPopup("filters"); }}><SlidersHorizontal size={18}/>필터{activeFilters > 0 && <small>{activeFilters}</small>}</button>
-      <button className="button" onClick={() => setPopup("columns")}><Columns3 size={16}/>열 표시<ChevronDown size={13}/></button>
+      <button className="icon-button export-trigger" aria-label="검색 결과 전체 내보내기" title="검색 결과 전체 내보내기" disabled={exporting || !data} onClick={() => void exportResults()}><Download size={16}/></button>
     </div>
     <div className="scan-meta" ref={resultsRef} id="screener-results" tabIndex={-1}>
       <button className="text-button" onClick={() => setPopup("coverage")}><span>프로젝트 {data?.pagination.total.toLocaleString() ?? "–"}개</span><span>·</span><span>연결 토큰 {data?.universe.linkedTokens.toLocaleString() ?? "–"}개</span><Info size={12}/></button>
       <span role="status">{refreshing ? "조회 중…" : `${total.toLocaleString()}개 표시 대상`}{prefs.view === "favorites" ? " · 관심종목" : ""}</span>
+      {comparison && <span className="comparison-asof">과거 비교 기준: {comparison.asOf} UTC</span>}
       {activeFilters > 0 && <button className="text-button" onClick={resetFilters}>조건 {activeFilters}개 해제<X size={12}/></button>}
     </div>
     <div ref={tableRef} className="table-scroll scan-table-scroll thin-scroll" role="region" aria-label="프로토콜 비교 표 · 가로 스크롤 가능" tabIndex={0} aria-busy={refreshing}>
-      <table className="screener-table scan-table"><caption className="sr-only">DefiLlama 원천 참고 배수, 수익 분류와 검토 상태 비교. 종목을 누르면 상세 팝업을 엽니다. 빈 값은 0이 아닙니다.</caption>
-        <thead><tr><th className="coin-column" rowSpan={2} scope="col" aria-sort={prefs.sortKey === "name" ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort("name")}>종목 · {capitalName}{sortIcon("name")}</button></th>{bands.map((band, i) => <th key={i} colSpan={band.count} scope="colgroup" className="band-heading">{band.label}{(band.label.includes("P/R") || band.label.includes("P/HR")) && <span className="band-basis"> ({capitalName} 기준)</span>}{selectedCols[band.start].key in REVENUE_COLUMN_DAYS && <select aria-label="수익 정렬 기준" value={prefs.revenueSort} onChange={e => { setPrefs(p => ({ ...p, revenueSort: e.target.value as WorkspacePreferences["revenueSort"], sortKey: p.sortKey in REVENUE_COLUMN_DAYS ? p.sortKey : selectedCols.find(c => c.key in REVENUE_COLUMN_DAYS)!.key, sortDir: "desc" })); setPage(1); }}><option value="amount">금액</option><option value="percent">증가율</option><option value="delta">증가액</option></select>}</th>)}</tr>
-          <tr>{selectedCols.map((col, i) => { const days = METRIC_COLUMN_DAYS[col.key] ?? REVENUE_COLUMN_DAYS[col.key as keyof typeof REVENUE_COLUMN_DAYS]; return <th key={col.key} className={`${bands.some(b => b.start === i) ? "band-start " : ""}${prefs.sortKey === col.key ? "active-sort" : ""}`} scope="col" title={col.title} aria-sort={prefs.sortKey === col.key ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort(col.key)} aria-label={col.label + " 정렬"}>{days ? windowLabel(days) : col.label}{sortIcon(col.key)}</button></th>; })}</tr>
+      <table className="screener-table scan-table fixed-valuation-table"><caption className="sr-only">기간별 수익 기준 현재 P/R·P/HR과 하루 수익 기준 과거 배수 비교. 종목을 누르면 상세 팝업을 엽니다. 빈 값은 0이 아닙니다.</caption>
+        <colgroup><col className="fixed-coin-col"/>{selectedCols.map(col => <col key={col.key} className="fixed-metric-col"/>)}<col className="fixed-history-col"/><col className="fixed-history-col"/></colgroup>
+        <thead>
+          <tr className="calculation-headings">
+            <th className="coin-column" rowSpan={3} scope="col" aria-sort={prefs.sortKey === "name" ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort("name")}>종목 · {capitalName}{sortIcon("name")}</button></th>
+            <th colSpan={10} scope="colgroup"><strong>현재 배수 · 기간별 수익 기준</strong><span>최신 {capitalName} ÷ 해당 기간 수익의 연환산액</span><small>아래 기간은 수익 집계 기간입니다.</small></th>
+            <th colSpan={2} scope="colgroup" className="history-band-start"><strong>과거 비교 · 하루 수익 기준</strong><span>해당 날짜 {capitalName} ÷ (그날 24시간 수익 × 365)</span><span className="comparison-key"><i>비교 범위: 이전 365일</i><i className="comparison-blue">파란선: 중앙값보다 낮음</i><i className="comparison-red">붉은선: 높음</i></span></th>
+          </tr>
+          <tr><th colSpan={5} scope="colgroup" className="band-heading">P/R · Revenue</th><th colSpan={5} scope="colgroup" className="band-heading">P/HR · Holders Revenue</th><th rowSpan={2} scope="col" className="band-heading history-band-start">P/R 과거 비교</th><th rowSpan={2} scope="col" className="band-heading">P/HR 과거 비교</th></tr>
+          <tr>{selectedCols.map((col, i) => <th key={col.key} className={(i === 5 ? "band-start " : "") + (prefs.sortKey === col.key ? "active-sort" : "")} scope="col" title={col.title} aria-sort={prefs.sortKey === col.key ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort(col.key)} aria-label={col.label + " 정렬"}>{windowLabel(METRIC_COLUMN_DAYS[col.key]!)}{sortIcon(col.key)}</button></th>)}</tr>
         </thead>
         <tbody>{rows.map(c => <tr key={c.slug} className={"coin-row" + (selectedSlug === c.slug ? " selected-coin" : "")} onClick={event => {
             if ((event.target as Element).closest("button, a")) return;
-            setSelectedSlug(selectedSlug === c.slug ? null : c.slug);
+            openDetail(c.slug);
           }}>
-            <th scope="row" className="coin-column"><div className="coin-identity"><button className={"favorite-button " + (favorites.has(c.slug) ? "saved" : "")} aria-pressed={favorites.has(c.slug)} aria-label={c.name + " 관심종목 " + (favorites.has(c.slug) ? "해제" : "추가")} onClick={() => toggleFavorite(c.slug)}><Star size={13} fill={favorites.has(c.slug) ? "currentColor" : "none"}/></button><button className="coin-open" ref={el => { if (el) rowButtons.current.set(c.slug, el); else rowButtons.current.delete(c.slug); }} aria-label={c.name + " 상세 보기"} aria-haspopup="dialog" aria-expanded={selectedSlug === c.slug} aria-controls={selectedSlug === c.slug ? `detail-${c.slug}` : undefined} onClick={() => setSelectedSlug(selectedSlug === c.slug ? null : c.slug)}>{selectedSlug === c.slug ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} {c.logo && <img src={c.logo} alt="" width={32} height={32} loading="lazy"/>}<span><strong>{c.name} <em>{c.symbol}</em></strong><small>{c[prefs.capital] === null ? `${capitalName} 미확인` : `${capitalName} ${fmtUsd(c[prefs.capital])}`}{c.identityStatus !== "verified" && " · 연결 확인"}{!!c.dataQuality?.issues.length && <span className="caution-text"> · 자료 확인</span>}</small></span></button></div></th>
-            {selectedCols.map((col, i) => <td key={col.key} className={bands.some(b => b.start === i) ? "band-start" : ""}><button className="metric-open" tabIndex={-1} aria-label={c.name + " " + col.label + " 계산 근거"} onClick={() => setSelectedSlug(selectedSlug === c.slug ? null : c.slug)}>{cell(c, col.key)}</button></td>)}
+            <th scope="row" className="coin-column"><div className="coin-identity"><button className={"favorite-button " + (favorites.has(c.slug) ? "saved" : "")} aria-pressed={favorites.has(c.slug)} aria-label={c.name + " 관심종목 " + (favorites.has(c.slug) ? "해제" : "추가")} onClick={() => toggleFavorite(c.slug)}><Star size={13} fill={favorites.has(c.slug) ? "currentColor" : "none"}/></button><button className="coin-open" ref={el => { if (el) rowButtons.current.set(c.slug, el); else rowButtons.current.delete(c.slug); }} aria-label={c.name + " 상세 보기"} aria-haspopup="dialog" aria-expanded={selectedSlug === c.slug} aria-controls={selectedSlug === c.slug ? `detail-${c.slug}` : undefined} onClick={event => openDetail(c.slug, event.currentTarget)}>{selectedSlug === c.slug ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} {c.logo && <img src={c.logo} alt="" width={32} height={32} loading="lazy"/>}<span><strong>{c.name} <em>{c.symbol}</em></strong><small>{c[prefs.capital] === null ? `${capitalName} 미확인` : `${capitalName} ${fmtUsd(c[prefs.capital])}`}{c.identityStatus !== "verified" && " · 연결 확인"}{!!c.dataQuality?.issues.length && <span className="caution-text"> · 자료 확인</span>}</small></span></button></div></th>
+            {selectedCols.map((col, i) => <td key={col.key} className={i === 5 ? "band-start" : ""}><button className="metric-open" tabIndex={-1} aria-label={c.name + " " + col.label + " 계산 근거"} onClick={event => openDetail(c.slug, event.currentTarget)}>{cell(c, col.key)}</button></td>)}
+            {(["pr", "phr"] as const).map(metric => <td key={metric} className={"history-cell " + (metric === "pr" ? "history-band-start" : "band-start")}><button className="metric-open history-open" aria-label={c.name + (metric === "pr" ? " P/R" : " P/HR") + " 과거 비교와 상세 보기"} onClick={event => openDetail(c.slug, event.currentTarget)}><span className="comparison-mobile-name" aria-hidden="true">{c.name}</span><ValuationComparisonCell reading={data?.coverage.capital !== prefs.capital ? {status: "loading"} : comparisonReading(data?.valuationComparison, prefs.capital, c.slug, metric)} label={metric === "pr" ? "P/R" : "P/HR"} capitalLabel={capitalName}/></button></td>)}
           </tr>
         )}</tbody>
       </table>
     </div>
     {!rows.length && <div className="empty-state"><Search size={26}/><h3>{!data ? "자료를 준비하고 있습니다" : prefs.view === "favorites" && !favorites.size ? "별표로 관심종목을 모아 보세요" : "조건에 맞는 종목이 없습니다"}</h3><p>{!data ? "공개 자료 응답을 기다립니다." : "검색어 또는 필터 조건을 조절하세요."}</p><button className="button" onClick={!data ? refresh : resetFilters}>{!data ? "다시 확인" : "조건 초기화"}</button></div>}
+    <div className="comparison-method"><p><strong>현재 배수</strong> 24시간·7일·30일·90일 수익은 연환산, 1년은 원천 수익 합계 기준입니다.</p><p><strong>과거 비교</strong> 이전 365일의 일별 배수를 비교합니다. 매일 그날의 가치와 24시간 수익으로 계산하며, 최신 시세와 관측 시점이 다를 수 있습니다.</p></div>
     <div className="table-legend"><span><b className="source-badge">제공처 집계</b> 제공처 기간 집계 · 완료일 이력과 구분</span><span><b>자료 부족</b> 기간 이력 미확보</span><span><b>미연결</b> 원천 자료 미연결</span></div>
     <div className="scan-footer"><p>원천 참고 배수 · 짧은 기간은 연환산 · 제공처 집계와 원천 1년 금액은 별도 표시<span className="app-version-persistent" aria-label="앱 버전">{`v${APP_VERSION}`}</span></p><Pagination total={total} page={currentPage} size={pageSize} position="top" onPage={goPage} onSize={s => { setPageSize(s); setPage(1); }}/></div>
     <span className="sr-only" role="status" aria-live="polite">{status}</span>
-    {selectedCoin && <CoinDetailDialog key={selectedCoin.slug} coin={selectedCoin} capital={prefs.capital} onClose={() => setSelectedSlug(null)} returnFocus={rowButtons.current.get(selectedCoin.slug) ?? null}/>}
+    {selectedCoin && <CoinDetailDialog key={selectedCoin.slug} coin={selectedCoin} capital={prefs.capital} onClose={() => setSelectedSlug(null)} returnFocus={detailTrigger.current}/>}
 
-    {popup === "columns" && <SettingsDialog title="열 표시" wide onClose={() => setPopup(null)} headerAction={<button className="text-button" onClick={() => { setPrefs(p => withVisibleColumns(p, [...DEFAULT_VISIBLE_COLUMNS])); setStatus("기본 열을 복원했습니다."); }}><RotateCcw size={15}/>기본 열 복원</button>}><DisplaySettings columns={prefs.columns} onChange={columns => setPrefs(p => withVisibleColumns(p, columns))} onStatus={setStatus}/><button className="button export-results" disabled={exporting || !data} onClick={() => void exportResults()}><Download size={15}/>{exporting ? "전체 결과 준비 중…" : "검색 결과 전체 내보내기"}</button><p role="status">{exporting || status.includes("내보") ? status : ""}</p></SettingsDialog>}
     {popup === "filters" && <SettingsDialog title="필터" onClose={() => setPopup(null)} headerAction={<button className="text-button" onClick={resetFilters}><RotateCcw size={15}/>초기화</button>}><div className="sidebar-body filter-settings" aria-label="필터 설정">
       <p className="sidebar-hint">조건은 전체 프로젝트에 적용합니다. 가격 하락만으로 종목을 제외하지 않습니다.</p>
       <fieldset className="filter-section"><legend>조건 적용 기간</legend><div className="choice-buttons period-buttons filter-periods" role="group" aria-label="조건 적용 기간">{METRIC_WINDOWS.map(days => <button key={days} aria-pressed={prefs.rangeWindow === days} onClick={() => update("rangeWindow", days)}>{windowLabel(days)}</button>)}</div></fieldset>

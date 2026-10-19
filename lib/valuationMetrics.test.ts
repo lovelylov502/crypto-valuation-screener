@@ -94,11 +94,11 @@ describe("canonical market identity",()=>{
 });
 
 describe("comparison preferences",()=>{
-  it("preserves chosen metric order through filter resets and storage reload",()=>{
+  it("keeps the fixed metric order through filter resets and storage reload",()=>{
     const p={...defaultPreferences(),columns:["pr","phr1y","phr90d","phr","phr7d"] as const,view:"favorites" as const,search:"VVV",maxPhr:200,capital:"fdv" as const};
     const saved=parseWorkspace(JSON.stringify(p)), reset=resetWorkspaceFilters(saved);
-    expect(saved.columns).toEqual(p.columns);
-    expect(reset.columns).toEqual(p.columns);
+    expect(saved.columns).toEqual(defaultPreferences().columns);
+    expect(reset.columns).toEqual(defaultPreferences().columns);
     expect(reset.capital).toBe("fdv");
     expect(reset.search).toBe("");
     expect(reset.maxPhr).toBe(0);

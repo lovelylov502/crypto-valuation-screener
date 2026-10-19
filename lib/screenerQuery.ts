@@ -7,8 +7,11 @@ import { sortValue } from "./screenerSort";
 import { REVENUE_COLUMN_DAYS } from "./screenerColumns";
 import { revenueTrend } from "./revenueTrend";
 import { revenueReading } from "./revenueReading";
+import type { ValuationComparisonPage } from "./valuationComparison";
 
 export interface ScreenerPage extends ScreenerResponse {
+  /** Optional batched daily-history read model. See docs/UI_DB_HANDOFF.md. */
+  valuationComparison?: ValuationComparisonPage;
   referenceMultiples: Record<string, ReturnType<typeof referenceMultiples>>;
   pagination: { page: number; size: number; total: number; filtered: number; favorites: number };
   coverage: ReturnType<typeof metricCoverage>&{capital:WorkspacePreferences["capital"];window:WorkspacePreferences["coverageWindow"]};

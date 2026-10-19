@@ -2,6 +2,40 @@
 
 final result: passed
 
+## Fixed valuation comparison table — 2026-10-20
+
+Scope: the approved second corrected table mockup. Current P/R and P/HR retain their five revenue windows on the left; same-date daily historical comparisons sit on the right. Revenue amount columns and column customization are removed. This is UI verification with an explicit DB handoff, not production or remote-data verification.
+
+Source: `C:/Users/TAE/.codex/generated_images/01a151cf-16bb-7f53-af8d-481d6145e64b/exec-f76647ce-9aa1-4257-923f-1b065bde42ce.png` (1660 × 948).
+Evidence directory: `C:/Users/TAE/.codex/worktrees/valuation-table-ui/crypto-valuation-screener/.hermes/ui-qa` (Git-ignored).
+
+- Desktop viewport: 1660 × 948 CSS pixels, device scale approximately 1. The full-page capture is 1645px wide because the browser scrollbar occupies 15px. The existing TOVENIT page header is retained, so the table regions, rather than the different page headers, are compared. Source crop: (17, 54)–(1643, 904), 1626 × 850. Implementation crop: (28, 304)–(1632, 1195), 1604 × 891. The 22px width difference follows existing page gutters; neither crop is stretched to claim pixel equality.
+- `comparison-final.jpg` places both complete table regions together. `comparison-rails.jpg` compares the first three historical rows in detail. Both were reopened and visually inspected after the final code changes. `desktop-final-dark.png` records the final production build; `desktop-final-light.png` records the same desktop layout in light mode.
+- Responsive evidence: `tablet-final.png` (1024 × 768), `mobile-final-light-history.png` (390px), `mobile-320-final-top.png` and `mobile-320-final-history.png` (320px). Document client/scroll widths match at 1009, 375 and 305px respectively. The table scrolls horizontally inside its own region. At 320px each 243px history rail is fully visible within the 277px table viewport, with the coin name repeated above it.
+- State evidence: `unconnected-final.png` and `invalid-final.png`. Omitting the optional history payload or supplying the wrong denominator produces 18 explicit state cells and no rails. QA fixtures are served only by the ignored local proxy. The user-facing preview at `/__qa__` explicitly labels all figures as fictional UI test data.
+
+Resolved findings and iterations:
+
+1. P2: excessive initial table height and undersized range labels. Header height reduced from 206px to 152px; rows from 98px to 82px; range labels increased to 11px and current multiples to 14px.
+2. P1: the sticky coin column obscured most of a history rail on phones. At narrow widths the coin column now scrolls with the table, comparison cells fit the viewport, and their coin names repeat locally. Full rails remain visible at 320px.
+3. P2: the existing hover rule replaced blue/red multiple colors with green. Scoped hover rules now preserve the below/above-median meaning.
+4. P2: export wrapped alone onto a third toolbar row at 320px. The narrow toolbar now uses two deliberate rows without page overflow.
+5. P2: closing a detail opened from the right could return focus to the left coin button. It now returns to the exact triggering control, verified with Escape.
+
+Fidelity surfaces: (1) existing Korean/system sans typography, tabular numbers and clearer numerical hierarchy; (2) fixed coin/current/history groups, fine dividers and compact rows; (3) shared light/dark tokens, blue below-median and red above-median lines; (4) existing TOVENIT identity, Lucide icons and available token logos, with stable spacing for missing logos; (5) explicit Korean labels for period-based current multiples, same-date daily historical multiples, and valid calculation days. The mockup's illustrative values and generated glyphs are not production assets.
+
+Rail verification: one linear min–max track, a median tick at its actual position, and a segment starting at that same coordinate. Browser measurements across 14 rails found less than 0.009 CSS px of endpoint rounding. The small BendDAO difference remains small rather than being exaggerated to match an illustrative mockup. Tests cover equal values, a flat historical range, and values outside the historical range. No dot, percentage ruler or forced midpoint is used.
+
+Verified interactions: five-period sorting; FDV/market-cap switching across both groups; search; favorites and persistence; existing source-amount filtering and reset; theme persistence; detail opening, Escape and focus return; export invocation for the nine fixture results. Pagination remains covered by the existing tests, but a multi-page live DB dataset and the downloaded export bytes were not inspected. Final local warning/error logs were empty.
+
+Validation: all 82 test files / 890 tests passed, typecheck passed, and the final production build passed after the narrow-toolbar change. Financial input guards reject mixed bases/windows, unfinished UTC dates, mismatched comparison dates, invalid numbers and malformed ranges. Existing financial calculations remain unchanged.
+
+Remaining integration boundary: the DB-backed batch summary is not implemented in this branch. The real API shows an unconnected state until that adapter is attached. Remote history coverage, readiness/staleness policies and live arithmetic require DB-side verification described in `docs/UI_DB_HANDOFF.md`. Existing detail history is unavailable in this credential-free UI checkout. No DB collection files, credentials, schedules or deployment were changed.
+
+No remaining actionable P0/P1/P2 UI finding. Intentional differences are the existing page header/theme, production qualifications, mathematically accurate rail lengths and responsive horizontal scrolling.
+
+final result: passed (UI scope; DB integration pending)
+
 ## Dated valuation overview — 2026-10-18 / v0.3.0
 
 Scope: implement the approved left-hand introduction/metrics and two stacked charts, add 7D, the three external links and a package-derived version. The complete existing research view remains available.

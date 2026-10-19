@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { sample } from "./testFixtures";
 import { metricCoverage, matchesAvailability, definitionReviewQueue } from "./metricCoverage";
 import { holderMultiple, holderReason, protocolMultiple, protocolReason } from "./valuationMetrics";
-import { parseWorkspace } from "./workspacePreferences";
+import { defaultPreferences, parseWorkspace } from "./workspacePreferences";
 
 describe("coverage counts and period filters",()=>{
   it("counts overlapping revenue and holder ratios only once in the universe total",()=>{
@@ -36,7 +36,7 @@ describe("coverage counts and period filters",()=>{
     expect(definitionReviewQueue([{...zero,fundamentals:f}])[0].components).toEqual(["new-source"]);
   });
   it("migrates saved columns without reopening the removed sidebar and persists the selected window",()=>{
-    expect(parseWorkspace(JSON.stringify({columns:["phr1y","pr","price"],capital:"fdv",sidebarOpen:true,coverageWindow:365}))).toMatchObject({columns:["phr1y","pr","price"],capital:"fdv",coverageWindow:365,sidebarOpen:false});
+    expect(parseWorkspace(JSON.stringify({columns:["phr1y","pr","price"],capital:"fdv",sidebarOpen:true,coverageWindow:365}))).toMatchObject({columns:defaultPreferences().columns,capital:"fdv",coverageWindow:365,sidebarOpen:false});
     expect(parseWorkspace('{"coverageWindow":15}').coverageWindow).toBe("any");
   });
 });

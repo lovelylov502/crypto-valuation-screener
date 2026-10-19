@@ -107,10 +107,10 @@ describe("source reference multiples", () => {
     expect(page.referenceMultiples.a.revenue[30]).toBeCloseTo(100000000 / (1000000 * 365 / 30));
     expect(page.coins[0].multiples.pr).toBeNull();
   });
-  it("adds review status to the previous default columns while preserving custom order and filters", () => {
-    const previous = DEFAULT_VISIBLE_COLUMNS.filter(k => k !== "revenueReview");
+  it("migrates source-reference columns to the fixed layout while preserving filters", () => {
+    const previous = ["pr", "revenue30d", "phr", "revenueReview"];
     expect(parseWorkspace(JSON.stringify({ ...defaultPreferences(), columns: previous })).columns).toEqual(DEFAULT_VISIBLE_COLUMNS);
-    expect(parseWorkspace(JSON.stringify({ ...defaultPreferences(), columns: ["pr", "price"], capital: "fdv", maxPr: 20 })).columns).toEqual(["pr", "price"]);
+    expect(parseWorkspace(JSON.stringify({ ...defaultPreferences(), columns: ["pr", "price"], capital: "fdv", maxPr: 20 }))).toMatchObject({ columns: DEFAULT_VISIBLE_COLUMNS, capital: "fdv", maxPr: 20 });
   });
   it("validates source-reference values separately without weakening archive checks", () => {
     const data = assembleScreener([sample()], new Date(at).toISOString(), []);

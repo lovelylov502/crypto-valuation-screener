@@ -28,7 +28,7 @@ describe("holder-value screener columns", () => {
     expect(ttm?.title).toContain("제외 유형 포함");
     expect(phr?.title).toContain("원천 참고 배수");
     expect(phr?.title).toContain("검토는 별도 표시");
-    expect(DEFAULT_VISIBLE_COLUMNS).toContain("revenueReview");
+    expect(DEFAULT_VISIBLE_COLUMNS).not.toContain("revenueReview");
     expect(SCREENER_COLUMNS.map((column) => column.title).join(" ")).not.toContain(
       "실질 배당",
     );
