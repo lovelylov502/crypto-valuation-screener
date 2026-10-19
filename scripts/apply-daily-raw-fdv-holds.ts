@@ -5,6 +5,7 @@ import { loadVerifiedFdvValidationManifest } from "../lib/dailyRawFdvValidation"
 import { loadCurrentFdvPrimaryHolds, loadVerifiedFdvHoldsManifest } from "../lib/dailyRawFdvHolds";
 import { applyFdvCorrections, fdvCorrectionClaims, fdvCorrectionError, readFdvCorrectionCandidates } from "../lib/dailyRawFdvCorrection";
 import { contentHash } from "../lib/sourceBundle";
+import { loadVerifiedDailyRawFdvReviewClaims } from "../lib/dailyRawFdvReview";
 
 async function main() {
   const argv = process.argv.slice(2), arg = (name: string, fallback = "") => { const index = argv.indexOf(name); return index < 0 ? fallback : argv[index + 1] ?? fallback; };
@@ -16,8 +17,8 @@ async function main() {
   const bounds = await loadVerifiedFdvValidationManifest(resolve(cache, arg("--fdv-validation-manifest", "fdv-validation-initial-manifest.json")), cache, legacyBytes);
   const holds = await loadVerifiedFdvHoldsManifest(resolve(cache, arg("--fdv-holds-manifest", "fdv-holds-initial-manifest.json")), cache, legacyBytes);
   const reference = JSON.parse(await readFile(resolve(cache, arg("--reference", "reference.json")), "utf8"));
-  const current = await loadCurrentFdvPrimaryHolds(legacyBytes, cache, reference), claims = fdvCorrectionClaims(bounds, holds, current);
-  console.log(JSON.stringify({ event: "fdv-correction-original-proofs-verified", bounds: bounds.rejections.length, holds: holds.holds.length, currentHolds: current.length, inputManifestSha256: contentHash(legacyBytes) }));
+  const current = await loadCurrentFdvPrimaryHolds(legacyBytes, cache, reference), reviewClaims = await loadVerifiedDailyRawFdvReviewClaims(cache), claims = [...fdvCorrectionClaims(bounds, holds, current), ...reviewClaims];
+  console.log(JSON.stringify({ event: "fdv-correction-original-proofs-verified", bounds: bounds.rejections.length, holds: holds.holds.length, currentHolds: current.length, reviewClaims: reviewClaims.length, inputManifestSha256: contentHash(legacyBytes) }));
   const db = connectHistory();
   try {
     const candidates = await readFdvCorrectionCandidates(db, claims), reasons: Record<string, number> = {};

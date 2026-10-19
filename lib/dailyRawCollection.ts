@@ -12,6 +12,7 @@ import type { PublishedSnapshot } from "./publicationTypes";
 import type { DailyRawAsset, DailyRawObservation, DailyRawPoint, DailyRawSource, DailyRawWitness } from "./dailyRawDatabase";
 import type { FdvRejection } from "./dailyRawFdvValidation";
 import { checkCapturedFdvUpperBound, type indexCapturedFdvQuotes } from "./dailyRawFdvValidation";
+import { DAILY_RAW_FDV_REVIEW, DAILY_RAW_FDV_REVIEW_BASIS, hasDailyRawFdvReview } from "./dailyRawFdvReview";
 
 export const DAILY_RAW_COLLECTION_VERSION = "daily-raw-collection-v1";
 const flowMetrics = [["fees", "dailyFees"], ["revenue", "dailyRevenue"], ["holders", "dailyHoldersRevenue"]] as const;
@@ -206,8 +207,13 @@ export function snapshotDailyRaw(coin: CoinRaw, current: CoinRaw, reference: Pub
     if (value === null) continue;
     const provider = coin.marketSources?.[metric] ?? "unknown";
     const observedAt = (provider === "CoinGecko" ? coin.marketSources?.gecko : coin.marketSources?.cmc)?.observedAt ?? reference.validatedAt;
+    const reviewed = hasDailyRawFdvReview(asset, { metric, provider, basis: "captured_quote;actual_provider_timestamp" });
     const source = dailyRawSource(current.slug, { metric, provider, url: reference.url, observedAt, sha256: reference.sha256, archiveUrl: reference.url,
-      scope: orderedJson(asset), definition: `provider_reported_${metric}_usd;verified_token_identity`, basis: "captured_quote;actual_provider_timestamp" });
+      scope: orderedJson(asset), definition: `provider_reported_${metric}_usd;verified_token_identity`, basis: reviewed ? DAILY_RAW_FDV_REVIEW_BASIS : "captured_quote;actual_provider_timestamp" });
+    if (reviewed) {
+      sources.push(source); row[metric] = { value: null, state: "conflict", source: source.key, at: point.fdvAt };
+      issues.push({ scope: current.slug, metric, day: point.day, reason: DAILY_RAW_FDV_REVIEW.reason }); continue;
+    }
     let rejected = false;
     if (metric === "fdv" && fdvIndex && (provider === "CoinGecko" || provider === "CoinMarketCap")) {
       const lookup = provider === "CoinGecko" ? coin.marketSources?.gecko : coin.marketSources?.cmc, id = provider === "CoinGecko" ? coin.geckoId : coin.cmcId ? String(coin.cmcId) : null;
@@ -235,18 +241,20 @@ export function legacyDailyRawFdv(input: LegacyFdvManifest, current: CoinRaw[]):
   for (const item of input.assets) {
     const coin = coins.get(item.slug);
     if (!coin || coin.identityStatus !== "verified" || historyIdentity(coin) !== item.identity || coin.capitalExclusionReason) continue;
-    const asset = { slug: item.slug, identity: item.identity }, sources = new Map<string, DailyRawSource>(), points: DailyRawPoint[] = [];
+    const asset = { slug: item.slug, identity: item.identity }, sources = new Map<string, DailyRawSource>(), points: DailyRawPoint[] = [], issues: DailyRawCollectionIssue[] = [];
     for (const point of item.points) {
       if (point.verification && point.verification !== "verified") continue;
       const receipt = receipts.get(point.sourceId);
       const observedAt = point.observedAt ?? receipt?.observedAt;
       if (!receipt || !validDay(point.day) || !Number.isFinite(Date.parse(point.fdvAt)) || utcDay(Date.parse(point.fdvAt)) !== point.day || !finite(point.fdv) || point.fdv <= 0 || !/^[a-f0-9]{64}$/.test(receipt.sha256) || !observedAt || !Number.isFinite(Date.parse(observedAt)) || Date.parse(point.fdvAt) > Date.parse(observedAt)) throw new DailyRawInputError("daily_raw_legacy_fdv_invalid");
-      const source = dailyRawSource(item.slug, { metric: "fdv", provider: point.provider ?? "verified_screener_archive", url: receipt.url, observedAt,
+      const provider = point.provider ?? "verified_screener_archive", reviewed = hasDailyRawFdvReview(asset, { metric: "fdv", provider, basis: "captured_quote;actual_provider_timestamp" });
+      const source = dailyRawSource(item.slug, { metric: "fdv", provider, url: receipt.url, observedAt,
         sha256: receipt.sha256, ...(receipt.archiveUrl ? { archiveUrl: receipt.archiveUrl } : {}), scope: orderedJson(asset),
-        definition: "provider_reported_fdv_usd;verified_token_identity", basis: "captured_quote;actual_provider_timestamp" });
-      sources.set(source.key, source); points.push({ day: point.day, fdv: { value: point.fdv, state: "complete", source: source.key, at: point.fdvAt } });
+        definition: "provider_reported_fdv_usd;verified_token_identity", basis: reviewed ? DAILY_RAW_FDV_REVIEW_BASIS : "captured_quote;actual_provider_timestamp" });
+      sources.set(source.key, source); points.push({ day: point.day, fdv: { value: reviewed ? null : point.fdv, state: reviewed ? "conflict" : "complete", source: source.key, at: point.fdvAt } });
+      if (reviewed) issues.push({ scope: item.slug, metric: "fdv", day: point.day, reason: DAILY_RAW_FDV_REVIEW.reason });
     }
-    output.push({ asset, sources: [...sources.values()], points });
+    output.push({ asset, sources: [...sources.values()], points, ...(issues.length ? { issues } : {}) });
   }
   return output;
 }
@@ -257,6 +265,7 @@ export function combineDailyRawAssets(asset: DailyRawAsset, inputs: CollectedDai
   const sources = new Map<string, DailyRawSource>(), points = new Map<string, DailyRawPoint>();
   const rank = (metric: string, source: DailyRawSource | undefined) => {
     if (!source) return 0;
+    if (metric === "fdv" && source.basis === DAILY_RAW_FDV_REVIEW_BASIS) return 0;
     if (metric === "fdv") return source.metric === "fdv" && source.provider === "CoinMetrics" && source.basis === "utc_daily_close_verified_total_supply" ? 4 : source.basis.includes("captured_quote") ? 3 : 1;
     if (["price", "mcap"].includes(metric) && source.metric === metric && source.provider === "CoinGecko" && source.basis.includes("coingecko_web_csv") && source.basis.includes("utc_day_close") && source.basis.includes('"verified":true')) return 4;
     return source.basis.includes("captured_quote") ? 3 : source.basis.includes("utc_day_close") ? 2 : 1;

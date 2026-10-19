@@ -4,10 +4,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { createClient } from "@libsql/client";
-import { acknowledgeDailyRawQueue, continueDailyRaw, markDailyRawQueueArchives, prepareDailyRawFeesOverview, restoreDailyRawPending, type DailyRawSelection } from "../scripts/continue-daily-raw";
+import { acknowledgeDailyRawQueue, certifyDailyRawFinancialMax, continueDailyRaw, DAILY_RAW_FINANCIAL_MAX_PROOF, establishedDailyRawFinancialAssets, markDailyRawQueueArchives, prepareDailyRawFeesOverview, restoreDailyRawPending, type DailyRawSelection } from "../scripts/continue-daily-raw";
+import { stageDailyRawAsset } from "../scripts/sync-daily-raw";
 import { planDailyRawQueue, reconcileDailyRawQueue, recordDailyRawAcquired, type DailyRawQueueReceipt, type DailyRawQueueState } from "./dailyRawQueue";
 import { COINGECKO_CSV_CLOSE_SEMANTICS, combineDailyRawAssets, extractDailyRawFundamentals, parseDailyRawCsv } from "./dailyRawCollection";
-import { copyDailyRaw, initializeDailyRaw, openDailyRawRun, upsertDailyRaw } from "./dailyRawDatabase";
+import { copyDailyRaw, getDailyRawCheckpoint, initializeDailyRaw, openDailyRawRun, readDailyRaw, upsertDailyRaw, type DailyRawPoint, type DailyRawSource } from "./dailyRawDatabase";
 import { contentHash, type SourceBundle, type SourceReceipt } from "./sourceBundle";
 import { gatherDailyRawArchiveReceipts } from "./dailyRawArchive";
 import { portableDailyRawQueue } from "./dailyRawQueueArchive";
@@ -43,7 +44,7 @@ it("marks public archives without falsely advancing the database import checkpoi
 
 it("acquires a bounded batch and selects MAX only for new CSV bindings while existing financial rows use 14 days", async () => {
   const universe = join(cache, "universe.json"), knownAssets = join(cache, "known.json");
-  await writeFile(universe, JSON.stringify({ coins })); await writeFile(knownAssets, JSON.stringify({ schema: 1, remainingEstimatedWrites: 1000000, assets: coins.map(coin => ({ slug: coin.slug, identity: `gecko:${coin.geckoId}` })) }));
+  await writeFile(universe, JSON.stringify({ coins })); await writeFile(knownAssets, JSON.stringify({ schema: 1, proofVersion: DAILY_RAW_FINANCIAL_MAX_PROOF, remainingEstimatedWrites: 1000000, assets: coins.map(coin => ({ slug: coin.slug, identity: `gecko:${coin.geckoId}` })) }));
   let ticks = 0; const fetcher = vi.fn().mockImplementation(() => Promise.resolve(new Response(csv)));
   const report = await continueDailyRaw({ cache, universe, knownAssets, maxRequests: 2, fetcher, now: () => clock + ticks++ * 2000 });
   expect(report).toMatchObject({ requests: 2, acquired: 2, pending: 2, recommendedMaxEstimatedWrites: 500000 });
@@ -54,6 +55,73 @@ it("acquires a bounded batch and selects MAX only for new CSV bindings while exi
   expect(selection.assets.find(asset => asset.slug === "a")?.csv?.from).toBeUndefined(); expect(selection.assets.find(asset => asset.slug === "c")?.from).toBe("2026-10-05");
   const held = await continueDailyRaw({ cache, universe, knownAssets, maxRequests: 2, remainingEstimatedWrites: 500000, fetcher, now: () => clock + ticks++ * 2000 });
   expect(held.status).toBe("budget-reserve-paused"); expect(held.requests).toBe(0); expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+it("keeps legacy registry-only knowledge at MAX without requesting a provider", async () => {
+  const universe = join(cache, "universe.json"), knownAssets = join(cache, "known.json"), fetcher = vi.fn();
+  await writeFile(universe, JSON.stringify({ coins: [coins[0]] }));
+  await writeFile(knownAssets, JSON.stringify({ schema: 1, remainingEstimatedWrites: 1000000, assets: [{ slug: "a", identity: "gecko:a" }] }));
+  expect(await continueDailyRaw({ cache, universe, knownAssets, maxRequests: 0, fetcher, now: () => clock })).toMatchObject({ requests: 0, selectedAssets: 1, fullAssets: 1 });
+  const selection = JSON.parse(await readFile(join(cache, "queue-selection.json"), "utf8")) as DailyRawSelection;
+  expect(selection.assets[0].from).toBeUndefined(); expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("does not let a completed 14-day patch certify an interrupted financial MAX import", async () => {
+  const initial = createClient({ url: ":memory:" }), patch = createClient({ url: ":memory:" }), recovered = createClient({ url: ":memory:" }), committed = createClient({ url: ":memory:" });
+  const asset = { slug: "a", identity: "gecko:a" }, stageId = "a".repeat(64), patchId = "b".repeat(64), recoveredId = "c".repeat(64);
+  try {
+    for (const db of [initial, patch, recovered, committed]) await initializeDailyRaw(db);
+    const source: DailyRawSource = { key: "full-revenue", metric: "revenue", provider: "DefiLlama", url: "https://api.llama.fi/summary/fees/a?dataType=dailyRevenue", sha256: "d".repeat(64), observedAt: new Date(clock).toISOString(), archiveUrl: archive, scope: "exact-parent-a", definition: "dailyRevenue", basis: "utc_day_flow" };
+    const points: DailyRawPoint[] = ["2020-01-01", "2020-01-02", "2020-01-03", "2026-10-18"].map((day, index) => ({ day, revenue: { value: index + 1, state: "complete", source: source.key } }));
+    const input = { asset, sources: [source], points };
+    await openDailyRawRun(initial, { id: "stage", maxEstimatedWrites: 10000 });
+    await stageDailyRawAsset(initial, "stage", input, () => true, true);
+    let batches = 0;
+    expect(await copyDailyRaw(initial, committed, { runId: "initial", stagingId: stageId, maxEstimatedWrites: 10000, batchSize: 1, hasTime: () => batches === 0, onBatch: () => { batches++; } })).toMatchObject({ assetsCompleted: 0, daysWritten: 1, stopped: true });
+    expect(await getDailyRawCheckpoint(committed, "initial", "copy:a:gecko:a")).toMatchObject({ status: "running", cursor: "2020-01-01" });
+    expect(await certifyDailyRawFinancialMax(initial, committed, { asset, runId: "initial", stagingId: stageId })).toBeNull();
+    expect(await establishedDailyRawFinancialAssets(committed)).toEqual([]);
+
+    const file = { ...pending(), geckoId: "a", path: "a.csv", archiveUrl: archive, timestampSemantics: COINGECKO_CSV_CLOSE_SEMANTICS };
+    const bounded = combineDailyRawAssets(asset, [{ ...input, points: points.filter(point => point.day >= "2026-10-05") }, parseDailyRawCsv(csv, file, asset)]);
+    await openDailyRawRun(patch, { id: "stage-patch", maxEstimatedWrites: 10000 });
+    await stageDailyRawAsset(patch, "stage-patch", bounded, () => true);
+    await copyDailyRaw(patch, committed, { runId: "patch", stagingId: patchId, maxEstimatedWrites: 10000, onBatch: async progress => {
+      if (progress.complete) expect(await certifyDailyRawFinancialMax(patch, committed, { asset, runId: "patch", stagingId: patchId })).toBeNull();
+    } });
+    expect(await getDailyRawCheckpoint(committed, "patch", "copy:a:gecko:a")).toMatchObject({ status: "complete" });
+    const state = reconcileDailyRawQueue(null, [coins[0]], "2026-10-18", new Date(clock)); recordDailyRawAcquired(state, "a", pending(), new Date(clock));
+    const fetcher = vi.fn().mockImplementation(() => Promise.resolve(new Response(gzipSync(JSON.stringify({ receipts: [original()] })))));
+    expect(await acknowledgeDailyRawQueue(state, patch, committed, { runId: "patch", stagingId: patchId, cache, fetcher })).toBe(1);
+    expect(state.entries.a.bindings[0].fullImported).toBe(true);
+    expect((await readDailyRaw(committed, { asset, from: "2020-01-01", to: "2020-01-03" }))?.points.map(point => point.revenue.value)).toEqual([1]);
+    expect(await establishedDailyRawFinancialAssets(committed)).toEqual([]);
+
+    const universe = join(cache, "universe.json"), knownAssets = join(cache, "known.json");
+    await writeFile(universe, JSON.stringify({ coins: [coins[0]] })); await writeFile(join(cache, "daily-raw-queue.json"), JSON.stringify(state));
+    const prepareKnown = async () => writeFile(knownAssets, JSON.stringify({ schema: 1, proofVersion: DAILY_RAW_FINANCIAL_MAX_PROOF, remainingEstimatedWrites: 1000000, assets: await establishedDailyRawFinancialAssets(committed) }));
+    await prepareKnown(); await continueDailyRaw({ cache, universe, knownAssets, maxRequests: 0, fetcher, now: () => clock });
+    let selection = JSON.parse(await readFile(join(cache, "queue-selection.json"), "utf8")) as DailyRawSelection;
+    expect(selection.assets[0].from).toBeUndefined();
+    const selected = { ...input, points: input.points.filter(point => !selection.assets[0].from || point.day >= selection.assets[0].from) };
+    await openDailyRawRun(recovered, { id: "stage-full", maxEstimatedWrites: 10000 });
+    await stageDailyRawAsset(recovered, "stage-full", selected, () => true, true);
+    await copyDailyRaw(recovered, committed, { runId: "recovered", stagingId: recoveredId, maxEstimatedWrites: 10000, onBatch: async progress => {
+      if (!progress.complete) return;
+      await expect(certifyDailyRawFinancialMax(recovered, committed, { asset, runId: "recovered", stagingId: "e".repeat(64) })).rejects.toThrow("financial_max_staging_not_committed");
+      expect(await certifyDailyRawFinancialMax(recovered, committed, { asset, runId: "recovered", stagingId: recoveredId })).not.toBeNull();
+    } });
+    expect((await readDailyRaw(committed, { asset, from: "2020-01-01", to: "2020-01-03" }))?.points.map(point => point.revenue.value)).toEqual([1, 2, 3]);
+    expect(await getDailyRawCheckpoint(committed, "initial", "copy:a:gecko:a")).toMatchObject({ status: "running" });
+    expect(await establishedDailyRawFinancialAssets(committed)).toEqual([asset]);
+    await prepareKnown(); await continueDailyRaw({ cache, universe, knownAssets, maxRequests: 0, fetcher, now: () => clock });
+    selection = JSON.parse(await readFile(join(cache, "queue-selection.json"), "utf8")) as DailyRawSelection;
+    expect(selection.assets[0].from).toBe("2026-10-05");
+    await upsertDailyRaw(committed, { runId: "recovered", asset: { slug: "a", identity: "gecko:other" }, sources: [], points: [] });
+    expect(await establishedDailyRawFinancialAssets(committed)).toEqual([asset]);
+    await committed.execute({ sql: "UPDATE daily_raw_checkpoints SET cursor=? WHERE run_id='recovered' AND checkpoint_key='copy:staging'", args: ["f".repeat(64)] });
+    expect(await establishedDailyRawFinancialAssets(committed)).toEqual([]);
+  } finally { initial.close(); patch.close(); recovered.close(); committed.close(); }
 });
 
 it("advances imported bindings only after the exact sealed copy and complete asset checkpoint exist", async () => {

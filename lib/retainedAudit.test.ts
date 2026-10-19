@@ -1,4 +1,4 @@
-import {expect,it,vi} from "vitest";
+import {afterEach,expect,it,vi} from "vitest";
 import {gzipSync} from "node:zlib";
 import {auditCompletionVerdicts,attemptExecutionVerdict,apiArchiveErrors,auditAttemptRetention} from "../scripts/audit-coverage";
 import {assembleScreener} from "./screener";
@@ -10,6 +10,7 @@ import {COLLECTION_DEADLINE_MS,stateUrl} from "./publication";
 import type {PublicationJournal} from "./publicationTypes";
 
 const at="2026-10-08T00:00:00.000Z";
+afterEach(()=>{vi.restoreAllMocks();vi.useRealTimers();});
 function retained() {
  const sources=["/protocols","/config","/overview/fees","/overview/fees?dataType=dailyRevenue","/overview/fees?dataType=dailyHoldersRevenue","/overview/dexs"].map(p=>({url:"https://api.llama.fi"+p,observedAt:at,status:"ok" as const}));
  const data=assembleScreener([sample({sourceSlugs:["sample"],marketSources:{mcap:"CoinGecko",price:"CoinGecko",fdv:"CoinGecko",cmc:null,gecko:{id:"test-token",status:"received",observedAt:at,available:["mcap","price","fdv"],positive:["mcap","price","fdv"]}}})],at,sources),bytes=gzipSync(JSON.stringify(data));
@@ -51,4 +52,60 @@ it("an unrelated later blocked attempt validates its own report while keeping hi
  expect(parseJournal(j)).toBe(j);expect(await auditAttemptRetention(j,data,report,fetcher)).toEqual({});expect(report).toHaveBeenCalledOnce();expect(fetcher).not.toHaveBeenCalled();
  expect(collectionHealth({...data,publication:j},Date.parse(at)).label).toBe("공개 보류");
  await expect(auditAttemptRetention(j,data,async()=>({errors:[],baseline:j.published}),fetcher)).rejects.toThrow("does not prove retention");
+});
+
+function blockedReportFixture() {
+ const value=retained();
+ value.j.attempt={...value.j.attempt,outcome:"blocked",completedAt:at,errors:["candidate_not_current"]};
+ value.j.incident={firstFailureObservedAt:at,lastFailureObservedAt:at,lastGoodDataAt:at};
+ return {...value,report:{errors:["candidate_not_current"],baseline:value.j.published}};
+}
+const socketFailure=()=>new TypeError("fetch failed",{cause:Object.assign(new Error("other side closed"),{code:"UND_ERR_SOCKET"})});
+
+it("retries one rejected public report transport and still verifies the retained baseline",async()=>{
+ vi.useFakeTimers();const {j,data,report}=blockedReportFixture();
+ const fetcher=vi.spyOn(globalThis,"fetch").mockRejectedValueOnce(socketFailure()).mockResolvedValueOnce(new Response(JSON.stringify(report)));
+ const checked=expect(auditAttemptRetention(j,data)).resolves.toEqual({});
+ await vi.runAllTimersAsync();await checked;
+ expect(fetcher).toHaveBeenCalledTimes(2);expect(fetcher.mock.calls.map(call=>call[0])).toEqual([j.attempt.reportUrl,j.attempt.reportUrl]);
+});
+
+it("surfaces a second public report transport failure",async()=>{
+ vi.useFakeTimers();const {j,data}=blockedReportFixture();
+ const fetcher=vi.spyOn(globalThis,"fetch").mockRejectedValue(socketFailure());
+ const checked=expect(auditAttemptRetention(j,data)).rejects.toThrow("fetch failed");
+ await vi.runAllTimersAsync();await checked;expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+it("retries an interrupted report body with a new complete GET",async()=>{
+ vi.useFakeTimers();const {j,data,report}=blockedReportFixture();
+ const body=new ReadableStream({start(controller){controller.error(socketFailure());}});
+ const fetcher=vi.spyOn(globalThis,"fetch").mockResolvedValueOnce(new Response(body)).mockResolvedValueOnce(new Response(JSON.stringify(report)));
+ const checked=expect(auditAttemptRetention(j,data)).resolves.toEqual({});
+ await vi.runAllTimersAsync();await checked;expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+ ["malformed JSON","{broken","JSON"],
+ ["invalid retention evidence",JSON.stringify({errors:[],baseline:{id:"other"}}),"does not prove retention"],
+])("does not hide %s behind a transport retry",async(_label,body,message)=>{
+ const {j,data}=blockedReportFixture(),fetcher=vi.spyOn(globalThis,"fetch").mockResolvedValue(new Response(body));
+ await expect(auditAttemptRetention(j,data)).rejects.toThrow(message);expect(fetcher).toHaveBeenCalledOnce();
+});
+
+it("keeps a public report HTTP 404 as a single final failure",async()=>{
+ const {j,data}=blockedReportFixture(),fetcher=vi.spyOn(globalThis,"fetch").mockResolvedValue(new Response("missing",{status:404}));
+ await expect(auditAttemptRetention(j,data)).rejects.toThrow("HTTP 404");expect(fetcher).toHaveBeenCalledOnce();
+});
+
+it.each([429,503])("preserves the existing three-attempt HTTP %s budget after one transport failure",async status=>{
+ vi.useFakeTimers();const {j,data}=blockedReportFixture();
+ const fetcher=vi.spyOn(globalThis,"fetch").mockRejectedValueOnce(socketFailure()).mockImplementation(async()=>new Response("unavailable",{status}));
+ const checked=expect(auditAttemptRetention(j,data)).rejects.toThrow(`HTTP ${status}`);
+ await vi.runAllTimersAsync();await checked;expect(fetcher).toHaveBeenCalledTimes(4);
+});
+
+it("rejects a foreign report URL before any request",async()=>{
+ const {j,data}=blockedReportFixture();j.attempt.reportUrl="https://github.com/other/repo/releases/download/data-2-complete/report.json";
+ const fetcher=vi.spyOn(globalThis,"fetch");await expect(auditAttemptRetention(j,data)).rejects.toThrow("Invalid archive URL");expect(fetcher).not.toHaveBeenCalled();
 });

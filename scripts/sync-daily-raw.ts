@@ -15,7 +15,7 @@ import { acquireCsvUniverse } from "./acquire-daily-csv";
 import { loadCoinMetricsManifest } from "../lib/dailyRawCoinMetrics";
 import { indexCapturedFdvQuotes, loadVerifiedFdvValidationManifest, type FdvRejection } from "../lib/dailyRawFdvValidation";
 import { loadVerifiedFdvHoldsManifest } from "../lib/dailyRawFdvHolds";
-import type { DailyRawSelection } from "./continue-daily-raw";
+import { certifyDailyRawFinancialMax, DAILY_RAW_FINANCIAL_MAX_PROOF, type DailyRawSelection } from "./continue-daily-raw";
 
 interface ArchiveManifest { schema: 1; receipts: { sha256: string; url?: string; observedAt?: string; archiveUrl: string }[] }
 const metrics = ["price", "mcap", "fdv", "fees", "revenue", "holders"] as const;
@@ -125,8 +125,8 @@ function applyArchives(input: CollectedDailyRawAsset, archives: Map<string, stri
   return { ...input, sources, points };
 }
 
-export async function stageDailyRawAsset(db: Client, runId: string, input: CollectedDailyRawAsset, hasTime: () => boolean) {
-  const fingerprint = dailyRawAssetFingerprint(input), key = `stage:${input.asset.slug}:${input.asset.identity}`, checkpoint = await getDailyRawCheckpoint(db, runId, key);
+export async function stageDailyRawAsset(db: Client, runId: string, input: CollectedDailyRawAsset, hasTime: () => boolean, financialMax = false) {
+  const fingerprint = objectHash([dailyRawAssetFingerprint(input), financialMax ? DAILY_RAW_FINANCIAL_MAX_PROOF : null]), key = `stage:${input.asset.slug}:${input.asset.identity}`, checkpoint = await getDailyRawCheckpoint(db, runId, key);
   let after = "";
   if (checkpoint) {
     const cursor = JSON.parse(checkpoint.cursor) as { fingerprint: string; after: string };
@@ -146,7 +146,7 @@ export async function stageDailyRawAsset(db: Client, runId: string, input: Colle
     if (sources.some(source => !source)) throw new DailyRawInputError("daily_raw_staging_source_missing");
     const complete = end === points.length;
     const result = await upsertDailyRaw(db, { runId, asset: input.asset, sources: sources as DailyRawSource[], points: chunk,
-      checkpoint: { key, cursor: JSON.stringify({ fingerprint, after: chunk.at(-1)?.day ?? after }), status: complete ? "complete" : "running" } });
+      checkpoint: { key, cursor: JSON.stringify({ fingerprint, after: chunk.at(-1)?.day ?? after, ...(financialMax ? { financialMaxProof: DAILY_RAW_FINANCIAL_MAX_PROOF } : {}) }), status: complete ? "complete" : "running" } });
     total.rowsWritten += result.rowsWritten; total.daysWritten += result.daysWritten; total.estimatedWrites += result.estimatedWrites;
     if (complete) break;
     start = end;
@@ -210,6 +210,10 @@ async function main() {
       const result = await copyDailyRaw(db, remote, { runId, maxEstimatedWrites: allowance, stagingId, maxAssets, hasTime, batchSize, onBatch: async progress => {
         if (progress.complete) report.assets++;
         report.daysWritten += progress.daysWritten; report.estimatedWrites += progress.estimatedWrites;
+        if (progress.complete) {
+          const proof = await certifyDailyRawFinancialMax(db!, remote!, { asset: progress.asset, runId, stagingId });
+          if (proof) { report.rowsWritten += proof.rowsWritten; report.estimatedWrites += proof.estimatedWrites; }
+        }
         if (progress.complete && report.assets % 25 === 0) console.log(JSON.stringify({ event: "daily-raw-import", assets: report.assets, daysWritten: report.daysWritten, estimatedWrites: report.estimatedWrites }));
       } });
       report.assets = result.assetsCompleted; report.skippedAssets = result.assetsSkipped; report.rowsWritten = result.rowsWritten; report.daysWritten = result.daysWritten; report.estimatedWrites = result.estimatedWrites; report.pendingAssets = result.pendingAssets;
@@ -302,7 +306,8 @@ async function main() {
         const combined = combineDailyRawAssets(asset, scoped), counts = new Map<string, number>();
         for (const entry of combined.issues ?? []) { const key = `${entry.metric ?? "csv"}|${entry.reason}`; counts.set(key, (counts.get(key) ?? 0) + 1); }
         for (const [key, count] of counts) { const [metric, reason] = key.split("|"); issue(`${coin.slug}:${metric}`, reason, count); }
-        const result = await stageDailyRawAsset(db, runId, applyArchives(combined, archives), hasTime);
+        const financialMax = !bounds?.from && (!bounds?.to || (fundamentals.series.get(coin.slug) ?? []).every(point => point.day <= bounds.to!)) && (fundamentals.series.get(coin.slug) ?? []).some(point => [point.fees, point.revenue, point.holders].some(value => value && value.state !== "missing"));
+        const result = await stageDailyRawAsset(db, runId, applyArchives(combined, archives), hasTime, financialMax);
         if (result.paused) { report.pendingAssets = coins.length - index; report.status = "time-paused"; break; }
         report.assets += Number(!result.skipped); report.skippedAssets += Number(result.skipped); report.rowsWritten += result.rowsWritten; report.daysWritten += result.daysWritten; report.estimatedWrites += result.estimatedWrites;
       } catch (error) { if (!(error instanceof DailyRawInputError)) throw error; issue(coin.slug, error.message); }

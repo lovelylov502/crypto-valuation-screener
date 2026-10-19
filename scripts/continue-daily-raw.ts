@@ -7,13 +7,14 @@ import { createClient, type Client } from "@libsql/client";
 import { historyIdentity, shiftDay, utcDay } from "../lib/dailyHistory";
 import { connectHistory, historyReadBatch, HISTORY_WRITE_LIMIT } from "../lib/historyDatabase";
 import { historyRetrySeconds, loadHistoryInputs } from "../lib/historyCollection";
-import { getDailyRawSources, readDailyRaw, type DailyRawStoredPoint } from "../lib/dailyRawDatabase";
+import { getDailyRawSources, readDailyRaw, upsertDailyRaw, type DailyRawAsset, type DailyRawStoredPoint } from "../lib/dailyRawDatabase";
 import { acquireDailyRawCsv, archiveDailyRawOriginal, COINGECKO_CSV_CLOSE_SEMANTICS, parseDailyRawCsv, verifyDailyRawArchives, type DailyRawArchiveVerification, type DailyRawCsvFile } from "../lib/dailyRawCollection";
 import { assertDailyRawQueue, planDailyRawQueue, reconcileDailyRawQueue, recordDailyRawAcquired, recordDailyRawArchived, recordDailyRawAttempt, recordDailyRawDeferred, recordDailyRawImported, type DailyRawQueueCoin, type DailyRawQueueReceipt, type DailyRawQueueState } from "../lib/dailyRawQueue";
 import { contentHash, objectHash, type SourceReceipt } from "../lib/sourceBundle";
 
 export interface DailyRawSelection { schema: 1; assets: { slug: string; identity: string; from?: string; to?: string; csv?: { from?: string; to: string } }[] }
-interface KnownAssets { schema: 1; observedAt?: string; remainingEstimatedWrites?: number; assets: { slug: string; identity: string }[] }
+export const DAILY_RAW_FINANCIAL_MAX_PROOF = "financial-max-copy-v1";
+interface KnownAssets { schema: 1; proofVersion?: string; observedAt?: string; remainingEstimatedWrites?: number; assets: { slug: string; identity: string }[] }
 const json = async <T>(path: string): Promise<T | null> => {
   try { return JSON.parse(await readFile(path, "utf8")) as T; }
   catch (error) { if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null; throw error; }
@@ -34,6 +35,34 @@ async function outsideGit(cache: string) {
   await mkdir(cache, { recursive: true }); const actual = await realpath(cache);
   if (spawnSync("git", ["-C", actual, "rev-parse", "--show-toplevel"], { windowsHide: true, encoding: "utf8" }).status === 0) throw Error("daily_raw_queue_cache_must_be_outside_git");
   return actual;
+}
+
+/** Registry existence and a completed patch cannot prove that an older MAX copy
+ * finished. Require an explicit full-stage attestation bound to its sealed copy. */
+export async function establishedDailyRawFinancialAssets(db: Client): Promise<DailyRawAsset[]> {
+  const prefix = `${DAILY_RAW_FINANCIAL_MAX_PROOF}:`;
+  const [registry, proofs] = await historyReadBatch(db, ["SELECT slug,identity FROM daily_raw_assets", {
+    sql: `SELECT p.checkpoint_key FROM daily_raw_checkpoints p
+      JOIN daily_raw_checkpoints c ON c.run_id=p.run_id AND c.checkpoint_key='copy:' || substr(p.checkpoint_key,?) AND c.status='complete'
+      JOIN daily_raw_checkpoints s ON s.run_id=p.run_id AND s.checkpoint_key='copy:staging' AND s.cursor=p.cursor
+      WHERE p.checkpoint_key LIKE ? AND p.status='complete' AND length(p.cursor)=64`, args: [prefix.length + 1, `${prefix}%`],
+  }]);
+  const complete = new Set(proofs.rows.map(row => String(row.checkpoint_key).slice(prefix.length)));
+  return registry.rows.map(row => ({ slug: String(row.slug), identity: String(row.identity) })).filter(asset => complete.has(`${asset.slug}:${asset.identity}`));
+}
+
+/** Called only after the copier commits an asset. A partial local stage or a
+ * later bounded patch never establishes its full financial history. */
+export async function certifyDailyRawFinancialMax(staged: Client, committed: Client, options: { asset: DailyRawAsset; runId: string; stagingId: string }) {
+  const suffix = `${options.asset.slug}:${options.asset.identity}`;
+  const local = await staged.execute({ sql: "SELECT cursor FROM daily_raw_checkpoints WHERE checkpoint_key=? AND status='complete'", args: [`stage:${suffix}`] });
+  if (!local.rows.some(row => {
+    try { return (JSON.parse(String(row.cursor)) as { financialMaxProof?: string }).financialMaxProof === DAILY_RAW_FINANCIAL_MAX_PROOF; } catch { return false; }
+  })) return null;
+  const checkpoints = (await historyReadBatch(committed, [{ sql: "SELECT checkpoint_key,cursor,status FROM daily_raw_checkpoints WHERE run_id=? AND checkpoint_key IN (?,?)", args: [options.runId, "copy:staging", `copy:${suffix}`] }]))[0].rows;
+  if (!/^[a-f0-9]{64}$/i.test(options.stagingId) || !checkpoints.some(row => row.checkpoint_key === "copy:staging" && row.cursor === options.stagingId)) throw Error("daily_raw_financial_max_staging_not_committed");
+  if (!checkpoints.some(row => row.checkpoint_key === `copy:${suffix}` && row.status === "complete")) return null;
+  return upsertDailyRaw(committed, { runId: options.runId, asset: options.asset, sources: [], points: [], checkpoint: { key: `${DAILY_RAW_FINANCIAL_MAX_PROOF}:${suffix}`, cursor: options.stagingId, status: "complete" } });
 }
 
 /** One public Fees request per preparation. A failed observation is retained
@@ -199,7 +228,7 @@ export async function continueDailyRaw(options: { cache: string; universe: strin
     await save();
     if (state.providerRetryAt && Date.parse(state.providerRetryAt) > now()) break;
   }
-  const selected = new Map<string, DailyRawSelection["assets"][number]>(), registry = new Set(known?.assets.map(key) ?? []);
+  const selected = new Map<string, DailyRawSelection["assets"][number]>(), registry = new Set(known?.proofVersion === DAILY_RAW_FINANCIAL_MAX_PROOF ? known.assets.map(key) : []);
   if (known) for (const coin of coins) {
     const identity = historyIdentity({ geckoId: coin.geckoId, cmcId: coin.cmcId ?? null }), eligible = coin.identityStatus === "verified" && identity !== "unlinked" && !coin.capitalExclusionReason;
     const asset = { slug: coin.slug, identity: eligible ? identity : `defillama:${coin.slug}` }, existing = registry.has(key(asset));
@@ -226,9 +255,9 @@ async function main() {
   if (argv.includes("--prepare")) {
     const { snapshot, ref } = await loadHistoryInputs(cache), db = connectHistory();
     try {
-      const [registry, budget] = await historyReadBatch(db, ["SELECT slug,identity FROM daily_raw_assets", { sql: "SELECT reserved FROM history_budget WHERE month=?", args: [new Date().toISOString().slice(0, 7)] }]);
+      const assets = await establishedDailyRawFinancialAssets(db), [budget] = await historyReadBatch(db, [{ sql: "SELECT reserved FROM history_budget WHERE month=?", args: [new Date().toISOString().slice(0, 7)] }]);
       await atomic(join(cache, "reference.json"), ref); await atomic(join(cache, "universe.json"), { coins: snapshot.coins });
-      await atomic(join(cache, "known-assets.json"), { schema: 1, observedAt: new Date().toISOString(), remainingEstimatedWrites: Math.max(0, HISTORY_WRITE_LIMIT - Number(budget.rows[0]?.reserved ?? 0)), assets: registry.rows.map(row => ({ slug: String(row.slug), identity: String(row.identity) })) });
+      await atomic(join(cache, "known-assets.json"), { schema: 1, proofVersion: DAILY_RAW_FINANCIAL_MAX_PROOF, observedAt: new Date().toISOString(), remainingEstimatedWrites: Math.max(0, HISTORY_WRITE_LIMIT - Number(budget.rows[0]?.reserved ?? 0)), assets });
     } finally { db.close(); }
     const state = await json<DailyRawQueueState>(statePath), fees = await prepareDailyRawFeesOverview(cache, { state });
     if (state) { state.updatedAt = new Date().toISOString(); await atomic(statePath, state); }

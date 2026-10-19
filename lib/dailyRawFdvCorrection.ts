@@ -9,6 +9,7 @@ import type { FdvHoldsManifest } from "./dailyRawFdvHolds";
 const CAPTURED_BASIS = "captured_quote;actual_provider_timestamp";
 export interface FdvCorrectionClaim extends DailyRawAsset {
   day: string; value: number; at: string; provider: string; observedAt: string; snapshotUrl: string; snapshotSha256: string; reason: string; proofSha256: string;
+  review?: { id: string; sha256: string };
 }
 export interface FdvCorrectionCandidate { asset: DailyRawAsset; day: string; value: number; at: string; source: DailyRawSource; claim: FdvCorrectionClaim }
 
@@ -36,6 +37,7 @@ export async function readFdvCorrectionCandidates(db: Client, claims: FdvCorrect
   const results: FdvCorrectionCandidate[] = [];
   for (let offset = 0; offset < claims.length; offset += 200) {
     const batch = claims.slice(offset, offset + 200), byKey = new Map(batch.map(claim => [claim.proofSha256, claim]));
+    // Match the REAL column representation even when JSON emits a large amount as integer digits.
     const found = await historyRead(db, { sql: `SELECT a.slug,a.identity,d.day,d.fdv,d.fdv_at,s.source_key,s.provider,s.scope,s.definition,s.basis,r.url,r.observed_at,r.sha256,r.archive_url,json_extract(j.value,'$.proofSha256') AS proof_key
       FROM json_each(?) j JOIN daily_raw_assets a ON a.slug=json_extract(j.value,'$.slug') AND a.identity=json_extract(j.value,'$.identity')
       JOIN daily_raw_days d ON d.asset_id=a.id AND d.day=json_extract(j.value,'$.day')
@@ -43,7 +45,7 @@ export async function readFdvCorrectionCandidates(db: Client, claims: FdvCorrect
       JOIN daily_raw_receipts r ON r.id=s.receipt_id
       WHERE d.fdv_state=1 AND d.fdv>0 AND s.basis=? AND s.provider=json_extract(j.value,'$.provider')
       AND r.url=json_extract(j.value,'$.snapshotUrl') AND r.sha256=json_extract(j.value,'$.snapshotSha256') AND r.observed_at=json_extract(j.value,'$.observedAt')
-      AND d.fdv=json_extract(j.value,'$.value') AND d.fdv_at=json_extract(j.value,'$.at') ORDER BY a.slug,d.day`, args: [JSON.stringify(batch), CAPTURED_BASIS] });
+      AND d.fdv=CAST(json_extract(j.value,'$.value') AS REAL) AND d.fdv_at=json_extract(j.value,'$.at') ORDER BY a.slug,d.day`, args: [JSON.stringify(batch), CAPTURED_BASIS] });
     for (const row of found.rows) results.push(candidate(row, byKey.get(String(row.proof_key))!));
   }
   const unique = new Map(results.map(item => [objectHash([item.asset, item.day, item.source.key]), item]));
@@ -52,7 +54,8 @@ export async function readFdvCorrectionCandidates(db: Client, claims: FdvCorrect
 
 export function fdvCorrectionRevision(item: FdvCorrectionCandidate) {
   const { key, ...metadata } = item.source;
-  return dailyRawSource(item.asset.slug, { ...metadata, basis: `${metadata.basis};fdv_withheld=${item.claim.reason};fdv_proof_sha256=${item.claim.proofSha256}`, revisionOf: key });
+  const review = item.claim.review ? `;fdv_review_id=${item.claim.review.id};fdv_review_sha256=${item.claim.review.sha256}` : "";
+  return dailyRawSource(item.asset.slug, { ...metadata, basis: `${metadata.basis};fdv_withheld=${item.claim.reason};fdv_proof_sha256=${item.claim.proofSha256}${review}`, revisionOf: key });
 }
 export async function applyFdvCorrections(db: Client, candidates: FdvCorrectionCandidate[], options: { runId: string; maxEstimatedWrites: number; now?: Date }) {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,127}$/.test(options.runId) || !Number.isSafeInteger(options.maxEstimatedWrites) || options.maxEstimatedWrites < 8 || options.maxEstimatedWrites > 50_000) throw Error("daily_raw_fdv_correction_run_and_allowance");

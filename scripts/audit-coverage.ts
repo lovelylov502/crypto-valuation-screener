@@ -35,7 +35,17 @@ const errors: string[] = [];
 type Row = Record<string, any>;
 let nextGeckoAt = 0;
 
+function reportTransportFailure(error: unknown): boolean {
+  for (let cause = error, depth = 0; cause && typeof cause === "object" && depth < 5; depth++) {
+    if ("code" in cause && ["UND_ERR_SOCKET", "ECONNRESET", "EPIPE", "ETIMEDOUT"].includes(String(cause.code))) return true;
+    cause = "cause" in cause ? cause.cause : null;
+  }
+  return error instanceof TypeError && ["fetch failed", "terminated"].includes(error.message) || error instanceof Error && error.name === "TimeoutError";
+}
+
 async function read(url: string): Promise<any> {
+  let archivedReport = false, transportRetried = false;
+  try { checkArchiveUrl(url); archivedReport = url.endsWith("/report.json"); } catch {}
   for (let attempt = 0; ; attempt++) {
     const gecko = url.startsWith("https://api.coingecko.com/");
     if (gecko) {
@@ -43,13 +53,25 @@ async function read(url: string): Promise<any> {
       if (delay) await new Promise(r => setTimeout(r, delay));
       nextGeckoAt = Date.now() + GECKO_INTERVAL_MS;
     }
-    const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(300_000) });
+    let response: Response, body = "", retryingTransport = false;
+    for (;;) {
+      try {
+        response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(retryingTransport ? 30_000 : 300_000) });
+        if (response.ok) body = url.startsWith(base + "/api/") ? await readJsonText(response) : await response.text();
+        break;
+      } catch (error) {
+        // Source replay can leave a pooled archive socket idle. Retry only this
+        // public report GET, once, without consuming an HTTP-status retry.
+        if (!archivedReport || transportRetried || !reportTransportFailure(error)) throw error;
+        transportRetried = true; retryingTransport = true;
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+    }
     if ((response.status === 429 || response.status >= 500) && attempt < 2) {
       await new Promise(r => setTimeout(r, response.status === 429 ? 60_000 : 1500 * 2 ** attempt));
       continue;
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
-    const body = url.startsWith(base + "/api/")?await readJsonText(response):await response.text();
     return JSON.parse(body);
   }
 }
