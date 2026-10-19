@@ -1,5 +1,7 @@
 # Daily valuation history
 
+This document describes the legacy trailing-window store and the currently deployed chart. The replacement data foundation uses each date's own daily flows; see [Same-date daily raw data](./DAILY_RAW_DATA.md). The legacy writer is paused during that migration. The raw-data phase does not yet change the chart or `/api/history` calculation contract.
+
 The historical store is a separate Turso Free database. The verified screener publication supplies the current table and latest detail summaries; `/api/history` supplies the dated detail charts. Their observation times and update progress remain separate.
 
 ## Calculation and dates
