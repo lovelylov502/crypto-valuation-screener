@@ -1,12 +1,13 @@
 import { readFile, writeFile, mkdir, rename, realpath } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { DAILY_RAW_ARCHIVE_REPOSITORY, type DailyRawArchiveManifest } from "../lib/dailyRawArchive";
 import { dailyRawQueueReleaseRef, latestDailyRawQueueRelease, prepareDailyRawQueueArchive, publishDailyRawQueueArchive, readDailyRawQueueArchive, restoreDailyRawQueueArchive, retryOnlyDailyRawQueue, type DailyRawQueueRef, type DailyRawQueueRelease } from "../lib/dailyRawQueueArchive";
 import type { DailyRawQueueState } from "../lib/dailyRawQueue";
 
-async function main() {
-  const argv = process.argv.slice(2), arg = (name: string, fallback = "") => { const i = argv.indexOf(name); return i < 0 ? fallback : argv[i + 1] ?? fallback; };
+export async function dailyRawQueueState(argv = process.argv.slice(2)) {
+  const arg = (name: string, fallback = "") => { const i = argv.indexOf(name); return i < 0 ? fallback : argv[i + 1] ?? fallback; };
   if (argv.includes("--help")) { console.log("daily-raw-queue-state.ts --restore --cache <outside-Git> [--state daily-raw-queue.json]\ndaily-raw-queue-state.ts --publish --cache <outside-Git> --tag daily-raw-queue-<run>-<attempt> [--archive-manifest file] [--seed] [--prepare-only] [--retry-only]\nRestoration requires an existing verified seed. --retry-only is an explicit original-archive failure fallback: preserve holds and DB progress, declare unarchived receipts need refetching. Local originals and state are retained."); return; }
   if (!arg("--cache") || Number(argv.includes("--restore")) + Number(argv.includes("--publish")) !== 1) throw Error("daily_raw_queue_state_arguments");
   await mkdir(resolve(arg("--cache")), { recursive: true });
@@ -74,27 +75,39 @@ async function main() {
   if (api(`commits/${target}`)?.sha !== target) throw Error("daily_raw_queue_state_remote_commit_missing");
   const existingTag = tagTarget(archive.ref.tag);
   if (existingTag && existingTag !== target) throw Error("daily_raw_queue_state_tag_target");
-  let releaseId = 0;
+  let releaseId = 0, mutationAttempted = false;
   const readRelease = async () => {
-    let raw = api(`releases/tags/${archive.ref.tag}`, true);
-    if (!raw) for (let number = 1; ; number++) {
-      const batch = api(`releases?per_page=100&page=${number}`) as unknown as Record<string, unknown>[];
-      raw = batch.find(item => item.tag_name === archive.ref.tag) ?? null;
-      if (raw || batch.length < 100) break;
+    for (let attempt = 0; attempt < (mutationAttempted ? 3 : 1); attempt++) {
+      let raw = api(releaseId ? `releases/${releaseId}` : `releases/tags/${archive.ref.tag}`, true);
+      if (!raw && !releaseId) for (let number = 1; ; number++) {
+        const batch = api(`releases?per_page=100&page=${number}`) as unknown as Record<string, unknown>[];
+        raw = batch.find(item => item.tag_name === archive.ref.tag) ?? null;
+        if (raw || batch.length < 100) break;
+      }
+      if (raw) {
+        const id = Number(raw.id);
+        if (!Number.isSafeInteger(id) || id < 1 || releaseId && releaseId !== id) throw Error("daily_raw_queue_state_release_id");
+        releaseId = id; const result = release(raw);
+        result.target = tagTarget(result.tag) ?? (result.draft ? String(raw.target_commitish) : ""); return result;
+      }
+      if (attempt < (mutationAttempted ? 3 : 1) - 1) await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 1000));
     }
-    if (!raw) return null;
-    releaseId = Number(raw.id); const result = release(raw);
-    result.target = tagTarget(result.tag) ?? (result.draft ? String(raw.target_commitish) : ""); return result;
+    return null;
   };
   const ref = await publishDailyRawQueueArchive(archive, {
     latest: async () => { const value = await latest(); return value ? dailyRawQueueReleaseRef(value) : null; },
     readRelease,
-    createDraft: async () => { command("gh", ["release", "create", archive.ref.tag, "--repo", repo, "--target", target, "--draft", "--latest=false", "--title", archive.ref.tag, "--notes-file", notes]); },
-    upload: async () => { command("gh", ["release", "upload", archive.ref.tag, asset, "--repo", repo]); },
-    publish: async () => { command("gh", ["api", "--method", "PATCH", `repos/${repo}/releases/${releaseId}`, "-F", "draft=false", "-f", "make_latest=false"]); },
+    createDraft: async () => {
+      mutationAttempted = true;
+      const created = JSON.parse(command("gh", ["api", "--method", "POST", `repos/${repo}/releases`, "-f", `tag_name=${archive.ref.tag}`, "-f", `target_commitish=${target}`, "-f", `name=${archive.ref.tag}`, "-F", "draft=true", "-f", "make_latest=false", "-F", `body=@${notes}`])!);
+      if (!Number.isSafeInteger(created.id) || created.id < 1) throw Error("daily_raw_queue_state_release_id");
+      releaseId = created.id;
+    },
+    upload: async () => { mutationAttempted = true; command("gh", ["api", "--method", "POST", `https://uploads.github.com/repos/${repo}/releases/${releaseId}/assets?name=${archive.file}`, "-H", "Content-Type: application/json", "--input", asset]); },
+    publish: async () => { mutationAttempted = true; command("gh", ["api", "--method", "PATCH", `repos/${repo}/releases/${releaseId}`, "-F", "draft=false", "-f", "make_latest=false"]); },
     readback: () => readDailyRawQueueArchive(archive.ref),
   });
   await save(originFile, ref);
   console.log(JSON.stringify({ status: "published-and-readback-verified", ...ref, entries: Object.keys(archive.envelope.state.entries).length, droppedUnarchived: retry?.unarchivedReceipts.length ?? 0, unarchivedReceipts: retry?.unarchivedReceipts ?? [] }));
 }
-main().catch(error => { const message = error instanceof Error ? error.message : ""; console.error(/^daily_raw_queue_[a-z_]+$/.test(message) ? message : "daily_raw_queue_state_failed"); process.exitCode = 1; });
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) dailyRawQueueState().catch(error => { const message = error instanceof Error ? error.message : ""; console.error(/^daily_raw_queue_[a-z_]+$/.test(message) ? message : "daily_raw_queue_state_failed"); process.exitCode = 1; });
