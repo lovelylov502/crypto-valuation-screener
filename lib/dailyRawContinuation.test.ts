@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { createClient } from "@libsql/client";
 import { acknowledgeDailyRawQueue, continueDailyRaw, markDailyRawQueueArchives, prepareDailyRawFeesOverview, restoreDailyRawPending, type DailyRawSelection } from "../scripts/continue-daily-raw";
-import { reconcileDailyRawQueue, recordDailyRawAcquired, type DailyRawQueueReceipt, type DailyRawQueueState } from "./dailyRawQueue";
-import { COINGECKO_CSV_CLOSE_SEMANTICS, extractDailyRawFundamentals, parseDailyRawCsv } from "./dailyRawCollection";
+import { planDailyRawQueue, reconcileDailyRawQueue, recordDailyRawAcquired, type DailyRawQueueReceipt, type DailyRawQueueState } from "./dailyRawQueue";
+import { COINGECKO_CSV_CLOSE_SEMANTICS, combineDailyRawAssets, extractDailyRawFundamentals, parseDailyRawCsv } from "./dailyRawCollection";
 import { copyDailyRaw, initializeDailyRaw, openDailyRawRun, upsertDailyRaw } from "./dailyRawDatabase";
 import { contentHash, type SourceBundle, type SourceReceipt } from "./sourceBundle";
 import { gatherDailyRawArchiveReceipts } from "./dailyRawArchive";
@@ -70,6 +70,41 @@ it("advances imported bindings only after the exact sealed copy and complete ass
     expect(await acknowledgeDailyRawQueue(state, staged, committed, { runId: "import", stagingId, cache, fetcher })).toBe(1);
     expect(state.entries.a.pending).toBeNull(); expect(state.entries.a.bindings[0]).toMatchObject({ fullImported: true, closedThrough: "2026-10-18" });
     await expect(acknowledgeDailyRawQueue(state, staged, committed, { runId: "import", stagingId: "d".repeat(64), cache, fetcher })).rejects.toThrow("staging_not_committed");
+  } finally { staged.close(); committed.close(); }
+});
+
+it.each([
+  { name: "blank CSV mcap", tail: "", price: 3, acknowledge: true },
+  { name: "negative CSV mcap sentinel", tail: "-1", price: 3, acknowledge: true },
+  { name: "different numeric price", tail: "-1", price: 3, storedPrice: 4, acknowledge: false },
+  { name: "different reported zero price", tail: "", price: 0, storedPrice: 1, acknowledge: false },
+  { name: "different actual observation time", tail: "-1", price: 3, storedAt: "2026-10-18T23:59:00Z", acknowledge: false },
+  { name: "CSV conflict replaced by an amount", tail: "15", price: 3, duplicate: true, storedPrice: 100, acknowledge: false },
+  { name: "invalid declared coverage", tail: "", price: 3, invalidCoverage: true, acknowledge: false },
+])("acknowledges actual CSV claims without requiring missing cells to clear independent quotes: $name", async test => {
+  const staged = createClient({ url: ":memory:" }), committed = createClient({ url: ":memory:" }), asset = { slug: "a", identity: "gecko:a" };
+  try {
+    await initializeDailyRaw(staged); await initializeDailyRaw(committed); await openDailyRawRun(staged, { id: "stage", maxEstimatedWrites: 1000 });
+    const text = `event_date,close_price_usd,market_cap_usd\n2026-10-17 00:00:00 UTC,2,10\n2026-10-18 00:00:00 UTC,${test.price},12\n${test.duplicate ? "2026-10-18 00:00:00 UTC,4,12\n" : ""}2026-10-19 00:00:00 UTC,,${test.tail}\n`;
+    const receipt = { ...pending(), ...(test.invalidCoverage ? { firstDay: "2010-01-01" } : {}), sha256: contentHash(text) }, file = { ...receipt, geckoId: "a", path: "a.csv", archiveUrl: archive, timestampSemantics: COINGECKO_CSV_CLOSE_SEMANTICS };
+    const parsed = parseDailyRawCsv(text, file, asset), csvMcap = parsed.sources.find(source => source.metric === "mcap")!;
+    const captured = { ...csvMcap, key: "independent-captured-mcap", url: archive.replace("receipts.json.gz", "snapshot.json.gz"), observedAt: "2026-10-18T12:01:00Z", sha256: "b".repeat(64), basis: "captured_quote;actual_provider_timestamp" };
+    const input = combineDailyRawAssets(asset, [parsed, { asset, sources: [captured], points: [{ day: "2026-10-18", mcap: { value: 100, state: "complete", source: captured.key, at: "2026-10-18T12:00:00Z" } }] }]);
+    const point = input.points.find(point => point.day === "2026-10-18")!;
+    expect(point.mcap).toMatchObject(test.tail === "15" ? { value: 15, state: "complete", at: "2026-10-19T00:00:00.000Z" } : { value: 100, state: "complete", at: "2026-10-18T12:00:00Z" });
+    if (test.storedPrice !== undefined || test.storedAt) point.price = { value: test.storedPrice ?? point.price!.value, state: "complete", source: point.price!.source, at: test.storedAt ?? point.price!.at };
+    await upsertDailyRaw(staged, { runId: "stage", ...input });
+    const stagingId = "c".repeat(64); await copyDailyRaw(staged, committed, { runId: "import", stagingId, maxEstimatedWrites: 1000 });
+    const state = reconcileDailyRawQueue(null, [coins[0]], "2026-10-18", new Date(clock)); recordDailyRawAcquired(state, "a", receipt, new Date(clock));
+    const fetcher = vi.fn().mockImplementation(() => Promise.resolve(new Response(gzipSync(JSON.stringify({ receipts: [{ ...original(receipt), body: text }] })))));
+    const result = acknowledgeDailyRawQueue(state, staged, committed, { runId: "import", stagingId, cache, fetcher });
+    if (test.invalidCoverage) await expect(result).rejects.toThrow("daily_raw_queue_coverage_mismatch");
+    else expect(await result).toBe(test.acknowledge ? 1 : 0);
+    expect(state.entries.a.bindings[0].fullImported).toBe(test.acknowledge); expect(state.entries.a.pending === null).toBe(test.acknowledge);
+    if (test.acknowledge) {
+      const next = new Date("2026-10-20T12:00:00Z"), refreshed = reconcileDailyRawQueue(state, [coins[0]], "2026-10-19", next);
+      expect(planDailyRawQueue(refreshed, { now: next, maxRequests: 1 })[0]).toMatchObject({ action: "acquire", mode: "patch", geckoId: "a" });
+    }
   } finally { staged.close(); committed.close(); }
 });
 

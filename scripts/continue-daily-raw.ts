@@ -152,7 +152,7 @@ export async function acknowledgeDailyRawQueue(state: DailyRawQueueState, staged
         } while (after);
         const same = expected.length && expected.every(point => ["price", "mcap"].every(metric => {
           const claim = point[metric as "price" | "mcap"], stored = actual.get(point.day)?.[metric as "price" | "mcap"];
-          return !claim || !!stored && claim.value === stored.value && (claim.at ?? null) === stored.at;
+          return !claim || claim.state === "missing" && claim.value === null || !!stored && claim.value === stored.value && (claim.at ?? null) === stored.at;
         }));
         if (!same) continue;
       }

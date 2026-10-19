@@ -10,7 +10,7 @@ DefiLlama 원천 금액과 토큰 시총으로 참고 배수를 계산하고, �
 
 종목 상세에서 날짜별 가격·시총·FDV와 P/R·P/HR 차트를 확인한다. 이력은 Turso 저장소와 `/api/history`에서 관리하며, 현재 목록은 검증된 스크리너 공개본을 사용한다. 기존 차트의 계산 기준은 [날짜별 밸류에이션 이력](./docs/DAILY_VALUATION_HISTORY.md), 같은 날짜의 가격과 일별 수익을 모으는 새 DB 구조는 [날짜별 원자료](./docs/DAILY_RAW_DATA.md)를 참고한다. 차트 전환은 원자료 정리 이후에 진행한다.
 
-앱 버전: **v0.4.0**. 변경 내역은 [CHANGELOG.md](./CHANGELOG.md)에 기록한다. 화면 하단과 `/api/status`의 `appVersion`은 `package.json`의 같은 버전을 사용한다. 데이터 공개본 ID·수집 revision·계산 규칙 버전은 각각 별도로 보존한다.
+앱 버전: **v0.4.1**. 변경 내역은 [CHANGELOG.md](./CHANGELOG.md)에 기록한다. 화면 하단과 `/api/status`의 `appVersion`은 `package.json`의 같은 버전을 사용한다. 데이터 공개본 ID·수집 revision·계산 규칙 버전은 각각 별도로 보존한다.
 
 ## Current product and data engine
 
