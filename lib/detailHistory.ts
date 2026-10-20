@@ -61,7 +61,7 @@ export async function loadDetailHistory(options: {
     const result = await response.json() as DetailHistoryData;
     if (!result.asset || result.asset.slug !== slug || result.asset.identity !== identity)
       throw new DetailHistoryError(409, "현재 토큰과 이력의 연결을 갱신 중입니다.");
-    if (result.schema !== 2 || result.capital !== capital || result.revenueDays !== 1 || !validDate(result.asOf) || result.asOf > bounds.to || typeof result.rawRevision !== "string" || !result.rawRevision
+    if (result.schema !== 2 || result.capital !== capital || result.revenueDays !== 1 || !validDate(result.asOf) || result.asOf >= date(Date.now()) || typeof result.rawRevision !== "string" || !result.rawRevision
       || !Array.isArray(result.points)
       || !Array.isArray(result.sources) || result.points.length > HISTORY_PAGE_LIMIT
       || result.points.some((point, index) => !validPoint(point) || !validDate(point.day) || point.day < bounds.from || point.day > result.asOf || point.day > bounds.to

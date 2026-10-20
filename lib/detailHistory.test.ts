@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HISTORY_MAX_PAGES, detailChartDomain, detailChartPoints, detailHistoryBounds, detailHistoryUrl, detailObservationState, detailSeriesSegments, loadDetailHistory, type DetailHistoryData, type DetailHistoryPoint } from "./detailHistory";
 import { calculateDailyValuation } from "./dailyValuation";
 import type { DailyRawSource, DailyRawStoredPoint } from "./dailyRawData";
@@ -19,6 +19,8 @@ const point = (date: string, extra: Partial<DailyRawStoredPoint> = {}, capital: 
 });
 const page = (points: DetailHistoryPoint[], nextCursor: string | null = null): DetailHistoryData => ({ schema: 2, calculationVersion: "daily-raw-same-day-v1", asset: { slug: "parent#sky", identity: "gecko:sky", snapshotId: "snapshot-one" }, capital: "mcap", revenueDays: 1, asOf: "2026-10-17", rawRevision: "revision-one", freshness: { status: "current", lagDays: 0, reason: null }, convention: "same completed UTC date", points, sources, nextCursor });
 const load = (fetcher: typeof fetch, extra: Partial<Parameters<typeof loadDetailHistory>[0]> = {}) => loadDetailHistory({ slug: "parent#sky", identity: "gecko:sky", range: "MAX", capital: "mcap", now, signal: new AbortController().signal, fetcher, ...extra });
+beforeEach(() => { vi.spyOn(Date, "now").mockReturnValue(now.getTime()); });
+afterEach(() => { vi.restoreAllMocks(); });
 
 describe("completed-day display ranges", () => {
   it("requests seven completed UTC dates and fixes the denominator to the same day", () => {
@@ -41,6 +43,28 @@ describe("completed-day display ranges", () => {
 });
 
 describe("full raw-history loading", () => {
+  it("accepts an advanced global asOf after UTC rollover while keeping every cursor request within the dialog's original range", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-19T00:05:00Z"));
+    const first = { ...page([point("2026-10-15")], "2026-10-15"), asOf: "2026-10-18" }, last = { ...page([point("2026-10-17")]), asOf: "2026-10-18" };
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json(first)).mockResolvedValueOnce(Response.json(last));
+    const result = await load(fetcher, { range: "7D" });
+    expect(result.asOf).toBe("2026-10-18"); expect(result.points.map(point => point.day)).toEqual(["2026-10-15", "2026-10-17"]);
+    for (const [url] of fetcher.mock.calls) {
+      const params = new URL(String(url), "https://example.test").searchParams;
+      expect(params.get("from")).toBe("2026-10-11"); expect(params.get("to")).toBe("2026-10-17");
+    }
+    expect(new URL(String(fetcher.mock.calls[1][0]), "https://example.test").searchParams.get("expectedRevision")).toBe("revision-one");
+    await expect(load(vi.fn().mockResolvedValue(Response.json({ ...last, points: [point("2026-10-18")] })), { range: "7D" })).rejects.toThrow("응답을 확인");
+  });
+  it.each(["2026-10-19", "2026-10-20"])("rejects global asOf %s that is not completed on the current clock even if query bounds extend later", async asOf => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-19T00:05:00Z"));
+    await expect(load(vi.fn().mockResolvedValue(Response.json({ ...page([point("2026-10-17")]), asOf })), { now: new Date("2026-10-22T00:00:00Z") })).rejects.toThrow("응답을 확인");
+  });
+  it("still aborts when a completed global asOf advances between pages of one bounded request", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-20T00:05:00Z"));
+    const first = page([point("2026-10-15")], "2026-10-15"), next = { ...page([point("2026-10-16")]), asOf: "2026-10-18" };
+    await expect(load(vi.fn().mockResolvedValueOnce(Response.json(first)).mockResolvedValueOnce(Response.json(next)), { range: "7D" })).rejects.toThrow("이력 기준이 갱신");
+  });
   it("loads all 32000 dates across 32 advancing pages and pins later pages to the first revision", async () => {
     let index = 0;
     const fetcher = vi.fn(async (_url: RequestInfo | URL) => {

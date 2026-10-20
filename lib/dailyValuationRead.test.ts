@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { createClient, type Client, type InStatement } from "@libsql/client";
+import { createClient, type Client, type InStatement, type TransactionMode } from "@libsql/client";
 import * as historyDatabase from "./historyDatabase";
 import { initializeDailyRaw, openDailyRawRun, upsertDailyRaw } from "./dailyRawDatabase";
 import { shiftValuationDay } from "./dailyValuation";
-import { DAILY_COMPARISON_TIMEOUT_MS, DailyValuationIdentityChanged, DailyValuationRevisionChanged, readDailyComparisonBatch, readDailyValuationHistory, type DailyValuationCoin } from "./dailyValuationRead";
+import { DAILY_COMPARISON_TIMEOUT_MS, DAILY_HISTORY_MAX_POINTS, DailyValuationIdentityChanged, DailyValuationRevisionChanged, readDailyComparisonBatch, readDailyValuationHistory, type DailyValuationCoin } from "./dailyValuationRead";
 import type { DailyRawMetric, DailyRawPoint, DailyRawSource } from "./dailyRawData";
 
 let db: Client;
@@ -19,6 +19,10 @@ function points(days = 366, first = shiftValuationDay(asOf, -days + 1), identity
 }
 async function seed(values = points(), asset = { slug: coin.slug, identity: "gecko:alpha-token" }, sources = metrics.map(metric => source(metric, asset.identity))) {
   for (let index = 0; index < values.length; index += 1000) await upsertDailyRaw(db, { runId: "fixture", asset, sources, points: values.slice(index, index + 1000), now });
+}
+async function correct(metric: DailyRawMetric, day: string, value: number) {
+  const previous = source(metric), revised = { ...previous, key: `${previous.key}:correction`, revisionOf: previous.key, observedAt: "2026-10-20T12:00:01Z", sha256: "b".repeat(64) };
+  await seed([{ day, [metric]: { value, source: revised.key, state: "complete", at: ["fdv", "mcap"].includes(metric) ? `${shiftValuationDay(day, 1)}T00:00:00Z` : null } }], undefined, [revised]);
 }
 const batch = (changes: Partial<Parameters<typeof readDailyComparisonBatch>[0]> = {}) => readDailyComparisonBatch({ coins: [coin], capital: "fdv", snapshot, db, now, ...changes });
 const history = (changes: Partial<Parameters<typeof readDailyValuationHistory>[1]> = {}) => readDailyValuationHistory(db, { coin, capital: "fdv", snapshot, now, ...changes });
@@ -101,16 +105,142 @@ it("clamps incomplete captured days and returns a shaped empty stale interval", 
   await expect(history({ from: "2026-10-19", to: "2026-10-18" })).rejects.toThrow("invalid_range");
 });
 
-it("rejects a revision change during the batch and does not cache its partial read", async () => {
+it("returns a coherent summary during an unrelated asset write, without caching it under the changed hint", async () => {
   await seed(); const execute = db.execute.bind(db); let changed = false;
   vi.spyOn(db, "execute").mockImplementation(async statement => {
     const result = await execute(statement);
-    if (!changed && sql(statement).includes("CROSS JOIN daily_raw_days")) { changed = true; await execute("UPDATE daily_raw_runs SET rows_written=rows_written+1 WHERE id='fixture'"); }
+    if (!changed && sql(statement).includes("CROSS JOIN daily_raw_days")) {
+      changed = true;
+      await seed(points(1, asOf, "gecko:beta"), { slug: "beta", identity: "gecko:beta" });
+    }
     return result;
   });
-  await expect(batch()).rejects.toBeInstanceOf(DailyValuationRevisionChanged);
-  vi.restoreAllMocks(); const retried = vi.spyOn(db, "execute"); await batch();
-  expect(retried.mock.calls.some(call => sql(call[0]).includes("CROSS JOIN daily_raw_days"))).toBe(true);
+  expect((await batch()).rows[coin.slug].pr).toMatchObject({ status: "ready", latest: { value: 366 } });
+  vi.restoreAllMocks(); const retried = vi.spyOn(db, "execute");
+  await batch(); await batch();
+  expect(retried.mock.calls.filter(call => sql(call[0]).includes("CROSS JOIN daily_raw_days"))).toHaveLength(1);
+});
+
+it("rereads the entire requested summary page whenever any coin is cold or an all-warm page becomes dirty", async () => {
+  const beta = { ...coin, slug: "beta", geckoId: "beta" };
+  await seed(); await seed(points(366, undefined, "gecko:beta"), { slug: beta.slug, identity: "gecko:beta" });
+  await batch();
+  const execute = db.execute.bind(db), page = { coins: [coin, beta] }, queries: InStatement[] = [];
+  let hints = 0, changeOnWarmRecheck = false;
+  vi.spyOn(db, "execute").mockImplementation(async statement => {
+    if (sql(statement).startsWith("SELECT id,estimated_writes") && changeOnWarmRecheck && ++hints === 2) {
+      changeOnWarmRecheck = false; await correct("fdv", asOf, 999 * 365);
+    }
+    if (sql(statement).includes("CROSS JOIN daily_raw_days")) queries.push(statement);
+    return execute(statement);
+  });
+  await batch(page); // Alpha is warm, beta is cold: both must come from this SELECT.
+  changeOnWarmRecheck = true;
+  const changed = await batch(page);
+  expect(changed.rows[coin.slug].pr).toMatchObject({ status: "ready", latest: { value: 999 } });
+  expect(changed.rows.beta.pr).toMatchObject({ status: "ready", latest: { value: 366 } });
+  expect(queries).toHaveLength(2);
+  for (const statement of queries) {
+    expect(typeof statement).not.toBe("string");
+    if (typeof statement !== "string") expect(JSON.parse(String((statement.args as unknown[])[0]))).toEqual([{ slug: coin.slug, identity: "gecko:alpha-token" }, { slug: beta.slug, identity: "gecko:beta" }]);
+  }
+});
+
+it("keeps the full-range content token across unrelated writes and cursor sizes in read-only transactions", async () => {
+  await seed(points(1002, "2020-01-01"));
+  const transaction = db.transaction.bind(db), modes: (TransactionMode | undefined)[] = [], statements: InStatement[] = [];
+  vi.spyOn(db, "transaction").mockImplementation(async (mode?: TransactionMode) => {
+    modes.push(mode); const tx = await transaction(mode), execute = tx.execute.bind(tx);
+    vi.spyOn(tx, "execute").mockImplementation(async statement => { statements.push(statement); return execute(statement); });
+    return tx;
+  });
+  const first = (await history({ limit: 1000 }))!;
+  vi.restoreAllMocks();
+  await seed(points(1, asOf, "gecko:beta"), { slug: "beta", identity: "gecko:beta" });
+  const last = (await history({ after: first.nextCursor!, limit: 1, expectedRevision: first.rawRevision }))!;
+  expect(last.rawRevision).toBe(first.rawRevision); expect(last.points).toHaveLength(1); expect(last.points[0].day).toBe("2022-09-27");
+  expect(modes).toEqual(["read"]); expect(statements.every(statement => /^SELECT\b/.test(sql(statement)))).toBe(true);
+  const seek = statements.find(statement => sql(statement).includes("LEFT JOIN daily_raw_days"))!;
+  const plan = await db.execute({ sql: `EXPLAIN QUERY PLAN ${sql(seek)}`, args: typeof seek === "string" ? [] : seek.args });
+  expect(plan.rows.map(row => String(row.detail)).join("\n")).toMatch(/SEARCH d USING PRIMARY KEY.*asset_id=\? AND day>\? AND day<\?/);
+});
+
+it.each(["fdv", "mcap", "revenue"] as const)("rejects a continuation after a scoped %s correction, including a non-selected visible metric", async metric => {
+  await seed(points(3, "2020-01-01"));
+  const first = (await history({ from: "2020-01-01", to: "2020-01-03", limit: 1 }))!;
+  await correct(metric, "2020-01-03", 1_000_000);
+  await expect(history({ from: "2020-01-01", to: "2020-01-03", after: first.nextCursor!, expectedRevision: first.rawRevision })).rejects.toBeInstanceOf(DailyValuationRevisionChanged);
+  expect((await history({ from: "2020-01-01", to: "2020-01-03" }))!.rawRevision).not.toBe(first.rawRevision);
+});
+
+it("retains a scoped token when the same asset changes outside the requested range", async () => {
+  await seed(points(3, "2020-01-01"));
+  const scope = { from: "2020-01-01", to: "2020-01-02", limit: 1 }, first = (await history(scope))!;
+  await correct("fdv", "2020-01-03", 1_000_000);
+  const last = (await history({ ...scope, after: first.nextCursor!, expectedRevision: first.rawRevision }))!;
+  expect(last.rawRevision).toBe(first.rawRevision); expect(last.points[0].day).toBe("2020-01-02");
+});
+
+it("binds the cached hint inside the read transaction, so a later correction cannot hide behind an outside hint", async () => {
+  await seed(points(2, "2020-01-01"));
+  const execute = db.execute.bind(db); let changed = false;
+  vi.spyOn(db, "execute").mockImplementation(async statement => {
+    const result = await execute(statement);
+    if (!changed && sql(statement).startsWith("SELECT id,estimated_writes")) { changed = true; await correct("fdv", "2020-01-02", 7300); }
+    return result;
+  });
+  const first = (await history())!;
+  expect(first.points[1].pr.value).toBe(20);
+  vi.restoreAllMocks(); const transaction = vi.spyOn(db, "transaction");
+  expect((await history({ expectedRevision: first.rawRevision }))!.rawRevision).toBe(first.rawRevision);
+  expect(transaction).not.toHaveBeenCalled();
+});
+
+it("does not label old content with a newer hint committed after its read transaction", async () => {
+  await seed(points(2, "2020-01-01"));
+  const transaction = db.transaction.bind(db); let changed = false;
+  vi.spyOn(db, "transaction").mockImplementation(async (mode?: TransactionMode) => {
+    const tx = await transaction(mode);
+    if (mode === "read") {
+      const commit = tx.commit.bind(tx);
+      vi.spyOn(tx, "commit").mockImplementation(async () => {
+        await commit();
+        if (!changed) { changed = true; await correct("fdv", "2020-01-02", 7300); }
+      });
+    }
+    return tx;
+  });
+  const first = (await history())!;
+  expect(first.points[1].pr.value).toBe(2);
+  await expect(history({ expectedRevision: first.rawRevision })).rejects.toBeInstanceOf(DailyValuationRevisionChanged);
+  expect((await history())!.points[1].pr.value).toBe(20);
+});
+
+it("rejects more than 32000 dates before loading sources or retaining a full snapshot", async () => {
+  await seed(points(1, "1900-01-01"));
+  await db.execute({ sql: `WITH RECURSIVE dates(n) AS (VALUES(0) UNION ALL SELECT n+1 FROM dates WHERE n<?) INSERT OR IGNORE INTO daily_raw_days(asset_id,day) SELECT (SELECT id FROM daily_raw_assets WHERE slug=?),date('1900-01-01','+'||n||' days') FROM dates`, args: [DAILY_HISTORY_MAX_POINTS, coin.slug] });
+  const transaction = db.transaction.bind(db), statements: InStatement[] = [];
+  vi.spyOn(db, "transaction").mockImplementation(async (mode?: TransactionMode) => {
+    const tx = await transaction(mode), execute = tx.execute.bind(tx);
+    vi.spyOn(tx, "execute").mockImplementation(async statement => { statements.push(statement); return execute(statement); });
+    return tx;
+  });
+  await expect(history()).rejects.toThrow("daily_valuation_history_range_too_large");
+  expect(statements.some(statement => sql(statement).includes("LIMIT 32001"))).toBe(true);
+  expect(statements.some(statement => sql(statement).startsWith("SELECT s.*"))).toBe(false);
+});
+
+it("includes source text in the byte-bounded detail cache rather than retaining an oversized source payload", async () => {
+  await seed(points(1, asOf));
+  const byteLength = Buffer.byteLength.bind(Buffer), sized: string[] = [];
+  vi.spyOn(Buffer, "byteLength").mockImplementation((value, encoding) => {
+    if (typeof value === "string" && value.startsWith('{"revision":') && value.includes('"sources":')) { sized.push(value); return 33 * 1024 * 1024; }
+    return byteLength(value, encoding);
+  });
+  const transaction = vi.spyOn(db, "transaction");
+  const first = (await history())!, second = (await history())!;
+  expect(second.rawRevision).toBe(first.rawRevision); expect(transaction).toHaveBeenCalledTimes(2);
+  expect(sized).toHaveLength(2); expect(sized[0]).toContain('"definition":"fdv USD"'); expect(sized[0]).toContain('"scope":"gecko:alpha-token"');
 });
 
 it("bounds an owned hung reader to eight seconds and closes it", async () => {
