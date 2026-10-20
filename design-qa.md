@@ -19,6 +19,8 @@ Interactions checked in the final production build: search, market-cap/FDV switc
 
 Validation: 114 test files / 1262 tests, typecheck, production build and whitespace checks passed. An independent review checked 2920 distributions covering every available count from 1 through 365, including even-sample medians, and compared representative stored raw rows. Tests retain exact latest-day, missing-data, source-definition, staleness and prepared-model revision guards. Reader deployment precedes the bounded prepared-model policy rebuild; production DB/readback evidence is retained outside Git after deployment.
 
+Production readback: the canonical v0.6.2 reader deployment passed the guarded full-universe source/replay audit. `live-full-proof.json` checks six actual assets across both capital bases, including 8/9/12/14/365-date FDV samples, an empty prior baseline and zero holders revenue. The actual Aave compact history retains March 5's FDV 1687920736.48512, Revenue 184635 and P/R 25.046390846436676; its zero holders flow remains unavailable. Older prepared models already lagged the raw asset revision before this migration, so their complete payload hashes are not claimed to remain identical after refreshing those raw revisions. Policy-only payload preservation is separately covered by regression tests. `production-hydrex-light.png` shows both live bars and their 8/365 date counts. Production detail open/Escape/focus return also passed.
+
 No remaining actionable P0/P1/P2 finding. Intentional differences are actual DB dates/amounts, the requested visible date counts, existing page chrome and responsive horizontal scrolling.
 
 final result: passed
