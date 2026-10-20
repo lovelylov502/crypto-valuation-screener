@@ -42,6 +42,21 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+      - name: Normalize the verified canonical repository remote
+        run: |
+          if [ "$GITHUB_REPOSITORY" != "lovelylov502/crypto-valuation-screener" ] || [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "daily_raw_workflow_repository_mismatch" >&2
+            exit 1
+          fi
+          canonical="https://github.com/lovelylov502/crypto-valuation-screener.git"
+          for remote in "$(git remote get-url origin)" "$(git remote get-url --push origin)"; do
+            if [ "$remote" != "$canonical" ] && [ "$remote" != "${canonical%.git}" ]; then
+              echo "daily_raw_workflow_repository_mismatch" >&2
+              exit 1
+            fi
+          done
+          git remote set-url origin "$canonical"
+          git remote set-url --push origin "$canonical"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

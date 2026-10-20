@@ -35,11 +35,17 @@ describe("daily valuation comparison boundary", () => {
   it("rejects corrupt coverage, ranges and amounts rather than drawing a misleading signal", () => {
     for (const metric of [
       { ...ready, validDays: 366 }, { ...ready, validDays: 0 }, { ...ready, validDays: 22.5 },
+      { ...ready, validDays: 364 },
       { ...ready, minimum: 16 }, { ...ready, maximum: 14 }, { ...ready, median: NaN },
       { ...ready, minimum: -1 }, { ...ready, maximum: Infinity },
       { ...ready, latest: { date: page().asOf, value: "5" } },
       { status: "unavailable", validDays: 0, reason: "unknown" },
     ]) expect(read(withMetric(metric))).toEqual({ status: "invalid" });
+  });
+  it("rejects forged ready values older than one completed UTC day while accepting explicit stale_data", () => {
+    const later = Date.parse("2026-10-22T12:00:00Z");
+    expect(comparisonReading(page(), "fdv", "sample", "pr", later)).toEqual({ status: "invalid" });
+    expect(comparisonReading(withMetric({ status: "unavailable", validDays: 365, reason: "stale_data" }), "fdv", "sample", "pr", later)).toEqual({ status: "unavailable", validDays: 365, reason: "stale_data" });
   });
 });
 

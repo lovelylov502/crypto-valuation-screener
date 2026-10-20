@@ -7,8 +7,8 @@ import economicIdentityV3 from "../lib/economic-policy-v3.identity.json" with {t
 import {readJsonText,jsonTransportErrors} from "../lib/jsonTransport.mjs";
 import packageJson from "../package.json" with {type:"json"};
 
-const ADVANCED_UI_MARKERS = ["화면 모드", "tovenit-theme", "밝게", "어둡게", "DefiLlama 전체 종목", "열 표시", "필터", "연결 토큰", "배수 분자", "P/R · 24시간", "P/HR · 24시간", "P/R · 30일", "P/HR · 30일", "지표 안내", "최신 자료 확인", "page-size-top", "scan-table", "수익 정렬 기준", "수익 분류·검토", "원천 참고 P/R"];
-const LEGACY_UI_MARKERS = ["저평가 80+", "고평가 20 이하", "P/S 참고선", "P/S · 30일", "P/S · 사업 매출", 'aria-label="결과 정렬"'];
+const ADVANCED_UI_MARKERS = ["화면 모드", "tovenit-theme", "밝게", "어둡게", "DefiLlama 전체 종목", "필터", "연결 토큰", "배수 분자", "P/R · 24시간", "P/HR · 24시간", "P/R · 30일", "P/HR · 30일", "지표 안내", "최신 자료 확인", "page-size-top", "scan-table", "fixed-valuation-table", "현재 배수 · 기간별 수익 기준", "과거 비교 · 하루 수익 기준", "P/R 과거 비교", "P/HR 과거 비교", "이전 365일", "수익 분류와 검토 상태", "원천 참고 배수"];
+const LEGACY_UI_MARKERS = ["저평가 80+", "고평가 20 이하", "P/S 참고선", "P/S · 30일", "P/S · 사업 매출", 'aria-label="결과 정렬"', 'aria-label="열 표시"', 'aria-label="수익 정렬 기준"'];
 const MAX_ATTEMPTS = 8;
 const RETRY_DELAY_MS = 5_000;
 

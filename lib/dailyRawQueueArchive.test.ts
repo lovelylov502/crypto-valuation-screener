@@ -137,3 +137,20 @@ it("serializes the daily raw workflow and retains queue archival after failed or
   const bash = process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "/bin/bash";
   if (existsSync(bash)) for (const step of steps.filter(step => step.run)) expect(() => execFileSync(bash, ["--noprofile", "--norc", "-n"], { input: step.run!, encoding: "utf8", windowsHide: true })).not.toThrow();
 });
+
+it("normalizes both allowed checkout remote spellings only after verifying repository and main ref", () => {
+  const workflow = parse(readFileSync(new URL("../.github/workflows/daily-history.yml", import.meta.url), "utf8"));
+  const steps = workflow.jobs.sync.steps as { name?: string; run?: string; uses?: string }[], step = steps.find(step => step.name === "Normalize the verified canonical repository remote")!;
+  expect(steps.indexOf(step)).toBe(steps.findIndex(step => step.uses === "actions/checkout@v4") + 1);
+  const bash = process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "/bin/bash", canonical = `https://github.com/${DAILY_RAW_ARCHIVE_REPOSITORY}.git`;
+  if (!existsSync(bash)) return;
+  const run = (fetch: string, push = fetch, repository = DAILY_RAW_ARCHIVE_REPOSITORY, ref = "refs/heads/main") => execFileSync(bash, ["--noprofile", "--norc", "-e"], {
+    input: `GITHUB_REPOSITORY='${repository}'\nGITHUB_REF='${ref}'\ngit() {\n  case "$*" in\n    'remote get-url origin') printf '%s\\n' '${fetch}';;\n    'remote get-url --push origin') printf '%s\\n' '${push}';;\n    'remote set-url '*) printf '%s\\n' "$*";;\n    *) return 97;;\n  esac\n}\n${step.run}`,
+    encoding: "utf8", windowsHide: true, stdio: ["pipe", "pipe", "pipe"],
+  });
+  for (const remote of [canonical, canonical.slice(0, -4)]) expect(run(remote)).toBe(`remote set-url origin ${canonical}\nremote set-url --push origin ${canonical}\n`);
+  for (const args of [[canonical, canonical, "other/repo"], [canonical, canonical, DAILY_RAW_ARCHIVE_REPOSITORY, "refs/heads/other"], ["https://github.com/other/repo"], [canonical, "https://github.com/other/repo.git"], [`https://user@github.com/${DAILY_RAW_ARCHIVE_REPOSITORY}`]]) {
+    try { run(...args as [string, string?, string?, string?]); throw Error("Expected rejection"); }
+    catch (error) { expect(error).toMatchObject({ status: 1, stdout: "" }); }
+  }
+});

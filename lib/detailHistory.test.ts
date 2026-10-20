@@ -1,116 +1,154 @@
 import { describe, expect, it, vi } from "vitest";
-import { HISTORY_MAX_PAGES, detailChartDomain, detailChartPoints, detailHistoryBounds, detailHistoryUrl, detailSeriesSegments, loadDetailHistory, type DetailHistoryData, type DetailHistoryPoint } from "./detailHistory";
+import { HISTORY_MAX_PAGES, detailChartDomain, detailChartPoints, detailHistoryBounds, detailHistoryUrl, detailObservationState, detailSeriesSegments, loadDetailHistory, type DetailHistoryData, type DetailHistoryPoint } from "./detailHistory";
+import { calculateDailyValuation } from "./dailyValuation";
+import type { DailyRawSource, DailyRawStoredPoint } from "./dailyRawData";
+import type { CapitalBasis } from "./valuationMetrics";
+import { createElement, Fragment } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { CoinDetailOverview } from "../components/CoinDetailOverview";
+import { DetailHistoryChart } from "../components/DetailHistoryChart";
+import { sample } from "./testFixtures";
+import { scoreCoins } from "./valuation";
 
-const now = new Date("2026-10-18T16:10:00Z");
-const point = (day: string, extra: Partial<DetailHistoryPoint> = {}): DetailHistoryPoint => ({ day, price: 1, mcap: 100, fdv: null,
-  marketAt: `${day}T00:00:00Z`, fdvAt: null, marketSource: "market", fdvSource: null, basis: "utc_midnight", valuation: null, valuationState: "unavailable", ...extra });
-const page = (points: DetailHistoryPoint[], nextCursor: string | null = null): DetailHistoryData => ({ schema: 1, calculationVersion: "daily-reference-v1",
-  asset: { slug: "parent#sky", identity: "gecko:sky" }, days: 30, convention: "UTC date D", points, fundamentals: [], sources: [], nextCursor });
-const load = (fetcher: typeof fetch, extra: Partial<Parameters<typeof loadDetailHistory>[0]> = {}) => loadDetailHistory({ slug: "parent#sky", identity: "gecko:sky", range: "MAX", days: 30, now,
-  signal: new AbortController().signal, fetcher, ...extra });
+const now = new Date("2026-10-18T16:10:00Z"), day = 86400000;
+const sources: DailyRawSource[] = ["price", "mcap", "fdv", "fees", "revenue", "holders"].map(metric => ({ key: metric, metric: metric as DailyRawSource["metric"], provider: ["price", "mcap", "fdv"].includes(metric) ? "CoinGecko" : "DefiLlama", url: `https://example.test/${metric}`, sha256: "a".repeat(64), archiveUrl: "https://example.test/archive", observedAt: now.toISOString(), scope: "exact-parent", definition: metric, basis: ["price", "mcap", "fdv"].includes(metric) ? "captured_quote;actual_provider_timestamp" : "completed_utc_day_flow;provider_reconstructed;original_dated_observations" }));
+const sourceMap = new Map(sources.map(source => [source.key, source]));
+const point = (date: string, extra: Partial<DailyRawStoredPoint> = {}, capital: CapitalBasis = "mcap"): DetailHistoryPoint => calculateDailyValuation({
+  point: { day: date, price: { value: 1, state: "positive", source: "price", at: `${date}T12:00:00Z` }, mcap: { value: 36500, state: "positive", source: "mcap", at: `${date}T12:00:00Z` }, fdv: { value: null, state: "missing", source: "", at: null }, fees: { value: 100, state: "positive", source: "fees", at: null }, revenue: { value: 10, state: "positive", source: "revenue", at: null }, holders: { value: 2, state: "positive", source: "holders", at: null }, ...extra },
+  sources: sourceMap, capital, eligible: true, completedThrough: "2026-10-17",
+});
+const page = (points: DetailHistoryPoint[], nextCursor: string | null = null): DetailHistoryData => ({ schema: 2, calculationVersion: "daily-raw-same-day-v1", asset: { slug: "parent#sky", identity: "gecko:sky", snapshotId: "snapshot-one" }, capital: "mcap", revenueDays: 1, asOf: "2026-10-17", rawRevision: "revision-one", freshness: { status: "current", lagDays: 0, reason: null }, convention: "same completed UTC date", points, sources, nextCursor });
+const load = (fetcher: typeof fetch, extra: Partial<Parameters<typeof loadDetailHistory>[0]> = {}) => loadDetailHistory({ slug: "parent#sky", identity: "gecko:sky", range: "MAX", capital: "mcap", now, signal: new AbortController().signal, fetcher, ...extra });
 
-describe("detail chart range and revenue window", () => {
-  it("uses exactly seven UTC dates and keeps the trailing revenue window independent", () => {
-    expect(detailHistoryBounds("7D", now)).toEqual({ from: "2026-10-12", to: "2026-10-18" });
-    const params = new URL(detailHistoryUrl("parent#sky", "7D", 90, now), "https://example.com").searchParams;
-    expect(params.get("slug")).toBe("parent#sky");
-    expect(params.get("days")).toBe("90");
-    expect(params.get("from")).toBe("2026-10-12");
-    expect(params.get("limit")).toBe("1000");
+describe("completed-day display ranges", () => {
+  it("requests seven completed UTC dates and fixes the denominator to the same day", () => {
+    expect(detailHistoryBounds("7D", now)).toEqual({ from: "2026-10-11", to: "2026-10-17" });
+    const params = new URL(detailHistoryUrl("parent#sky", "gecko:sky", "fdv", "7D", now), "https://example.test").searchParams;
+    expect(params.get("slug")).toBe("parent#sky"); expect(params.get("expectedIdentity")).toBe("gecko:sky"); expect(params.get("capital")).toBe("fdv");
+    expect(params.has("days")).toBe(false); expect(params.get("to")).toBe("2026-10-17"); expect(params.get("limit")).toBe("1000");
   });
-  it("maps 1M, 3M, YTD, 1Y and MAX explicitly without a 365-day MAX cap", () => {
-    expect(detailHistoryBounds("1M", now).from).toBe("2026-09-19");
-    expect(detailHistoryBounds("3M", now).from).toBe("2026-07-21");
-    expect(detailHistoryBounds("YTD", now).from).toBe("2026-01-01");
-    expect(detailHistoryBounds("1Y", now).from).toBe("2025-10-19");
-    expect(detailHistoryBounds("MAX", now).from).toBe("2000-01-01");
-    expect(detailHistoryBounds("7D", new Date("2024-03-01T00:10:00Z")).from).toBe("2024-02-24");
+  it("handles YTD, leap days and MAX independently of revenue aggregation", () => {
+    expect(detailHistoryBounds("1M", now).from).toBe("2026-09-18"); expect(detailHistoryBounds("3M", now).from).toBe("2026-07-20");
+    expect(detailHistoryBounds("YTD", now).from).toBe("2026-01-01"); expect(detailHistoryBounds("1Y", now).from).toBe("2025-10-18");
+    expect(detailHistoryBounds("MAX", now).from).toBe("1900-01-01"); expect(detailHistoryBounds("7D", new Date("2024-03-01T00:10:00Z"))).toEqual({ from: "2024-02-23", to: "2024-02-29" });
+    expect(detailHistoryBounds("YTD", new Date("2026-01-01T00:10:00Z"))).toEqual({ from: "2025-01-01", to: "2025-12-31" });
   });
-  it("uses the actual available MAX domain and the same requested domain for every series", () => {
-    const points = detailChartPoints([point("2020-02-01"), point("2026-10-17")], "mcap");
+  it("uses actual MAX history dates while every series shares the requested short range", () => {
+    const points = detailChartPoints([point("2020-02-01"), point("2026-10-17")]);
     expect(detailChartDomain("MAX", points, now)).toEqual([Date.parse("2020-02-01"), Date.parse("2026-10-17")]);
-    expect(detailChartDomain("7D", points, now)).toEqual([Date.parse("2026-10-12"), Date.parse("2026-10-18")]);
+    expect(detailChartDomain("7D", points, now)).toEqual([Date.parse("2026-10-11"), Date.parse("2026-10-17")]);
   });
 });
 
-describe("bounded full history loading", () => {
-  it("follows cursors beyond the first 1000 dates and merges repeated source and flow metadata", async () => {
-    const dates = Array.from({ length: 1000 }, (_, i) => point(new Date(Date.parse("2020-01-01") + i * 86_400_000).toISOString().slice(0, 10)));
-    const source = { id: "source", url: "https://example.com", observedAt: now.toISOString(), archiveUrl: "https://example.com/archive", sha256: "hash" };
-    const flow = { day: "2020-01-01", revenue: { value: 1, state: "complete" as const, source: "source", scope: "scope" }, holders: { value: null, state: "missing" as const, source: "source", scope: "scope" } };
-    const a = { ...page(dates, dates.at(-1)!.day), sources: [source], fundamentals: [flow] };
-    const b = { ...page([point("2024-01-01")]), sources: [source], fundamentals: [flow] };
-    const fetcher = vi.fn().mockResolvedValueOnce(Response.json(a)).mockResolvedValueOnce(Response.json(b));
-    const result = await load(fetcher);
-    expect(result.points).toHaveLength(1001);
-    expect(result.sources).toEqual([source]);
-    expect(result.fundamentals).toEqual([flow]);
-    expect(new URL(fetcher.mock.calls[1][0], "https://example.com").searchParams.get("after")).toBe(dates.at(-1)!.day);
-    expect(result.nextCursor).toBeNull();
-  });
-  it("rejects repeated/nonadvancing cursors instead of looping or returning a partial MAX", async () => {
-    const fetcher = vi.fn().mockResolvedValueOnce(Response.json(page([point("2026-10-16")], "2026-10-16")))
-      .mockResolvedValueOnce(Response.json(page([point("2026-10-16")], "2026-10-16")));
-    await expect(load(fetcher)).rejects.toThrow();
-    expect(fetcher).toHaveBeenCalledTimes(2);
-  });
-  it("refuses a token identity change between pages", async () => {
-    const fetcher = vi.fn().mockResolvedValueOnce(Response.json(page([point("2026-10-16")], "2026-10-16")))
-      .mockResolvedValueOnce(Response.json({ ...page([point("2026-10-17")]), asset: { slug: "parent#sky", identity: "gecko:different" } }));
-    await expect(load(fetcher)).rejects.toThrow("연결을 갱신");
-  });
-  it("refuses a changed snapshot between cursor pages", async () => {
-    const a = { ...page([point("2026-10-16")], "2026-10-16"), asset: { slug: "parent#sky", identity: "gecko:sky", snapshotId: "one" } };
-    const b = { ...page([point("2026-10-17")]), asset: { ...a.asset, snapshotId: "two" } };
-    const fetcher = vi.fn().mockResolvedValueOnce(Response.json(a)).mockResolvedValueOnce(Response.json(b));
-    await expect(load(fetcher)).rejects.toThrow("이력 기준이 갱신");
-  });
-  it("bounds pagination even if a service continually returns an advancing cursor", async () => {
+describe("full raw-history loading", () => {
+  it("loads all 32000 dates across 32 advancing pages and pins later pages to the first revision", async () => {
     let index = 0;
-    const fetcher = vi.fn(async () => {
-      const day = new Date(Date.parse("2020-01-01") + index++ * 86_400_000).toISOString().slice(0, 10);
-      return Response.json(page([point(day)], day));
+    const fetcher = vi.fn(async (_url: RequestInfo | URL) => {
+      const points = Array.from({ length: 1000 }, (_, i) => point(new Date(Date.parse("1900-01-01") + (index * 1000 + i) * day).toISOString().slice(0, 10)));
+      return Response.json(page(points, ++index < HISTORY_MAX_PAGES ? points.at(-1)!.day : null));
     });
-    await expect(load(fetcher)).rejects.toThrow("한 번에 불러오지 못했습니다");
-    expect(fetcher).toHaveBeenCalledTimes(HISTORY_MAX_PAGES);
+    const result = await load(fetcher);
+    expect(result.points).toHaveLength(32000); expect(result.sources).toEqual(sources); expect(result.nextCursor).toBeNull(); expect(fetcher).toHaveBeenCalledTimes(32);
+    const second = new URL(fetcher.mock.calls[1][0] as string, "https://example.test").searchParams;
+    expect(second.get("after")).toBe("1902-09-27"); expect(second.get("expectedRevision")).toBe("revision-one");
   });
-  it("withholds an older token identity before drawing even the first history page", async () => {
-    const fetcher = vi.fn().mockResolvedValue(Response.json(page([point("2026-10-17")])));
-    await expect(load(fetcher, { identity: "gecko:new-sky" })).rejects.toMatchObject({ status: 409 });
+  it.each(["rawRevision", "asOf", "calculationVersion"])("refuses a changed %s instead of mixing cursor pages", async field => {
+    const a = page([point("2026-10-15")], "2026-10-15"), b = { ...page([point("2026-10-16")]), [field]: field === "asOf" ? "2026-10-16" : "different" };
+    await expect(load(vi.fn().mockResolvedValueOnce(Response.json(a)).mockResolvedValueOnce(Response.json(b)))).rejects.toThrow("이력 기준이 갱신");
   });
-  it("distinguishes no stored asset, a configured empty period, and service failure", async () => {
-    await expect(load(vi.fn().mockResolvedValue(new Response(null, { status: 404 })))).rejects.toMatchObject({ status: 404 });
-    await expect(load(vi.fn().mockResolvedValue(new Response(null, { status: 503 })))).rejects.toMatchObject({ status: 503 });
-    const empty = vi.fn().mockResolvedValue(Response.json(page([])));
-    await expect(load(empty)).resolves.toMatchObject({ points: [], nextCursor: null });
+  it("refuses changed snapshot identity, token identity, numerator and source evidence", async () => {
+    const first = page([point("2026-10-15")], "2026-10-15"), second = page([point("2026-10-16")]);
+    for (const changed of [{ ...second, asset: { ...second.asset, snapshotId: "new" } }, { ...second, asset: { ...second.asset, identity: "gecko:new" } }, { ...second, capital: "fdv" }, { ...second, sources: [{ ...sources[0], sha256: "b".repeat(64) }] }])
+      await expect(load(vi.fn().mockResolvedValueOnce(Response.json(first)).mockResolvedValueOnce(Response.json(changed)))).rejects.toThrow();
   });
-  it("does not continue pagination after cancellation", async () => {
-    const controller = new AbortController();
-    const fetcher = vi.fn(async () => {
-      controller.abort();
-      return Response.json(page([point("2026-10-16")], "2026-10-16"));
-    });
-    await expect(load(fetcher, { signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
-    expect(fetcher).toHaveBeenCalledTimes(1);
+  it("rejects a repeated cursor and bounds an endlessly advancing service", async () => {
+    const repeated = vi.fn().mockResolvedValueOnce(Response.json(page([point("2026-10-15")], "2026-10-15"))).mockResolvedValueOnce(Response.json(page([point("2026-10-15")], "2026-10-15")));
+    await expect(load(repeated)).rejects.toThrow(); expect(repeated).toHaveBeenCalledTimes(2);
+    let index = 0; const endless = vi.fn(async () => { const date = new Date(Date.parse("2020-01-01") + index++ * day).toISOString().slice(0, 10); return Response.json(page([point(date)], date)); });
+    await expect(load(endless)).rejects.toThrow("한 번에 불러오지 못했습니다"); expect(endless).toHaveBeenCalledTimes(HISTORY_MAX_PAGES);
+  });
+  it("rejects unfinished dates, legacy window responses and malformed cells", async () => {
+    for (const invalid of [{ ...page([]), schema: 1 }, { ...page([]), revenueDays: 30 }, { ...page([]), points: [point("2026-10-18")] }, { ...page([]), points: [{ ...point("2026-10-17"), fdv: 36500 }] }])
+      await expect(load(vi.fn().mockResolvedValue(Response.json(invalid)))).rejects.toThrow("응답을 확인");
+  });
+  it("distinguishes an absent identity, an empty period, a revision conflict and service failure", async () => {
+    for (const status of [404, 409, 503]) await expect(load(vi.fn().mockResolvedValue(new Response(null, { status })))).rejects.toMatchObject({ status });
+    await expect(load(vi.fn().mockResolvedValue(Response.json(page([]))))).resolves.toMatchObject({ points: [], nextCursor: null });
+    await expect(load(vi.fn().mockResolvedValue(Response.json(page([point("2026-10-17")]))), { identity: "gecko:other" })).rejects.toMatchObject({ status: 409 });
+  });
+  it("does not continue after cancellation", async () => {
+    const controller = new AbortController(), fetcher = vi.fn(async () => { controller.abort(); return Response.json(page([point("2026-10-15")], "2026-10-15")); });
+    await expect(load(fetcher, { signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" }); expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("stored series and gaps", () => {
-  const valuation = { day: "2026-10-18", days: 30, revenue: 50, holders: 10, revenueDays: 30, holderDays: 30,
-    prMcap: 4, prFdv: null, phrMcap: 20, phrFdv: null, revenueReason: null, holderReason: null };
-  it("projects only the selected stored numerator and never invents FDV or missing multiples", () => {
-    const rows = [point("2026-10-18", { valuation, valuationState: "ready" })];
-    expect(detailChartPoints(rows, "mcap")[0]).toMatchObject({ fdv: null, pr: 4, phr: 20 });
-    expect(detailChartPoints(rows, "fdv")[0]).toMatchObject({ fdv: null, pr: null, phr: null });
-    expect(detailChartPoints([point("2026-10-18", { valuation, valuationState: "updating" })], "mcap")[0].pr).toBeNull();
-    expect(detailChartPoints(rows, "mcap", true)[0]).toMatchObject({ price: 1, mcap: 100, pr: null, phr: null });
+describe("same-date financial meaning and independent gaps", () => {
+  it("pairs March5 capital with March5 Revenue and Holders, without a March4 or current-cap substitution", () => {
+    const march4 = point("2026-03-04", { fdv: { value: 365000, state: "positive", source: "fdv", at: "2026-03-04T14:23:00Z" }, revenue: { value: 2, state: "positive", source: "revenue", at: null } }, "fdv");
+    const march5 = point("2026-03-05", { fdv: { value: 73000, state: "positive", source: "fdv", at: "2026-03-05T14:23:00Z" }, revenue: { value: 20, state: "positive", source: "revenue", at: null }, holders: { value: 5, state: "positive", source: "holders", at: null } }, "fdv");
+    expect(detailChartPoints([march4, march5])[1]).toMatchObject({ pr: 10, phr: 40, fdv: 73000 }); expect(march5.fdv.at).toBe("2026-03-05T14:23:00Z");
+    const missingFdv = point("2026-03-06", {}, "fdv"); expect(detailChartPoints([missingFdv])[0]).toMatchObject({ mcap: 36500, fdv: null, pr: null, phr: null });
   });
-  it("breaks at missing calendar days and independent nulls; observed single days stay visible", () => {
-    const rows = [point("2026-10-12"), point("2026-10-13"), point("2026-10-15"), point("2026-10-16", { price: null }), point("2026-10-17", { fdv: 130 })];
-    const points = detailChartPoints(rows, "mcap");
-    expect(detailSeriesSegments(points, "price").map(segment => segment.map(p => p.day))).toEqual([["2026-10-12", "2026-10-13"], ["2026-10-15"], ["2026-10-17"]]);
-    expect(detailSeriesSegments(points, "mcap").map(segment => segment.length)).toEqual([2, 3]);
-    expect(detailSeriesSegments(points, "fdv").map(segment => segment.map(p => p.day))).toEqual([["2026-10-17"]]);
-    expect(detailSeriesSegments(points, "pr")).toEqual([]);
+  it("keeps zero, negative, partial and conflict evidence while withholding invalid ratios", () => {
+    for (const [state, amount] of [["zero", 0], ["negative", -2], ["partial", 4], ["conflict", null], ["missing", null]] as const) {
+      const raw = point("2026-03-05", { revenue: { value: amount, state, source: "revenue", at: null } });
+      expect(detailChartPoints([raw])[0].pr).toBeNull(); expect(raw.revenue).toMatchObject({ value: amount, state }); expect(detailObservationState(raw.revenue)).not.toBe("확인값");
+    }
+    const unfinished = point("2026-10-18"); expect(detailChartPoints([unfinished])[0]).toMatchObject({ pr: null, phr: null });
+  });
+  it("breaks lines at missing days and partial market cells while showing a confirmed zero", () => {
+    const rows = [point("2026-10-11"), point("2026-10-12"), point("2026-10-14"), point("2026-10-15", { price: { value: 2, state: "partial", source: "price", at: null } }), point("2026-10-16", { price: { value: 0, state: "zero", source: "price", at: "2026-10-16T12:00:00Z" } })];
+    const points = detailChartPoints(rows);
+    expect(detailSeriesSegments(points, "price").map(segment => segment.map(p => p.day))).toEqual([["2026-10-11", "2026-10-12"], ["2026-10-14"], ["2026-10-16"]]);
+    expect(points.at(-1)!.price).toBe(0); expect(detailSeriesSegments(points, "fdv")).toEqual([]);
+  });
+  it("keeps valid historical definitions but breaks each ratio line when its own financial definition changes", () => {
+    const changed = { ...sourceMap.get("revenue")!, key: "changed-revenue", scope: "new-exact-parent-scope" }, changedSources = new Map([...sourceMap, [changed.key, changed] as const]);
+    const rows = [point("2026-03-04"), ...["2026-03-05", "2026-03-06"].map(day => { const raw = point(day); return calculateDailyValuation({ point: { ...raw, revenue: { ...raw.revenue, source: changed.key } }, sources: changedSources, capital: "mcap", eligible: true, completedThrough: "2026-10-17" }); })];
+    const points = detailChartPoints(rows);
+    expect(points.map(p => p.pr)).toEqual([10, 10, 10]);
+    expect(detailSeriesSegments(points, "pr").map(segment => segment.map(p => p.day))).toEqual([["2026-03-04"], ["2026-03-05", "2026-03-06"]]);
+    expect(detailSeriesSegments(points, "phr").map(segment => segment.length)).toEqual([3]);
+  });
+  it("withholds a positive reported market cell when its quote time or source meaning is unverified", () => {
+    const missingTime = point("2026-03-05", { mcap: { value: 36500, state: "positive", source: "mcap", at: null } });
+    expect(missingTime.mcap).toMatchObject({ value: 36500, state: "positive", reason: "invalid_timestamp" });
+    expect(detailChartPoints([missingTime])[0]).toMatchObject({ mcap: null, pr: null, phr: null });
+    const unverified = point("2026-03-05"); unverified.price.reason = "invalid_definition";
+    expect(detailChartPoints([unverified])[0].price).toBeNull();
+  });
+});
+
+describe("daily chart render contract", () => {
+  it.each(["market", "valuation"])("keeps both crosshairs synchronized while only the active %s chart shows source evidence", activeChart => {
+    const raw = point("2026-03-05"), shared = { points: detailChartPoints([raw]), historyPoints: [raw], sources, capital: "mcap" as const, domain: [Date.parse("2026-03-04"), Date.parse("2026-03-06")] as [number, number], activeDay: "2026-03-05", onActiveDay: () => {} };
+    const html = renderToStaticMarkup(createElement(Fragment, null,
+      createElement(DetailHistoryChart, { ...shared, series: [{ key: "price", label: "가격", color: "blue", axis: "left" }], label: "시세", showTooltip: activeChart === "market" }),
+      createElement(DetailHistoryChart, { ...shared, series: [{ key: "pr", label: "P/R", color: "green", axis: "left" }], label: "배수", valuation: true, showTooltip: activeChart === "valuation" }),
+    ));
+    expect(html.match(/class="detail-chart-crosshair"/g)).toHaveLength(2);
+    expect(html.match(/class="detail-chart-tooltip(?: tooltip-left)?"/g)).toHaveLength(1);
+    expect(html.match(/role="status"/g)).toHaveLength(1);
+    expect(html.includes("Fees · 원자료")).toBe(activeChart === "valuation");
+  });
+  it("retains the introduction, three external links, current capture and exact display periods with MAX selected", () => {
+    const c = scoreCoins([sample({ slug: "parent#sky", geckoId: "sky", price: 123, descriptionKo: "프로젝트 소개 자료입니다." })], now.toISOString())[0];
+    const html = renderToStaticMarkup(createElement(CoinDetailOverview, { coin: c, capital: "mcap", onClose: () => {} }));
+    expect(html).toContain("어떤 프로젝트인가요?"); expect(html).toContain("공식 홈페이지"); expect(html).toContain("DefiLlama"); expect(html).toContain("CoinGecko");
+    expect(html).toContain("현재 가격"); expect(html).toContain("최신 공개본"); expect(html).toContain("$123");
+    for (const range of ["7D", "1M", "3M", "YTD", "1Y", "MAX"]) expect(html).toContain(`>${range}</button>`);
+    expect(html).toMatch(/aria-pressed="true">MAX<\/button>/); expect(html).not.toContain("<select"); expect(html).not.toContain("직전 30일"); expect(html).toContain("같은 날짜 하루 수익 × 365");
+  });
+  it("shows the selected day's raw flows, Fees, numerator and actual quote time in the valuation tooltip", () => {
+    const raw = point("2026-03-05", { fdv: { value: 73000, state: "positive", source: "fdv", at: "2026-03-05T14:23:00Z" }, revenue: { value: 20, state: "positive", source: "revenue", at: null }, holders: { value: 5, state: "positive", source: "holders", at: null } }, "fdv");
+    const html = renderToStaticMarkup(createElement(DetailHistoryChart, { points: detailChartPoints([raw]), historyPoints: [raw], sources, capital: "fdv", series: [{ key: "pr", label: "P/R", color: "blue", axis: "left" }, { key: "phr", label: "P/HR", color: "green", axis: "left" }], domain: [Date.parse("2026-03-04"), Date.parse("2026-03-06")], activeDay: "2026-03-05", onActiveDay: () => {}, valuation: true, label: "일별 배수" }));
+    expect(html).toContain("Revenue"); expect(html).toContain("Holders Revenue"); expect(html).toContain("Fees · 원자료"); expect(html).toContain("$20"); expect(html).toContain("$5"); expect(html).toContain("$73,000");
+    expect(html).toContain("2026-03-05 14:23:00 UTC"); expect(html).toContain("10x"); expect(html).toContain("40x"); expect(html).toContain("실제 관측 시세"); expect(html).not.toContain("수익 기간");
+  });
+  it("keeps the UTC day and next-midnight close timestamp distinct in the tooltip", () => {
+    const close = { ...sourceMap.get("fdv")!, provider: "CoinMetrics", basis: "utc_daily_close_verified_total_supply" }, raw = point("2026-03-05");
+    const closed = calculateDailyValuation({ point: { ...raw, fdv: { value: 73000, state: "positive", source: close.key, at: "2026-03-06T00:00:00Z" } }, sources: new Map([...sourceMap, [close.key, close] as const]), capital: "fdv", eligible: true, completedThrough: "2026-10-17" });
+    const html = renderToStaticMarkup(createElement(DetailHistoryChart, { points: detailChartPoints([closed]), historyPoints: [closed], sources: [...sources.filter(source => source.key !== close.key), close], capital: "fdv", series: [{ key: "pr", label: "P/R", color: "blue", axis: "left" }], domain: [Date.parse("2026-03-05"), Date.parse("2026-03-06")], activeDay: "2026-03-05", onActiveDay: () => {}, valuation: true, label: "일별 배수" }));
+    expect(html).toContain("2026-03-05 <span>UTC</span>"); expect(html).toContain("2026-03-06 00:00:00 UTC"); expect(html).toContain("CoinMetrics"); expect(html).toContain("UTC 일 마감");
   });
 });

@@ -117,7 +117,7 @@ export function apiArchiveErrors(first: ScreenerPage, coins: CoinScored[], archi
   if (objectHash(first.sources) !== objectHash(archived.sources) || objectHash(first.collection ?? null) !== objectHash(archived.collection ?? null)) errors.push("API source accounting differs from archive");
   if (archived.pipeline || first.pipeline) {
     if (objectHash(first.pipeline ?? null) !== objectHash(archived.pipeline ?? null)) errors.push("API pipeline proof differs from archive");
-    const { pagination, coverage, visibleCoverage, universe, publication, referenceMultiples: references, ...page } = first;
+    const { pagination, coverage, visibleCoverage, universe, publication, referenceMultiples: references, valuationComparison, ...page } = first;
     const reconstructed = { ...page, coins } as ScreenerResponse;
     errors.push(...pipelineIntegrityErrors(reconstructed), ...scopedSourceErrors(first.sources, coins));
     if (pipelineOutputHash(reconstructed) !== pipelineOutputHash(archived)) errors.push("API snapshot differs from replay-bound archive");

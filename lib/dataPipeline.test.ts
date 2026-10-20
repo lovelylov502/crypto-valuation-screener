@@ -63,6 +63,13 @@ it("replays the full raw-to-display path offline, recovers explicit zero without
   expect((await auditArchivedPipeline(alternate, publication(alternate), alternateBytes, result.witness)).errors).toEqual([]);
   expect(assessPipelineCandidate(alternate, result.bundle, null, at, at, alternate, alternateBytes).errors).toEqual([]);
   expect(apiArchiveErrors(queryScreener(result.data), result.data.coins, result.data)).toEqual([]);
+  const enriched = queryScreener(result.data);
+  Object.assign(enriched, { valuationComparison: { schema: 1, capital: "fdv", revenueDays: 1, asOf: "2026-10-03",
+    baseline: { from: "2025-10-03", to: "2026-10-02", expectedDays: 365 }, rows: Object.fromEntries(enriched.coins.map(coin => [coin.slug, { pr: { status: "insufficient", validDays: 0 }, phr: { status: "insufficient", validDays: 0 } }])) } });
+  expect(apiArchiveErrors(enriched, result.data.coins, result.data)).toEqual([]);
+  expect(sha256(bytes)).toBe(ref.sha256);
+  const changedPage = structuredClone(enriched); changedPage.coins[0].mcap = 123;
+  expect(apiArchiveErrors(changedPage, changedPage.coins, result.data)).toContain(`published bytes changed:${changedPage.coins[0].slug}`);
   await expect(auditArchivedPipeline(result.data, publication(result.data), Buffer.from("corrupt"), result.witness)).rejects.toThrow("raw source proof mismatch");
   const alteredWitness = structuredClone(result.witness); alteredWitness[0] = [];
   expect((await auditArchivedPipeline(result.data, publication(result.data), encodeSourceBundle(result.bundle), alteredWitness)).errors).toContain("archived witness differs from original source bundle");

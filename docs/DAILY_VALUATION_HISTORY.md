@@ -1,6 +1,8 @@
 # Daily valuation history
 
-This document describes the legacy trailing-window store and the currently deployed chart. The replacement data foundation uses each date's own daily flows; see [Same-date daily raw data](./DAILY_RAW_DATA.md). The legacy writer is paused during that migration. The raw-data phase does not yet change the chart or `/api/history` calculation contract.
+The active v0.5.0 chart and `/api/history` use the shared same-day `daily_raw_*` read model described in [Same-date daily raw data](./DAILY_RAW_DATA.md). A daily multiple divides that UTC date's own capital by that day's flow × 365; display ranges exclude unfinished UTC dates. The current chart has no trailing-denominator selector.
+
+The remainder of this document preserves the historical `history_*` schema, earlier chart and API contracts, and legacy operating procedures for audit and compatibility. Its including-today ranges and trailing-denominator examples are historical. The legacy writer remains paused; production deployment and replacement workflow recovery require their own actual verification.
 
 The historical store is a separate Turso Free database. The verified screener publication supplies the current table and latest detail summaries; `/api/history` supplies the dated detail charts. Their observation times and update progress remain separate.
 

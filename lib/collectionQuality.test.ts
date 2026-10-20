@@ -8,6 +8,10 @@ import { aggregateRevenueSource } from "./sources";
 import { revenueReading } from "./revenueReading";
 import { protocolMultiple } from "./valuationMetrics";
 import { hasSourceData } from "./metricCoverage";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ScreenerClient } from "../components/ScreenerClient";
+import RootLayout from "../app/layout";
 
 const at = "2026-09-28T00:00:00Z";
 function coin() {
@@ -15,6 +19,13 @@ function coin() {
     gecko: { id: "test-token", status: "received", observedAt: at, available: ["mcap", "price", "fdv"] } } });
 }
 describe("source completeness independently of financial calculation", () => {
+  it("verifies the actual fixed comparison shell while rejecting removed controls and missing comparison headings", () => {
+    const body = renderToStaticMarkup(createElement(RootLayout, { children: createElement(ScreenerClient, { initialData: null }) }));
+    expect(inspectHome({ status: 200, body }).errors).toEqual([]);
+    expect(inspectHome({ status: 200, body: body.replaceAll("과거 비교 · 하루 수익 기준", "missing comparison heading") }).missingMarkers).toContain("과거 비교 · 하루 수익 기준");
+    expect(inspectHome({ status: 200, body: body + '<button aria-label="열 표시">columns</button>' }).legacyMarkers).toContain('aria-label="열 표시"');
+    expect(inspectHome({ status: 200, body: body + '<div aria-label="수익 정렬 기준">old amount sort</div>' }).legacyMarkers).toContain('aria-label="수익 정렬 기준"');
+  });
   it("rejects a page collected separately from the API snapshot", () => {
     const home = { status:200, body: `<script>{"updatedAt":"${at}"}</script>` };
     expect(inspectHome(home, at).errors).not.toContain("HTML and API snapshots differ");

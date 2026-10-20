@@ -9,7 +9,7 @@ export interface ValuationComparisonPage {
   baseline: { from: string; to: string; expectedDays: 365 };
   rows: Record<string, { pr: ValuationComparisonMetric; phr: ValuationComparisonMetric }>;
 }
-export type ComparisonUnavailableReason = "not_collected" | "missing_capital" | "missing_revenue" | "non_positive_revenue" | "definition_changed";
+export type ComparisonUnavailableReason = "not_collected" | "missing_capital" | "missing_revenue" | "non_positive_revenue" | "definition_changed" | "stale_data";
 export type ValuationComparisonMetric =
   | { status: "ready"; validDays: number; latest: { date: string; value: number }; minimum: number; median: number; maximum: number }
   | { status: "insufficient"; validDays: number }
@@ -20,7 +20,7 @@ const day = 86_400_000;
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const positive = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 const date = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v;
-const reasons: ComparisonUnavailableReason[] = ["not_collected", "missing_capital", "missing_revenue", "non_positive_revenue", "definition_changed"];
+const reasons: ComparisonUnavailableReason[] = ["not_collected", "missing_capital", "missing_revenue", "non_positive_revenue", "definition_changed", "stale_data"];
 
 /** Reject a different numerator/window or stale per-row dates instead of mixing calculations. */
 export function comparisonEnvelopeValid(value: unknown, capital: CapitalBasis, now = Date.now()): value is ValuationComparisonPage {
@@ -39,7 +39,8 @@ export function comparisonReading(value: unknown, capital: CapitalBasis, slug: s
   if (!record(m) || !Number.isInteger(m.validDays) || (m.validDays as number) < 0 || (m.validDays as number) > 365) return { status: "invalid" };
   if (m.status === "insufficient") return { status: "insufficient", validDays: m.validDays as number };
   if (m.status === "unavailable" && reasons.includes(m.reason as ComparisonUnavailableReason)) return m as ValuationComparisonMetric;
-  if (m.status !== "ready" || (m.validDays as number) < 1 || !record(m.latest) || m.latest.date !== value.asOf || !positive(m.latest.value)
+  if (Math.floor(now / day) * day - day - Date.parse(value.asOf) > day) return { status: "invalid" };
+  if (m.status !== "ready" || m.validDays !== 365 || !record(m.latest) || m.latest.date !== value.asOf || !positive(m.latest.value)
     || !positive(m.minimum) || !positive(m.median) || !positive(m.maximum) || m.minimum > m.median || m.median > m.maximum) return { status: "invalid" };
   return m as ValuationComparisonMetric;
 }

@@ -1,6 +1,17 @@
 # Same-date daily raw data
 
-The database foundation for the requested chart is one row per exact token identity and UTC date. It stores the day's own financial flows alongside dated market observations. This phase does not change the existing chart, historical API, or legacy trailing-window calculations.
+The database stores one row per exact token identity and UTC date, with that day's financial flows and dated market observations. The v0.5.0 chart, historical API and list comparison use the shared same-day read model below. Original `history_*` data remains available for historical audits and compatibility.
+
+## Current chart and comparison read model
+
+- `lib/dailyValuation.ts` calculates `capital(D) / (daily flow(D) × 365)` for both detail charts and list comparisons. Ratios require positive complete selected FDV/circulating cap and Revenue/Holders Revenue on the same completed UTC date. Fees, partial/conflicting cells, nonpositive denominators and current capital substituted into past dates do not supply a ratio. Confirmed raw zero amounts keep their own state.
+- `/api/screener` attaches optional `valuationComparison` only after search, sort and pagination. Its indexed batch reads at most 366 dates for each of up to 200 requested exact slug/identity pairs. The latest point must be on the shared `asOf` date; its preceding 365 distinct positive valid daily ratios form the min/median/max baseline. All 365 are required for `ready`, and the latest point never enters that distribution. Missing latest data is not carried forward.
+- `/api/history` returns schema 2 daily cells, ratios, original source metadata and per-metric measurement times. Queries bind the exact token identity and selected capital; `expectedRevision` binds continuation to the same raw-data revision. MAX follows advancing `nextCursor` pages of at most 1,000 dates until null, with one snapshot ID, identity, `asOf` and calculation version. The fixed `revenueDays=1` replaces the historical API's trailing-window `days` selector.
+- The global `asOf` is the earlier of the verified snapshot's captured UTC day minus one and UTC yesterday. A lag greater than one completed UTC day is `stale_data`. Captured capital retains its actual intraday timestamp; an approved daily close for D may be timestamped at D+1 midnight. No token migration splices different identities together.
+- Financial comparability binds provider, exact component scope, definition and measurement basis while allowing receipt URL/hash/time to change. The detail chart may retain valid dated regimes but breaks ratio lines when the financial definition changes. A comparison distribution mixing different financial definitions is withheld. Approved stored capital conventions retain their provenance without inventing a normalized replacement valuation.
+- Summary caches distinguish raw revision, reference date, exact identity and selected capital. Revision checks before and after a read reject mixed import states. The list summary has an eight-second deadline; summary failure leaves the basic screener response usable. The query-only read model is excluded before immutable API/archive hash reconstruction. These paths use server-side readers and do not collect data or write database rows.
+
+Local contracts and read-only real-data benchmarks are separate from canonical deployment and actual replacement-workflow recovery. Do not infer live activation from this implementation description; retain those operational readbacks independently.
 
 ## Stored contract
 
@@ -13,7 +24,7 @@ The database foundation for the requested chart is one row per exact token ident
 | `revenue` | DefiLlama's daily Revenue amount for that date and exact protocol scope |
 | `holders` | DefiLlama's daily Holders Revenue amount for that date and exact protocol scope |
 
-For example, March 5's future multiple must use March 5's capital and March 5's own daily flow. No previous-day or trailing-30-day denominator is introduced by this store. The final display and annualization convention belong to the later chart/calculation phase.
+For example, March 5's multiple uses March 5's capital and March 5's own daily flow × 365. The reader calculates it from the stored cells without a previous-day or trailing-30-day denominator.
 
 Every metric has a separate value, state, source reference and, for market data, measurement time. A project name or ticker alone cannot establish token identity. A token migration creates a different identity. Unverified links retain protocol financial history without attaching an uncertain market series.
 
@@ -44,7 +55,7 @@ history_budget        shared monthly guard, also used by legacy history
 
 Asset identities, receipts and source keys are immutable. Later observations of the same provider, URL, scope, definition and basis can revise a value while retaining prior evidence. Older receipts cannot replace a newer value. Unresolved meaning changes remain conflicts. Local staging merges inputs before remote import so a date is written once during the initial import.
 
-The existing `history_*` tables are preserved for the current application. They do not automatically read the new raw tables. The legacy five-window history writer is paused while this collection is established; it must not run alongside a replacement writer without sharing the budget and concurrency guard.
+The existing `history_*` tables are preserved for historical audits and compatibility. They do not automatically read the raw tables. The legacy five-window history writer is paused; it must not run alongside a replacement writer without sharing the budget and concurrency guard.
 
 ## Free-limit protection and evidence
 
