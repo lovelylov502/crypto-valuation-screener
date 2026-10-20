@@ -55,6 +55,8 @@ export interface DailyRawWriteResult { assetId: number; rowsWritten: number; day
 export interface DailyRawUpsertOptions {
   runId: string; asset: DailyRawAsset; sources: DailyRawSource[]; points: DailyRawPoint[];
   checkpoint?: DailyRawCheckpoint; now?: Date;
+  /** Optional maintenance headroom, checked before any mutation together with the monthly cap. */
+  minimumReserve?: number;
   /** Optional compare-and-swap guard for an explicitly reviewed correction. */
   expectedCells?: { day: string; metric: DailyRawMetric; sourceKey: string; value: number | null; state: number; at: string | null }[];
 }
@@ -181,9 +183,10 @@ async function preflightDailyRaw(tx: Transaction, options: DailyRawUpsertOptions
   const required = estimatedCost(counts, run.accountingVersion);
   const monthlyRemaining = HISTORY_WRITE_LIMIT - Number(reads[1].rows[0]?.reserved ?? 0), runRemaining = run.maxEstimatedWrites - run.estimatedWrites;
   const size = Number(reads[6].rows[0][0]) * Number(reads[7].rows[0][0]), estimatedBytes = Buffer.byteLength(JSON.stringify({ sources, points })) * 2 + Number(reads[7].rows[0][0]) * 4;
-  if ((!local && required > monthlyRemaining) || required > runRemaining || (!local && size + estimatedBytes >= HISTORY_STORAGE_LIMIT)) {
+  const monthlyRequired = required + (options.minimumReserve ?? 0);
+  if ((!local && monthlyRequired > monthlyRemaining) || required > runRemaining || (!local && size + estimatedBytes >= HISTORY_STORAGE_LIMIT)) {
     if (assetId !== null && await replayWithoutWrites(tx, options, assetId, known, reads[5].rows[0])) return { ...snapshot, replay: true };
-    if (!local && required > monthlyRemaining) throw new DailyRawPreflightBudgetExceeded("monthly", required, monthlyRemaining);
+    if (!local && monthlyRequired > monthlyRemaining) throw new DailyRawPreflightBudgetExceeded("monthly", monthlyRequired, monthlyRemaining);
     if (required > runRemaining) throw new DailyRawPreflightBudgetExceeded("run", required, runRemaining);
     throw new HistoryBudgetExceeded("history_storage_budget");
   }
@@ -232,6 +235,7 @@ async function registerSources(tx: Transaction, assetId: number, sources: DailyR
 export async function upsertDailyRaw(db: Client, options: DailyRawUpsertOptions): Promise<DailyRawWriteResult> {
   const { asset, points, sources, checkpoint, runId } = options, now = options.now ?? new Date();
   assertDailyRawAsset(asset);
+  if (options.minimumReserve !== undefined && (!Number.isSafeInteger(options.minimumReserve) || options.minimumReserve < 0 || options.minimumReserve > HISTORY_WRITE_LIMIT)) throw Error("Invalid daily raw maintenance reserve");
   if (points.length > 1_000 || sources.length > 100) throw Error("Daily raw batch exceeds its bounded size");
   if (new Set(points.map(point => point.day)).size !== points.length || new Set(sources.map(source => source.key)).size !== sources.length) throw Error("Duplicate daily raw batch key");
   const inputSources = new Map(sources.map(source => [source.key, source]));

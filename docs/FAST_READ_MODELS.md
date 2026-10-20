@@ -1,4 +1,4 @@
-# 조회 성능 구조 · v0.6.0
+# 조회 성능 구조 · v0.6.1
 
 목록과 차트의 계산 결과를 수집 뒤에 준비해 Turso에서 읽는다. 공급자 수집·원본 보관·검증된 공개본은 기존 절차를 따른다. 이 조회 구조는 아직 수집되지 않은 값을 채우거나 계산 기준을 바꾸지 않는다.
 
@@ -40,6 +40,7 @@ flowchart LR
 - 이력 생성은 쓰기 트랜잭션 밖에서 원자료를 읽고 계산한다. 저장 순간 해당 종목 revision이 그대로인지 확인한다. 자료가 바뀌면 그 결과를 공개하지 않는다.
 - 일별 계산 결과는 공개본 ID와 독립적으로 보관한다. 조회 시 현재 검증된 공개본의 토큰·투자자산 적격성·완료일에 다시 연결한다. 다른 종목의 입력은 해당 종목의 결과를 무효화하지 않는다.
 - 두 분자에 대해 `Capital(D) / (daily flow(D) × 365)`를 계산한다. 수익·시세가 없는 날짜, 0·음수·충돌·부분 수익, 정의 변경, 확인되지 않는 FDV의 보류 기준은 유지한다. 365일 비교는 최근 비교점을 제외한 이전 365일이 모두 유효해야 한다.
+- 최근 날짜의 배수가 유효하면 365일 이력이 부족해도 그 배수와 계산 가능한 날짜 수를 표시한다. 이때 과거 비교 막대와 분포 통계는 표시하지 않는다. 과거 요약에 최근 숫자가 없으면 숫자를 추정하지 않고 기존 자료 부족 상태를 유지한다.
 
 ## 읽기 계약
 
@@ -60,16 +61,20 @@ flowchart LR
 ```powershell
 # 기본 실행은 검증·계획만 수행한다.
 npx tsx scripts/prepare-table-read-model.ts
+npx tsx scripts/refresh-daily-financials.ts --cache C:/outside-git/history-model
 npx tsx scripts/prepare-daily-history.ts --cache C:/outside-git/history-model
 
 # 기존 쓰기 전용 환경을 불러온 뒤 명시적으로 적용한다.
 npx tsx scripts/prepare-table-read-model.ts --apply --max-estimated-writes 50000 --minimum-reserve 500000
-npx tsx scripts/prepare-daily-history.ts --cache C:/outside-git/history-model --run-id history-model-YYYY-MM-DD --max-estimated-writes 50000 --time-budget-seconds 2400 --workers 4 --apply
+npx tsx scripts/refresh-daily-financials.ts --cache C:/outside-git/history-model --run-id history-model-YYYY-MM-DD --max-estimated-writes 50000 --time-budget-seconds 600 --recent-days 3 --apply
+npx tsx scripts/prepare-daily-history.ts --cache C:/outside-git/history-model --reference C:/outside-git/history-model/reference.json --run-id history-model-YYYY-MM-DD --max-estimated-writes 50000 --time-budget-seconds 900 --workers 4 --apply
 ```
 
 Turso의 기존 읽기/쓰기 권한을 사용한다. API와 브라우저는 생성·정리 작업을 실행하지 않는다. 원격 쓰기는 월별 800만 크레딧·4GB 내부 보호선, 실행별 불변 한도, 50만 크레딧 유지보수 여유를 함께 지킨다. 변경 없는 결과는 쓰지 않는다. 결과를 확인할 수 없는 쓰기는 자동 재시도하지 않으며, 읽기로 현재 revision·해시·실행 예산을 확인한 뒤 재개한다.
 
-스크리너 공개 작업 뒤에 목록과 이력을 준비하고, 일별 원자료 입력 뒤에도 이력을 갱신한다. 이력 준비는 수집 작업과 별도로 최대 20분인 job에서 실행하며 CLI 계산 시간은 900초, 쓰기 한도는 5만이다. 두 워크플로의 이력 준비는 같은 동시 실행 잠금을 사용한다. 수집이 자체 제한 시간을 모두 써도 준비 작업의 시간은 남는다. 원자료 revision이 같아도 완료일이 바뀌면 다시 계산하며, 같은 완료일의 새 공개본은 기존 결과를 재사용한다.
+스크리너 공개 작업과 일별 원자료 입력 뒤의 이력 job은 최근 수익 입력부터 실행한다. 최신 검증 공개본과 원본 묶음의 해시·토큰·집계 범위·완료일을 확인하고, 검증된 투자 토큰의 최근 3일만 비교해 바뀐 셀을 입력한다. 원본에 없는 Fees·수익은 채우지 않는다. 전체 이력·CSV 대기 목록과 MAX 완료 증명은 이 경로에서 변경하지 않는다.
+
+이력 job은 최대 30분이며 최근 수익 입력 600초, 이력 준비 900초를 각각 제한한다. 두 단계는 같은 고정 공개본과 실행 ID·5만 쓰기 한도·50만 유지보수 여유를 사용한다. 두 워크플로의 이력 job도 같은 동시 실행 잠금을 사용한다. 수집이 자체 제한 시간을 모두 써도 이 job의 시간은 남는다. 원자료 revision이 같아도 완료일이 바뀌면 다시 계산하며, 같은 완료일의 새 공개본은 기존 결과를 재사용한다. 입력·준비가 중단되면 보고서를 남기고 job에서 실패를 알린다. 검증된 원본 공개본과 이미 저장된 셀은 보존한다.
 
 예산·시간이 부족하면 원본 공개와 저장된 원자료를 보존한 채 재개한다. 공급자 API를 추가 호출하거나 유료 요금제로 전환하지 않는다. DB 전체 이력의 확보율은 조회 결과 준비율과 별도로 본다.
 
@@ -80,3 +85,5 @@ Turso의 기존 읽기/쓰기 권한을 사용한다. API와 브라우저는 생
 Aave의 2,209일 MAX는 압축 이력 응답 하나에 들어간다. 2024-03-05 FDV `1,687,920,736.48512`와 같은 날짜 Revenue `184,635`에서 P/R `25.046390846436676`을 확인했다. 해당 날짜 Holders Revenue 0은 배수 미산출로 유지한다. 실제 배포 응답 지연과 브라우저 결과는 출시 시 별도로 측정한다.
 
 첫 원격 입력은 위 공개본의 검증된 토큰과 원자료가 연결된 2,837종목에 대해 완료했다. 압축 이력 93,027,200바이트와 목록·상세 묶음 6,876,570바이트를 저장했으며, 총 14,570크레딧을 반영했다. 2026-10-20 07:25 UTC 읽기 검증에서 DB 크기는 1,409,695,744바이트, 10월 내부 예약량은 7,294,271크레딧이었다. 이는 조회 결과 준비의 완료 기록이며, 모든 종목의 모든 과거 수익·FDV가 확보됐다는 뜻은 아니다.
+
+v0.6.1 점검에서는 2026-10-19 시세가 저장돼 있지만 같은 날짜 Revenue·Holders Revenue가 모두 빠진 상태를 확인했다. v0.6.0의 준비 job이 원자료 읽기와 요약 생성만 실행하고 최근 수익 입력을 누락한 것이 원인이었다. 검증 공개본 `data-39391324741-1-complete`의 원본에서 최근 수익을 복구하고 변경된 711종목의 결과를 다시 준비했다. 10월 19일 입력은 Revenue 707종목·Holders Revenue 543종목이며 부분 집계·0·음수도 각각 보존했다. 이 공개본에 없는 Fees 원본은 새로 보충하지 않았다. FDV 기준 Aave P/R `44.35977119672567`, Papertrade P/R `0.3019230805472772`·P/HR `0.3429872005981916`과 앞서 기록한 2024-03-05 Aave 값을 실제 DB 조회로 확인했다. 이는 해당 공개본과 복구 실행의 검증이며 이후 자연 실행 전체의 완료를 뜻하지 않는다.

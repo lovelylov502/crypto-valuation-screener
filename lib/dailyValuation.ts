@@ -86,7 +86,7 @@ export function dailyComparisonMetric(points: DailyValuationHistoryPoint[], metr
     return unavailable(reason === "invalid_definition" ? "definition_changed" : reason === "non_positive_revenue" ? reason
       : reason?.includes("capital") || reason === "ineligible_asset" ? "missing_capital" : "missing_revenue");
   }
-  if (validDays !== 365) return { status: "insufficient", validDays };
+  if (validDays !== 365) return { status: "insufficient", validDays, latest: { date: asOf, value: latest.value } };
   const values = valid.map(ratio => ratio.value!).sort((a, b) => a - b);
   return { status: "ready", validDays, latest: { date: asOf, value: latest.value }, minimum: values[0], median: values[182], maximum: values[364] };
 }

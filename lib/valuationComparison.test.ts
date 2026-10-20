@@ -48,6 +48,14 @@ describe("daily valuation comparison boundary", () => {
     expect(comparisonReading(page(), "fdv", "sample", "pr", later)).toEqual({ status: "invalid" });
     expect(comparisonReading(withMetric({ status: "unavailable", validDays: 365, reason: "stale_data" }), "fdv", "sample", "pr", later)).toEqual({ status: "unavailable", validDays: 365, reason: "stale_data" });
   });
+  it("accepts an honest latest ratio independently of short history and keeps legacy numberless summaries readable", () => {
+    const metric = { status: "insufficient", validDays: 0, latest: { date: page().asOf, value: 25.046390846436676 } };
+    expect(read(withMetric(metric))).toEqual(metric);
+    expect(read(withMetric({ status: "insufficient", validDays: 22 }))).toEqual({ status: "insufficient", validDays: 22 });
+    for (const latest of [null, undefined, { date: "2026-10-18", value: 1 }, { date: page().asOf, value: 0 }, { date: page().asOf, value: -1 }, { date: page().asOf, value: NaN }, { date: page().asOf, value: Infinity }, { date: page().asOf, value: "1" }]) expect(read(withMetric({ ...metric, latest }))).toEqual({ status: "invalid" });
+    expect(comparisonReading(withMetric(metric), "fdv", "sample", "pr", Date.parse("2026-10-22T12:00:00Z"))).toEqual({ status: "invalid" });
+    expect(comparisonReading(withMetric({ status: "insufficient", validDays: 22 }), "fdv", "sample", "pr", Date.parse("2026-10-22T12:00:00Z"))).toEqual({ status: "insufficient", validDays: 22 });
+  });
 });
 
 describe("median-anchored comparison rail", () => {

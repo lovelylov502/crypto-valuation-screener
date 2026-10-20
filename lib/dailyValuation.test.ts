@@ -69,9 +69,20 @@ it("derives asOf from captured UTC day minus one, bounds future capture, and per
 it("takes min/median/max of all 365 distinct prior daily ratios, excluding the current point", () => {
   const values = year(); values.at(-1)!.pr.value = 99_999;
   expect(dailyComparisonMetric([...values, values[0]], "pr", asOf, false)).toEqual({ status: "ready", validDays: 365, latest: { date: asOf, value: 99_999 }, minimum: 1, median: 183, maximum: 365 });
-  expect(dailyComparisonMetric(values.slice(1), "pr", asOf, false)).toEqual({ status: "insufficient", validDays: 364 });
+  expect(dailyComparisonMetric(values.slice(1), "pr", asOf, false)).toEqual({ status: "insufficient", validDays: 364, latest: { date: asOf, value: 99_999 } });
   expect(dailyComparisonMetric(values.slice(0, -1), "pr", asOf, false)).toEqual({ status: "unavailable", validDays: 365, reason: "not_collected" });
   expect(dailyComparisonMetric(values, "pr", asOf, true)).toEqual({ status: "unavailable", validDays: 365, reason: "stale_data" });
+});
+
+it("retains a valid same-day latest ratio with no prior year but never substitutes an older, zero or missing latest value", () => {
+  const latest = calculate(point(asOf, 36500, 100));
+  expect(dailyComparisonMetric([latest], "pr", asOf, false)).toEqual({ status: "insufficient", validDays: 0, latest: { date: asOf, value: 1 } });
+  expect(dailyComparisonMetric([calculate(point(shiftValuationDay(asOf, -1)))], "pr", asOf, false)).toEqual({ status: "unavailable", validDays: 1, reason: "not_collected" });
+  const zero = point(asOf); zero.revenue = { ...zero.revenue, value: 0, state: "zero" };
+  expect(dailyComparisonMetric([calculate(zero)], "pr", asOf, false)).toEqual({ status: "unavailable", validDays: 0, reason: "non_positive_revenue" });
+  const missing = point(asOf); missing.fdv = { ...missing.fdv, value: null, state: "missing" };
+  expect(dailyComparisonMetric([calculate(missing)], "pr", asOf, false)).toEqual({ status: "unavailable", validDays: 0, reason: "missing_capital" });
+  expect(dailyComparisonMetric([latest], "pr", asOf, true)).toEqual({ status: "unavailable", validDays: 0, reason: "stale_data" });
 });
 
 it.each(["scope", "definition", "basis", "provider"] as const)("rejects a mixed financial %s while retaining dated historical values", field => {

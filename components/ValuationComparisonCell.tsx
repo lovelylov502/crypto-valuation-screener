@@ -11,7 +11,10 @@ const unavailable: Record<ComparisonUnavailableReason, string> = {
 export function ValuationComparisonCell({ reading, label, capitalLabel }: { reading: ComparisonReading; label: string; capitalLabel: string }) {
   if (reading.status !== "ready") {
     const title = reading.status === "insufficient" ? "1년 비교 자료 부족" : reading.status === "loading" ? "과거 비교 불러오는 중" : reading.status === "unconnected" ? "과거 비교 연결 준비 중" : reading.status === "invalid" ? "비교 자료 확인 필요" : "산출 불가";
-    return <span className={`history-comparison comparison-${reading.status}`}>
+    const latest = reading.status === "insufficient" ? reading.latest : undefined;
+    const description = reading.status === "insufficient" && latest ? `${label} · ${latest.date} UTC · 최근 ${fmtMult(latest.value)} · 1년 비교 자료 부족 · 배수 계산 가능 ${reading.validDays}일 / 365일` : undefined;
+    return <span className={`history-comparison comparison-${reading.status}`} title={description}>
+      {latest && <span className="comparison-latest">최근 <strong>{fmtMult(latest.value)}</strong></span>}
       <strong>{title}</strong>
       {reading.status === "insufficient" ? <><span>배수 계산 가능: {reading.validDays}일 / 365일</span><small>해당일 {capitalLabel}·수익으로 계산할 수 있는 날짜</small></>
         : <small>{reading.status === "loading" ? `${capitalLabel} 기준으로 바꾸고 있습니다.` : reading.status === "unconnected" ? "날짜별 배수 요약을 기다립니다." : reading.status === "invalid" ? "계산 기준이 맞는지 확인이 필요합니다." : reading.reason === "missing_capital" ? `최근 날짜의 ${capitalLabel} 없음` : unavailable[reading.reason]}</small>}

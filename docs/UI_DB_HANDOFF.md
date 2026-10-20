@@ -109,7 +109,7 @@ return jsonResponse({ ...result, valuationComparison }, request.signal);
 - `validDays`: **기준 365일 안에서 해당 배수를 유효하게 계산한 서로 다른 UTC 날짜 수**다. 최근 비교점은 세지 않는다. P/R와 P/HR의 일수는 다를 수 있다. 다운로드된 행 수나 수집 소요 일수가 아니다.
 - `latest.date`: 전역 `asOf`와 같아야 한다. 그 날짜 값이 없으면 과거 값을 최근 값으로 옮겨 보내지 않는다.
 - `ready`: 양수인 유한 배수와 `minimum ≤ median ≤ maximum`을 보낸다. 최근 값은 과거 범위 밖일 수 있다. 숫자는 반올림하지 않고 전송하며 UI에서 표시만 포맷한다.
-- `insufficient`: 비교에 필요한 이력이 부족할 때 사용한다. 화면에 `1년 비교 자료 부족`, `배수 계산 가능: 22일 / 365일`처럼 표시한다.
+- `insufficient`: 비교에 필요한 이력이 부족할 때 사용한다. 화면에 `1년 비교 자료 부족`, `배수 계산 가능: 22일 / 365일`처럼 표시한다. v0.6.1부터 정확한 `asOf` 날짜의 양수 배수가 있으면 선택 필드 `latest: { date, value }`로 함께 전달해 최근 숫자를 표시한다. 이 상태에서 비교 막대와 최저·중앙값·최고는 표시하지 않는다. 이전 요약의 `latest`가 생략돼 있으면 숫자를 추정하지 않는다.
 - `unavailable.reason`: `not_collected`, `missing_capital`, `missing_revenue`, `non_positive_revenue`, `definition_changed` 중 하나다.
 - 필드 자체가 없거나 `null`이면 미연결 상태다. 잘못된 분자·기간·날짜·숫자·누락 행은 `비교 자료 확인 필요`로 표시한다. 잘못된 값을 0으로 바꾸거나 막대를 그리지 않는다.
 

@@ -12,7 +12,7 @@ export interface ValuationComparisonPage {
 export type ComparisonUnavailableReason = "not_collected" | "not_prepared" | "missing_capital" | "missing_revenue" | "non_positive_revenue" | "definition_changed" | "stale_data";
 export type ValuationComparisonMetric =
   | { status: "ready"; validDays: number; latest: { date: string; value: number }; minimum: number; median: number; maximum: number }
-  | { status: "insufficient"; validDays: number }
+  | { status: "insufficient"; validDays: number; latest?: { date: string; value: number } }
   | { status: "unavailable"; validDays: number; reason: ComparisonUnavailableReason };
 export type ComparisonReading = ValuationComparisonMetric | { status: "unconnected" } | { status: "invalid" } | { status: "loading" };
 
@@ -37,7 +37,11 @@ export function comparisonReading(value: unknown, capital: CapitalBasis, slug: s
   const row: unknown = Object.hasOwn(value.rows, slug) ? value.rows[slug] : undefined;
   const m: unknown = record(row) ? row[metric] : undefined;
   if (!record(m) || !Number.isInteger(m.validDays) || (m.validDays as number) < 0 || (m.validDays as number) > 365) return { status: "invalid" };
-  if (m.status === "insufficient") return { status: "insufficient", validDays: m.validDays as number };
+  if (m.status === "insufficient") {
+    if (!Object.hasOwn(m, "latest")) return { status: "insufficient", validDays: m.validDays as number };
+    if (!record(m.latest) || m.latest.date !== value.asOf || !positive(m.latest.value) || Math.floor(now / day) * day - day - Date.parse(value.asOf) > day) return { status: "invalid" };
+    return { status: "insufficient", validDays: m.validDays as number, latest: { date: value.asOf, value: m.latest.value } };
+  }
   if (m.status === "unavailable" && reasons.includes(m.reason as ComparisonUnavailableReason)) return m as ValuationComparisonMetric;
   if (Math.floor(now / day) * day - day - Date.parse(value.asOf) > day) return { status: "invalid" };
   if (m.status !== "ready" || m.validDays !== 365 || !record(m.latest) || m.latest.date !== value.asOf || !positive(m.latest.value)

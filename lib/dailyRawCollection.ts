@@ -89,7 +89,8 @@ export function exactDailyRawFeeParentChart(key: string, members: Row[], summary
 
 /** Retains the existing exact parent/component checks and the entire original
  * dated series. Fees follows the same path as Revenue and Holders Revenue. */
-export function extractDailyRawFundamentals(bundle: SourceBundle, archiveUrl: string, receiptArchive?: (receipt: SourceReceipt) => string | undefined) {
+export function extractDailyRawFundamentals(bundle: SourceBundle, archiveUrl: string, receiptArchive?: (receipt: SourceReceipt) => string | undefined, bounds?: { from: string; to: string }) {
+  if (bounds && (!validDay(bounds.from) || !validDay(bounds.to) || bounds.from > bounds.to)) throw new DailyRawInputError("daily_raw_financial_bounds");
   const series = new Map<string, Map<string, DailyRawPoint>>();
   const sources = new Map<string, Map<string, DailyRawSource>>();
   const bundleLastDay = shiftDay(utcDay(Date.parse(bundle.asOf)), -1);
@@ -109,7 +110,8 @@ export function extractDailyRawFundamentals(bundle: SourceBundle, archiveUrl: st
     const candidates = bundle.receipts.filter(r => matches(r, "/overview/fees", dataType) && new URL(r.url).searchParams.get("excludeTotalDataChartBreakdown") === "false");
     const receipt = metric === "fees" ? candidates.sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt))[0] : candidates[0];
     if (!receipt) continue;
-    const lastDay = metric === "fees" ? shiftDay(utcDay(Date.parse(receipt.observedAt)), -1) : bundleLastDay;
+    const lastDay = bounds ? [bundleLastDay, bounds.to, shiftDay(utcDay(Date.parse(receipt.observedAt)), -1)].sort()[0]
+      : metric === "fees" ? shiftDay(utcDay(Date.parse(receipt.observedAt)), -1) : bundleLastDay;
     const overview = read(receipt);
     if (!Array.isArray(overview?.protocols) || !Array.isArray(overview.totalDataChartBreakdown)) continue;
     const protocols = overview.protocols as Row[], counts = new Map<string, number>(), groups = new Map<string, Row[]>();
@@ -122,7 +124,7 @@ export function extractDailyRawFundamentals(bundle: SourceBundle, archiveUrl: st
     for (const point of overview.totalDataChartBreakdown) {
       if (!Array.isArray(point) || !finite(point[0]) || point[0] % 86400 !== 0 || !point[1] || typeof point[1] !== "object" || Array.isArray(point[1])) continue;
       const day = utcDay(point[0] * 1000);
-      if (day > lastDay) continue;
+      if (day > lastDay || bounds && day < bounds.from) continue;
       if (rows.has(day) && orderedJson(rows.get(day)) !== orderedJson(point[1])) conflicts.add(day);
       rows.set(day, point[1] as Row);
     }
@@ -162,7 +164,7 @@ export function extractDailyRawFundamentals(bundle: SourceBundle, archiveUrl: st
         for (const point of summaryChart) {
           if (!Array.isArray(point) || !finite(point[0]) || point[0] % 86400 !== 0 || !finite(point[1])) continue;
           const day = utcDay(point[0] * 1000);
-          if (day > lastDay) continue;
+          if (day > lastDay || bounds && (day < bounds.from || day >= utcDay(Date.parse(summary.receipt.observedAt)))) continue;
           const old = points.get(day), previous = seen.get(day);
           const duplicate = previous !== undefined && differs(previous, point[1]);
           const changed = old?.state === "complete" && old.value !== null && differs(old.value, point[1]);
@@ -179,7 +181,7 @@ export function extractDailyRawFundamentals(bundle: SourceBundle, archiveUrl: st
         }
         if (metric === "fees" && slug.startsWith("parent#")) for (const point of exactDailyRawFeeParentBreakdown(slug, members, summary.data, excluded) ?? []) {
           if (point.time % 86400 !== 0) continue;
-          const day = utcDay(point.time * 1000); if (day > lastDay) continue;
+          const day = utcDay(point.time * 1000); if (day > lastDay || bounds && (day < bounds.from || day >= utcDay(Date.parse(summary.receipt.observedAt)))) continue;
           const old = points.get(day), next: DailyRawObservation = { value: point.value, state: point.state, source, at: null };
           // Child decimals are a separate representation of the same receipt.
           // They fill gaps, never dispute a verified authoritative parent total.

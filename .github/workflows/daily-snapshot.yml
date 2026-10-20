@@ -154,8 +154,7 @@ jobs:
     needs: capture
     if: needs.capture.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    continue-on-error: true
+    timeout-minutes: 30
     concurrency:
       group: daily-history-model-preparation
       cancel-in-progress: false
@@ -170,12 +169,23 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci --no-audit --no-fund
+      - name: Patch recent financial dates from the latest verified source archive
+        id: financial
+        run: npx tsx scripts/refresh-daily-financials.ts --cache "$RUNNER_TEMP/daily-history-model" --run-id "history-model-${{ github.run_id }}-${{ github.run_attempt }}" --time-budget-seconds 600 --max-estimated-writes 50000 --recent-days 3 --apply
       - name: Refresh complete-history models for the latest verified completion date
-        run: npx tsx scripts/prepare-daily-history.ts --cache "$RUNNER_TEMP/daily-history-model" --run-id "history-model-${{ github.run_id }}-${{ github.run_attempt }}" --time-budget-seconds 900 --max-estimated-writes 50000 --workers 4 --apply
+        if: steps.financial.outcome == 'success'
+        run: |
+          npx tsx scripts/prepare-daily-history.ts --cache "$RUNNER_TEMP/daily-history-model" --reference "$RUNNER_TEMP/daily-history-model/reference.json" --run-id "history-model-${{ github.run_id }}-${{ github.run_attempt }}" --time-budget-seconds 900 --max-estimated-writes 50000 --workers 4 --apply
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const report=JSON.parse(readFileSync(process.env.RUNNER_TEMP+'/daily-history-model/daily-history-model-report.json','utf8'));
+          console.log(JSON.stringify({status:report.status,pending:report.pending,runEstimatedWrites:report.runEstimatedWrites}));
+          if(report.status!=='complete'||report.pending!==0){console.error('::error::History preparation is incomplete; inspect the retained report before retrying.');process.exitCode=2;}
+          NODE
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: snapshot-history-model-report-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/daily-history-model/daily-history-model-report.json
+          path: ${{ runner.temp }}/daily-history-model/*report.json
           retention-days: 30
           if-no-files-found: warn
