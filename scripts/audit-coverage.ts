@@ -12,7 +12,7 @@ import type { CoinScored, ScreenerResponse } from "../lib/types";
 import type { PublishedSnapshot } from "../lib/publicationTypes";
 import type { ScreenerPage } from "../lib/screenerQuery";
 import { gunzipSync } from "node:zlib";
-import { checkArchiveUrl, readSnapshot, sha256 } from "../lib/snapshotArchive";
+import { checkArchiveUrl, decodeSnapshot, readSnapshot, sha256 } from "../lib/snapshotArchive";
 import { witnessErrors } from "../lib/sourceWitness";
 import { COLLECTION_DEADLINE_MS,JOURNAL_DOWNLOAD } from "../lib/publication";
 import { collectionSchedule } from "../lib/collectionSchedule";
@@ -35,12 +35,24 @@ const errors: string[] = [];
 type Row = Record<string, any>;
 let nextGeckoAt = 0;
 
-function reportTransportFailure(error: unknown): boolean {
+function reportTransportFailure(error: unknown, allowUnclassifiedFetch = true): boolean {
   for (let cause = error, depth = 0; cause && typeof cause === "object" && depth < 5; depth++) {
-    if ("code" in cause && ["UND_ERR_SOCKET", "ECONNRESET", "EPIPE", "ETIMEDOUT"].includes(String(cause.code))) return true;
+    if ("code" in cause && ["UND_ERR_SOCKET", "ECONNRESET", "EPIPE", "ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT"].includes(String(cause.code)) || "name" in cause && cause.name === "TimeoutError") return true;
     cause = "cause" in cause ? cause.cause : null;
   }
-  return error instanceof TypeError && ["fetch failed", "terminated"].includes(error.message) || error instanceof Error && error.name === "TimeoutError";
+  return allowUnclassifiedFetch && error instanceof TypeError && ["fetch failed", "terminated"].includes(error.message);
+}
+
+/** Deployment audit may retry a timed-out/reset public snapshot once. Runtime
+ * reads keep their 12-second limit; every retry still verifies the pinned proof. */
+export async function readAuditSnapshot(ref: PublishedSnapshot): Promise<ScreenerResponse> {
+  const expected = { ...ref }; checkArchiveUrl(expected.url);
+  try { return await readSnapshot(expected); }
+  catch (error) { if (!reportTransportFailure(error, false)) throw error; }
+  await new Promise(resolve => setTimeout(resolve, 250));
+  const response = await fetch(expected.url, { cache: "no-store", signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new Error(`Snapshot store HTTP ${response.status}`);
+  return decodeSnapshot(new Uint8Array(await response.arrayBuffer()), expected);
 }
 
 async function read(url: string): Promise<any> {
@@ -189,7 +201,7 @@ async function main() {
   // candidate's baseline, rather than comparing yesterday's snapshot to today's feed.
   const p = first.publication;
   if (!p?.published || p.storeError) throw new Error("Verified publication metadata unavailable");
-  const archived = await readSnapshot(p.published);
+  const archived = await readAuditSnapshot(p.published);
   errors.push(...apiArchiveErrors(first, coins, archived));
   checkArchiveUrl(p.published.witnessUrl);
   const witnessResponse = await fetch(p.published.witnessUrl, { signal: AbortSignal.timeout(30_000) });
