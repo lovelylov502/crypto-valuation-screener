@@ -37,6 +37,7 @@ export async function initializeDailyRaw(db: Client, options: DailyRawInitialize
     `CREATE TABLE IF NOT EXISTS daily_raw_revisions(id INTEGER PRIMARY KEY,event_key TEXT NOT NULL UNIQUE,asset_id INTEGER NOT NULL REFERENCES daily_raw_assets(id),day TEXT NOT NULL,metric TEXT NOT NULL,kind TEXT NOT NULL,previous_value REAL,previous_state INTEGER NOT NULL,previous_source INTEGER REFERENCES daily_raw_sources(id),previous_at TEXT,next_value REAL,next_state INTEGER NOT NULL,next_source INTEGER REFERENCES daily_raw_sources(id),next_at TEXT)`,
     `CREATE TABLE IF NOT EXISTS daily_raw_runs(id TEXT PRIMARY KEY,started_at TEXT NOT NULL,max_estimated_writes INTEGER NOT NULL CHECK(max_estimated_writes>=1${local ? "" : " AND max_estimated_writes<=8000000"}),estimated_writes INTEGER NOT NULL DEFAULT 0 CHECK(estimated_writes<=max_estimated_writes),rows_written INTEGER NOT NULL DEFAULT 0,days_written INTEGER NOT NULL DEFAULT 0,accounting_version TEXT NOT NULL DEFAULT '${LEGACY_ACCOUNTING_VERSION}') WITHOUT ROWID`,
     `CREATE TABLE IF NOT EXISTS daily_raw_checkpoints(run_id TEXT NOT NULL REFERENCES daily_raw_runs(id),checkpoint_key TEXT NOT NULL,cursor TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('running','complete')),rows_written INTEGER NOT NULL,days_written INTEGER NOT NULL,PRIMARY KEY(run_id,checkpoint_key)) WITHOUT ROWID`,
+    `CREATE TABLE IF NOT EXISTS daily_raw_asset_revisions(asset_id INTEGER PRIMARY KEY REFERENCES daily_raw_assets(id),revision INTEGER NOT NULL CHECK(revision>=1)) WITHOUT ROWID`,
     `CREATE TRIGGER IF NOT EXISTS daily_raw_asset_immutable BEFORE UPDATE OF slug,identity ON daily_raw_assets BEGIN SELECT RAISE(ABORT,'daily_raw_asset_identity_immutable'); END`,
     `CREATE TRIGGER IF NOT EXISTS daily_raw_source_immutable BEFORE UPDATE ON daily_raw_sources BEGIN SELECT RAISE(ABORT,'daily_raw_source_immutable'); END`,
     `CREATE TRIGGER IF NOT EXISTS daily_raw_receipt_immutable BEFORE UPDATE ON daily_raw_receipts BEGIN SELECT RAISE(ABORT,'daily_raw_receipt_immutable'); END`,
@@ -49,7 +50,7 @@ export async function initializeDailyRaw(db: Client, options: DailyRawInitialize
   if (local) unmeteredLocalClients.add(db);
 }
 
-interface RawRunOptions { id: string; maxEstimatedWrites: number; now?: Date }
+interface RawRunOptions { id: string; maxEstimatedWrites: number; minimumReserve?: number; now?: Date }
 export interface DailyRawWriteResult { assetId: number; rowsWritten: number; daysWritten: number; estimatedWrites: number }
 export interface DailyRawUpsertOptions {
   runId: string; asset: DailyRawAsset; sources: DailyRawSource[]; points: DailyRawPoint[];
@@ -92,8 +93,9 @@ async function reserve(tx: Transaction, runId: string, counts: RawWriteCounts, d
 /** A run's caller-supplied ceiling is immutable, including after process restarts. */
 export async function openDailyRawRun(db: Client, options: RawRunOptions): Promise<DailyRawRun> {
   const { id, maxEstimatedWrites } = options, now = options.now ?? new Date();
+  const minimumReserve = options.minimumReserve ?? 0;
   const local = unmeteredLocalClients.has(db);
-  if (!id.trim() || !Number.isSafeInteger(maxEstimatedWrites) || maxEstimatedWrites < 8 || (!local && maxEstimatedWrites > HISTORY_WRITE_LIMIT)) throw Error("Invalid daily raw run allowance");
+  if (!id.trim() || !Number.isSafeInteger(maxEstimatedWrites) || maxEstimatedWrites < 8 || (!local && maxEstimatedWrites > HISTORY_WRITE_LIMIT) || !Number.isSafeInteger(minimumReserve) || minimumReserve < 0 || minimumReserve > HISTORY_WRITE_LIMIT) throw Error("Invalid daily raw run allowance");
   const tx = await db.transaction("write");
   try {
     const old = await tx.batch([
@@ -108,7 +110,7 @@ export async function openDailyRawRun(db: Client, options: RawRunOptions): Promi
     }
     const remaining = HISTORY_WRITE_LIMIT - Number(old[1].rows[0]?.reserved ?? 0);
     const initialCost = estimatedCost({ plain: 1, indexed: 0 }, DAILY_RAW_ACCOUNTING_VERSION);
-    if (!local && remaining < initialCost) throw new DailyRawPreflightBudgetExceeded("monthly", initialCost, remaining);
+    if (!local && remaining < initialCost + minimumReserve) throw new DailyRawPreflightBudgetExceeded("monthly", initialCost + minimumReserve, remaining);
     if (!local && (Number(old[2].rows[0][0]) + 4) * Number(old[3].rows[0][0]) >= HISTORY_STORAGE_LIMIT) throw new HistoryBudgetExceeded("history_storage_budget");
     await tx.execute({ sql: "INSERT INTO daily_raw_runs(id,started_at,max_estimated_writes,accounting_version) VALUES(?,?,?,?)", args: [id, now.toISOString(), maxEstimatedWrites, DAILY_RAW_ACCOUNTING_VERSION] });
     await reserve(tx, id, { plain: 1, indexed: 0 }, 0, now, DAILY_RAW_ACCOUNTING_VERSION, local);
@@ -173,7 +175,7 @@ async function preflightDailyRaw(tx: Transaction, options: DailyRawUpsertOptions
   }
   const ordinaryEvents = points.reduce((total, point) => total + DAILY_RAW_METRICS.filter(metric => point[metric] && point[metric]!.state !== "missing" && !point[metric]!.witnesses).length, 0);
   const witnessedEvents = points.reduce((total, point) => total + DAILY_RAW_METRICS.reduce((n, metric) => n + (point[metric]?.witnesses ? point[metric]!.witnesses!.length - 1 + Number(!!sources.find(source => source.key === point[metric]!.source)?.revisionOf) : 0), 0), 0);
-  const counts = { plain: points.length + Number(!!checkpoint), indexed: Number(assetId === null) + sources.filter(source => !known.has(source.key)).length * 2 + Math.min(ordinaryEvents, Number(reads[4].rows[0].n) * 6) + witnessedEvents };
+  const counts = { plain: points.length + Number(points.length > 0) + Number(!!checkpoint), indexed: Number(assetId === null) + sources.filter(source => !known.has(source.key)).length * 2 + Math.min(ordinaryEvents, Number(reads[4].rows[0].n) * 6) + witnessedEvents };
   const run = readRun(reads[0].rows[0]), snapshot = { assetId, sources: known, run, replay: false };
   if (!counts.plain && !counts.indexed) return { ...snapshot, replay: true };
   const required = estimatedCost(counts, run.accountingVersion);
@@ -307,12 +309,71 @@ export async function upsertDailyRaw(db: Client, options: DailyRawUpsertOptions)
       const expressions = COLUMNS.map((_, i) => `json_extract(value,'$[${i}]')`).join(",");
       const written = await tx.execute({ sql: `INSERT INTO daily_raw_days(${COLUMNS.join(",")}) SELECT ${expressions} FROM json_each(?) WHERE 1 ON CONFLICT(asset_id,day) DO UPDATE SET ${CELL_COLUMNS.map(column => `${column}=excluded.${column}`).join(",")}`, args: [JSON.stringify(changed)] });
       counts.plain += written.rowsAffected;
+      counts.plain += (await tx.execute({ sql: "INSERT INTO daily_raw_asset_revisions(asset_id,revision) VALUES(?,1) ON CONFLICT(asset_id) DO UPDATE SET revision=revision+1", args: [assetId] })).rowsAffected;
     }
     if (checkpoint) counts.plain += (await tx.execute({ sql: `INSERT INTO daily_raw_checkpoints(run_id,checkpoint_key,cursor,status,rows_written,days_written) VALUES(?,?,?,?,?,?) ON CONFLICT(run_id,checkpoint_key) DO UPDATE SET cursor=excluded.cursor,status=excluded.status,rows_written=rows_written+excluded.rows_written,days_written=days_written+excluded.days_written WHERE cursor<>excluded.cursor OR status<>excluded.status OR excluded.rows_written>0`, args: [runId, checkpoint.key, checkpoint.cursor, checkpoint.status ?? "running", counts.plain + counts.indexed, changed.length] })).rowsAffected;
     const rowsWritten = counts.plain + counts.indexed;
     const estimatedWrites = rowsWritten ? await reserve(tx, runId, counts, changed.length, now, preflight.run.accountingVersion, local) : 0;
     await tx.commit();
     return { assetId, rowsWritten: rowsWritten + Number(rowsWritten > 0), daysWritten: changed.length, estimatedWrites };
+  } finally { tx.close(); }
+}
+
+/** One prepared blob row; its CAS, quota reservation and data commit share this transaction. */
+export async function writeDailyRawReadModel(db: Client, options: {
+  runId: string; namespace: string; key: string; revision: string; sha256: string; metadata: string; metadataSha256: string; payload: Uint8Array;
+  expectedRaw?: { assetId: number; revision: number }; minimumReserve?: number; immutable?: boolean; now?: Date;
+}) {
+  const now = options.now ?? new Date(), local = unmeteredLocalClients.has(db), minimumReserve = options.minimumReserve ?? 500_000;
+  if (!Number.isSafeInteger(minimumReserve) || minimumReserve < 0 || minimumReserve > HISTORY_WRITE_LIMIT) throw Error("Invalid read model maintenance reserve");
+  const tx = await db.transaction("write");
+  try {
+    const reads = await tx.batch([
+      { sql: "SELECT * FROM daily_raw_runs WHERE id=?", args: [options.runId] },
+      { sql: "SELECT reserved FROM history_budget WHERE month=?", args: [now.toISOString().slice(0, 7)] },
+      { sql: "SELECT revision,sha256,metadata FROM daily_read_models WHERE namespace=? AND model_key=?", args: [options.namespace, options.key] },
+      { sql: "SELECT a.id,COALESCE(r.revision,0) revision FROM daily_raw_assets a LEFT JOIN daily_raw_asset_revisions r ON r.asset_id=a.id WHERE a.id=?", args: [options.expectedRaw?.assetId ?? -1] },
+      "PRAGMA page_count", "PRAGMA page_size",
+    ]);
+    if (!reads[0].rows.length) throw Error("Daily raw run has not been opened");
+    if (options.expectedRaw && (!reads[3].rows.length || Number(reads[3].rows[0].revision) !== options.expectedRaw.revision)) throw Error("daily_read_model_raw_changed");
+    const old = reads[2].rows[0];
+    if (old && old.revision === options.revision && old.sha256 === options.sha256 && old.metadata === options.metadata) { await tx.commit(); return { changed: false, estimatedWrites: 0, sha256: options.sha256 }; }
+    if (old && options.immutable) throw Error("daily_read_model_immutable_conflict");
+    const run = readRun(reads[0].rows[0]), required = estimatedCost({ plain: 1, indexed: 0 }, run.accountingVersion);
+    const remaining = HISTORY_WRITE_LIMIT - Number(reads[1].rows[0]?.reserved ?? 0), runRemaining = run.maxEstimatedWrites - run.estimatedWrites;
+    if (!local && remaining - required < minimumReserve) throw new DailyRawPreflightBudgetExceeded("monthly", required + minimumReserve, remaining);
+    if (required > runRemaining) throw new DailyRawPreflightBudgetExceeded("run", required, runRemaining);
+    const size = Number(reads[4].rows[0][0]) * Number(reads[5].rows[0][0]), bytes = options.payload.byteLength * 2 + Buffer.byteLength(options.metadata) * 2 + Number(reads[5].rows[0][0]) * 4;
+    if (!local && size + bytes >= HISTORY_STORAGE_LIMIT) throw new HistoryBudgetExceeded("history_storage_budget");
+    await tx.execute({ sql: "INSERT INTO daily_read_models(namespace,model_key,revision,sha256,payload,metadata,metadata_sha256,built_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(namespace,model_key) DO UPDATE SET revision=excluded.revision,sha256=excluded.sha256,payload=excluded.payload,metadata=excluded.metadata,metadata_sha256=excluded.metadata_sha256,built_at=excluded.built_at", args: [options.namespace, options.key, options.revision, options.sha256, options.payload, options.metadata, options.metadataSha256, now.toISOString()] });
+    const estimatedWrites = await reserve(tx, options.runId, { plain: 1, indexed: 0 }, 0, now, run.accountingVersion, local);
+    await tx.commit(); return { changed: true, estimatedWrites, sha256: options.sha256 };
+  } finally { tx.close(); }
+}
+
+/** Builder-only retention for explicit prepared-model keys; source tables are never touched. */
+export async function deleteDailyRawReadModels(db: Client, options: { runId: string; namespace: string; keys: string[]; minimumReserve?: number; now?: Date }) {
+  const now = options.now ?? new Date(), local = unmeteredLocalClients.has(db), minimumReserve = options.minimumReserve ?? 500_000;
+  if (!Number.isSafeInteger(minimumReserve) || minimumReserve < 0 || minimumReserve > HISTORY_WRITE_LIMIT) throw Error("Invalid read model maintenance reserve");
+  if (!options.keys.length) return { deleted: 0, estimatedWrites: 0 };
+  const tx = await db.transaction("write");
+  try {
+    const reads = await tx.batch([
+      { sql: "SELECT * FROM daily_raw_runs WHERE id=?", args: [options.runId] },
+      { sql: "SELECT reserved FROM history_budget WHERE month=?", args: [now.toISOString().slice(0, 7)] },
+      { sql: "SELECT COUNT(*) n FROM daily_read_models WHERE namespace=? AND model_key IN (SELECT value FROM json_each(?))", args: [options.namespace, JSON.stringify(options.keys)] },
+    ]);
+    if (!reads[0].rows.length) throw Error("Daily raw run has not been opened");
+    const count = Number(reads[2].rows[0].n);
+    if (!count) { await tx.commit(); return { deleted: 0, estimatedWrites: 0 }; }
+    const run = readRun(reads[0].rows[0]), required = estimatedCost({ plain: count, indexed: 0 }, run.accountingVersion), remaining = HISTORY_WRITE_LIMIT - Number(reads[1].rows[0]?.reserved ?? 0);
+    if (!local && remaining - required < minimumReserve) throw new DailyRawPreflightBudgetExceeded("monthly", required + minimumReserve, remaining);
+    if (required > run.maxEstimatedWrites - run.estimatedWrites) throw new DailyRawPreflightBudgetExceeded("run", required, run.maxEstimatedWrites - run.estimatedWrites);
+    const deleted = (await tx.execute({ sql: "DELETE FROM daily_read_models WHERE namespace=? AND model_key IN (SELECT value FROM json_each(?))", args: [options.namespace, JSON.stringify(options.keys)] })).rowsAffected;
+    // Deletion cannot increase storage; existing full files must still be able to remove prepared rows.
+    const estimatedWrites = await reserve(tx, options.runId, { plain: deleted, indexed: 0 }, 0, now, run.accountingVersion, true);
+    await tx.commit(); return { deleted, estimatedWrites };
   } finally { tx.close(); }
 }
 

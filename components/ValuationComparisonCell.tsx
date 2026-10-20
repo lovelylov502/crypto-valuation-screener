@@ -5,6 +5,7 @@ const unavailable: Record<ComparisonUnavailableReason, string> = {
   not_collected: "비교 기준일의 일별 이력 없음", missing_capital: "최근 날짜의 시총·FDV 없음", missing_revenue: "최근 날짜의 하루 수익 없음",
   non_positive_revenue: "최근 하루 수익이 0 이하", definition_changed: "수익 집계 기준 확인 필요",
   stale_data: "최근 UTC 완료일보다 2일 이상 오래된 자료",
+  not_prepared: "최신 일별 비교 요약 준비 중",
 };
 
 export function ValuationComparisonCell({ reading, label, capitalLabel }: { reading: ComparisonReading; label: string; capitalLabel: string }) {

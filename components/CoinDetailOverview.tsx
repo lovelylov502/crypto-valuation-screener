@@ -10,7 +10,8 @@ import { koreanDetailDescription } from "@/lib/detailDescriptions";
 import { protocolResearch } from "@/lib/protocolResearch";
 import { referenceReview } from "@/lib/referenceMetrics";
 import { fmtKstMinute, fmtMult, fmtPct, fmtPrice, fmtUsd } from "@/lib/format";
-import { DETAIL_RANGES, DetailHistoryError, detailChartDomain, detailChartPoints, detailHistoryBounds, detailHistoryReason, detailObservationState, loadDetailHistory, type DetailHistoryData, type DetailRange } from "@/lib/detailHistory";
+import { DETAIL_RANGES, DetailHistoryError, detailChartDomain, detailChartPoints, detailHistoryBounds, detailHistoryReason, detailObservationState, type DetailHistoryData, type DetailRange } from "@/lib/detailHistory";
+import { loadCachedDetailHistory } from "@/lib/detailHistoryCache";
 import { DetailHistoryChart, detailSeriesFormat, type DetailChartSeries } from "./DetailHistoryChart";
 import { InlineCoinDetail, tone } from "./InlineCoinDetail";
 
@@ -28,30 +29,33 @@ type HistoryState = { key: string; status: "loading"; count: number } | { key: s
 const INTRO_PREVIEW_LENGTH = 50;
 const shortDescription = (text: string) => text.length > INTRO_PREVIEW_LENGTH ? `${text.slice(0, INTRO_PREVIEW_LENGTH - 3).trimEnd()}…` : text;
 
-export function CoinDetailOverview({ coin: c, capital: initialCapital, onClose }: { coin: CoinScored; capital: CapitalBasis; onClose: () => void }) {
+export function CoinDetailOverview({ coin: c, capital: initialCapital, onClose, publicationId, snapshotUpdatedAt, onRefreshPublication }: { coin: CoinScored; capital: CapitalBasis; onClose: () => void; publicationId?: string; snapshotUpdatedAt?: string; onRefreshPublication?: () => void }) {
   const [view, setView] = useState<"overview" | "research">("overview");
   const [originalOpen, setOriginalOpen] = useState(false);
   const [capital, setCapital] = useState(initialCapital);
   const [range, setRange] = useState<DetailRange>("MAX");
   const [now] = useState(() => new Date());
   const [retry, setRetry] = useState(0);
+  const lastRetry = useRef(0);
   const [{ day: activeDay, chart: activeChart }, setActive] = useState<{ day: string | null; chart: "market" | "valuation" | null }>({ day: null, chart: null });
   const setChartDay = (chart: "market" | "valuation", day: string | null) => setActive(previous => day ? { day, chart } : previous.chart === chart ? { day: null, chart: null } : previous);
   const identity = c.geckoId ? `gecko:${c.geckoId}` : c.cmcId ? `cmc:${c.cmcId}` : "unlinked";
-  const requestKey = `${c.slug}:${identity}:${range}:${capital}:${retry}`;
+  const requestKey = JSON.stringify([c.slug, identity, publicationId, snapshotUpdatedAt, range, capital, retry]);
   const [history, setHistory] = useState<HistoryState>({ key: requestKey, status: "loading", count: 0 });
   const researchRef = useRef<HTMLDivElement>(null);
   const overviewRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const controller = new AbortController();
+    const force = retry !== lastRetry.current;
+    lastRetry.current = retry;
     setHistory({ key: requestKey, status: "loading", count: 0 });
     setActive({ day: null, chart: null });
-    void loadDetailHistory({ slug: c.slug, identity, range, capital, signal: controller.signal, now,
+    void loadCachedDetailHistory({ slug: c.slug, identity, range, capital, signal: controller.signal, now, publicationId, snapshotUpdatedAt, force,
       onPage: count => { if (!controller.signal.aborted) setHistory({ key: requestKey, status: "loading", count }); },
     }).then(data => { if (!controller.signal.aborted) setHistory({ key: requestKey, status: "ready", data }); })
       .catch(error => { if (!controller.signal.aborted) setHistory({ key: requestKey, status: "error", error: error instanceof DetailHistoryError ? error : new DetailHistoryError(0, "이력을 불러오지 못했습니다.") }); });
     return () => controller.abort();
-  }, [c.slug, identity, range, capital, now, requestKey]);
+  }, [c.slug, identity, range, capital, now, requestKey, publicationId, snapshotUpdatedAt, retry]);
   useEffect(() => {
     if (view !== "research") return;
     researchRef.current?.focus({ preventScroll: true });
@@ -77,13 +81,17 @@ export function CoinDetailOverview({ coin: c, capital: initialCapital, onClose }
   const unknownEconomics = reviewRevenue !== "분류 검토 완료" || reviewHolders !== "분류 검토 완료";
   function openResearch(original = false) { setOriginalOpen(original); setView("research"); }
   function returnOverview() { setView("overview"); requestAnimationFrame(() => overviewRef.current?.focus({ preventScroll: true })); }
+  function retryHistory() {
+    if (state.status === "error" && state.error.status === 409 && onRefreshPublication) onRefreshPublication();
+    setRetry(value => value + 1);
+  }
 
   function legend(series: DetailChartSeries[]) {
     return <dl className="detail-chart-legend">{series.map(item => <div key={item.key}><dt><i style={{ borderColor: item.color, borderTopStyle: item.dashed ? "dashed" : "solid" }}/>{item.label}</dt><dd>{detailSeriesFormat(item.key, selectedPoint?.[item.key])}</dd></div>)}</dl>;
   }
   function chartState(valuation = false) {
     if (state.status === "loading") return <div className="detail-chart-state" role="status"><LoaderCircle size={22} className="detail-loading-icon"/><strong>이력을 불러오고 있습니다.</strong><span>{state.count ? `${state.count.toLocaleString("ko-KR")}개 날짜 확인 중` : "저장된 날짜별 자료를 조회합니다."}</span></div>;
-    if (state.status === "error") return <div className="detail-chart-state" role="status"><Info size={23}/><strong>{state.error.status === 404 ? "저장된 이력이 없습니다." : state.error.status === 409 ? "이력 기준을 확인해 주세요." : "이력을 불러올 수 없습니다."}</strong><span>{state.error.status === 404 ? "현재 지표와 원천 자료는 핵심 지표와 자료 보기에서 확인할 수 있습니다." : state.error.status === 503 ? "이력 저장소 연결이 지연되고 있습니다. 잠시 후 다시 시도해 주세요." : state.error.message}</span><button className="button" onClick={() => setRetry(value => value + 1)}><RefreshCw size={13}/>다시 불러오기</button></div>;
+    if (state.status === "error") return <div className="detail-chart-state" role="status"><Info size={23}/><strong>{state.error.status === 404 ? "저장된 이력이 없습니다." : state.error.status === 409 ? "이력 기준을 확인해 주세요." : "이력을 불러올 수 없습니다."}</strong><span>{state.error.status === 404 ? "현재 지표와 원천 자료는 핵심 지표와 자료 보기에서 확인할 수 있습니다." : state.error.status === 503 ? "이력 저장소 연결이 지연되고 있습니다. 잠시 후 다시 시도해 주세요." : state.error.message}</span><button className="button" onClick={retryHistory}><RefreshCw size={13}/>다시 불러오기</button></div>;
     const available = valuation ? points.some(point => point.pr !== null || point.phr !== null) : points.some(point => point.price !== null || point.mcap !== null || point.fdv !== null);
     if (!available) return <div className="detail-chart-state"><Info size={22}/><strong>{valuation ? "이 기간의 참고 배수를 표시할 수 없습니다." : "선택한 기간에 저장된 시세가 없습니다."}</strong><span>{valuation ? "같은 날짜의 자본 값·하루 수익·토큰 연결을 확인한 날짜에 배수를 표시합니다." : "다른 기간을 선택하거나 자료 기준을 확인해 주세요."}</span>{valuation && selectedHistory && <small>P/R · {detailHistoryReason(selectedHistory.pr.reason)}<br/>P/HR · {detailHistoryReason(selectedHistory.phr.reason)}</small>}</div>;
     return null;

@@ -18,6 +18,7 @@ describe("daily valuation comparison boundary", () => {
     expect(read({ ...page(), rows: {} })).toEqual({ status: "invalid" });
     expect(read(withMetric({ status: "insufficient", validDays: 22 }))).toEqual({ status: "insufficient", validDays: 22 });
     expect(read(withMetric({ status: "unavailable", validDays: 0, reason: "not_collected" }))).toEqual({ status: "unavailable", validDays: 0, reason: "not_collected" });
+    expect(read(withMetric({ status: "unavailable", validDays: 0, reason: "not_prepared" }))).toEqual({ status: "unavailable", validDays: 0, reason: "not_prepared" });
     expect(read(withMetric({ ...ready, latest: { date: page().asOf, value: 0 } }))).toEqual({ status: "invalid" });
   });
   it("rejects a different capital basis or revenue window instead of relabeling it", () => {

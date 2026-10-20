@@ -4,6 +4,7 @@ import { queryScreener } from "@/lib/screenerQuery";
 import { parseWorkspace } from "@/lib/workspacePreferences";
 import { jsonResponse } from "@/lib/jsonTransport.mjs";
 import { readDailyComparisonBatch } from "@/lib/dailyValuationRead";
+import { readTablePage } from "@/lib/tableRead";
 
 // Only the joined snapshot is cached. A second ISR cache could extend stale data by 30 minutes.
 export const dynamic = "force-dynamic";
@@ -14,6 +15,12 @@ export async function GET(request: Request) {
     const params = new URL(request.url).searchParams;
     if ((params.get("prefs")?.length ?? 0) > 10000 || (params.get("favorites")?.length ?? 0) > 30000) return NextResponse.json({ error: "검색 조건이 너무 깁니다." }, { status: 400 });
     const prefs = parseWorkspace(params.get("prefs"));
+    if (params.get("view") === "table") {
+      const result = await readTablePage(prefs, params.getAll("favorites").flatMap(v => v.split(",")), Number(params.get("page") ?? 1), Number(params.get("size") ?? 100));
+      const response = await jsonResponse(result, request.signal);
+      response.headers.set("X-Tovenit-Read-Model", result.readModel);
+      return response;
+    }
     const data = await getScreener();
     const result = queryScreener(data, prefs, params.getAll("favorites").flatMap(v => v.split(",")), Number(params.get("page") ?? 1), Number(params.get("size") ?? 100));
     try {

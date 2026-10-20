@@ -149,3 +149,7 @@ DB 체크아웃에서 읽어 확인한 연결 대상은 `docs/DAILY_RAW_DATA.md`
 8. 배포는 canonical 루트 `C:\Users\TAE\Workspace\projects\hermes\crypto-valuation-screener`에서 `docs/DEPLOYMENT.md`의 검사와 `npm run deploy:production`으로만 진행한다. 이 인수인계 자체가 배포 실행 기록은 아니다.
 
 UI 검수 근거와 남은 제한은 프로젝트 루트 [`design-qa.md`](../design-qa.md)의 2026-10-20 항목에 기록한다.
+
+## v0.6.0 조회 경로 통합 · 2026-10-20
+
+위 내용 중 미연결·정책 미확정 표기는 초기 UI 인수인계 시점의 기록이다. v0.5.0에서 같은 날짜의 원자료와 365일 전체 유효 비교 기준을 연결했다. v0.6.0에서는 목록을 `/api/screener?view=table`, 전체 상세 근거를 `/api/coin`, 차트를 `/api/history?format=version|compact`에 연결한다. 준비한 결과가 없거나 원자료 revision·완료일이 다르면 목록 비교는 `not_prepared`로 표시하며, 없는 과거 FDV와 수익을 채우지 않는다. 원본 전체 응답·내보내기·감사 계약은 유지한다. 생성 명령, 저장 구조와 버전 검증은 [조회 성능 구조](./FAST_READ_MODELS.md)를 따른다.

@@ -4,11 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Download, Info, RefreshCw, RotateCcw, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import type { CoinScored } from "@/lib/types";
 import type { ScreenerPage } from "@/lib/screenerQuery";
+import { tableCell, type TablePage, type TableRow, type TableDetail } from "@/lib/tableDto";
+import { validateTableDetail } from "@/lib/tableDetail";
+import { readJsonText } from "@/lib/jsonTransport.mjs";
 import { fmtKstMinute, fmtMult, fmtUsd } from "@/lib/format";
 import { parseFavoriteSlugs, serializeFavoriteSlugs } from "@/lib/screenerFilters";
 import { DEFAULT_VISIBLE_COLUMNS, SCREENER_COLUMNS as COLS, type SortKey } from "@/lib/screenerColumns";
 import { defaultPreferences, parseWorkspace, resetWorkspaceFilters, workspaceMigrationNotice, WORKSPACE_KEY, type WorkspacePreferences } from "@/lib/workspacePreferences";
-import { referenceMultiple, referenceReason, referenceReading, referenceMultiples } from "@/lib/referenceMetrics";
+import { referenceMultiples } from "@/lib/referenceMetrics";
 import { UsdRangeFilter } from "./RangeFilters";
 import { Pagination } from "./Pagination";
 import { PAGE_SIZE_KEY, parsePageSize } from "@/lib/pagination";
@@ -45,7 +48,7 @@ function MaximumMultipleInput({ value, label, onChange }: { value: number; label
   />;
 }
 
-export function ScreenerClient({ initialData }: { initialData: ScreenerPage | null }) {
+export function ScreenerClient({ initialData }: { initialData: TablePage | null }) {
   const [prefs, setPrefs] = useState(defaultPreferences);
   const [ready, setReady] = useState(false);
   const [storageError, setStorageError] = useState(false);
@@ -58,6 +61,8 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [detail, setDetail] = useState<TableDetail | null>(null);
+  const [detailRetry, setDetailRetry] = useState(0);
   const [exporting, setExporting] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
   const rowButtons = useRef(new Map<string, HTMLButtonElement>());
@@ -95,22 +100,35 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
   const comparison = comparisonEnvelopeValid(data?.valuationComparison, prefs.capital) ? data!.valuationComparison! : null;
   const activeFilters = [!!prefs.search, prefs.view !== "all", prefs.growingOnly, prefs.holderOnly, !!prefs.category, prefs.available !== "all", prefs.minMcap > 0 || prefs.maxMcap > 0, prefs.maxPr > 0, prefs.maxPhr > 0, prefs.minSourceAmount !== null, prefs.hideDilution, prefs.verifiedOnly].filter(Boolean).length;
   const capitalName = prefs.capital === "mcap" ? "유통 시총" : "FDV";
-  const rows = data?.coins ?? [];
-  const selectedCoin = rows.find(c => c.slug === selectedSlug);
+  const rows = data?.rows ?? [];
+  const selectedRow = rows.find(c => c.slug === selectedSlug) ?? (detail?.coin.slug === selectedSlug ? { slug: detail.coin.slug, identity: detail.identity } : undefined);
+  const selectedCoin = detail?.coin.slug === selectedSlug ? detail.coin : null;
+  useEffect(() => {
+    if (!selectedRow || !data) { setDetail(null); return; }
+    setDetail(previous => previous?.coin.slug === selectedRow.slug ? previous : null);
+    const controller = new AbortController(), expected = { slug: selectedRow.slug, identity: selectedRow.identity, publicationId: data.publicationId, snapshotSha256: data.snapshotSha256, updatedAt: data.updatedAt };
+    setStatus("상세 근거를 불러오고 있습니다.");
+    void (async () => {
+      try {
+        const response = await fetch("/api/coin?" + new URLSearchParams({ slug: expected.slug, identity: expected.identity, publicationId: expected.publicationId }), { cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]) });
+        if (response.status === 409) { refresh(); setStatus("자료가 갱신되었습니다. 새 검증본의 상세 근거를 불러옵니다."); return; }
+        if (!response.ok) throw Error("상세 근거를 불러오지 못했습니다. 다시 시도해 주세요.");
+        const next = validateTableDetail(JSON.parse(await readJsonText(response)), expected);
+        if (!controller.signal.aborted) { setDetail(next); setStatus(""); }
+      } catch (error) { if (!controller.signal.aborted) { setSelectedSlug(null); setStatus(error instanceof Error ? error.message : "상세 조회 실패"); } }
+    })();
+    return () => controller.abort();
+  }, [selectedSlug, selectedRow?.identity, data?.publicationId, data?.snapshotSha256, data?.updatedAt, detailRetry]);
   const total = data?.pagination.filtered ?? 0;
   const currentPage = data?.pagination.page ?? 1;
   const coverage = data?.coverage;
   const sortIcon = (key: SortKey) => prefs.sortKey === key ? prefs.sortDir === "asc" ? <ArrowUp size={12}/> : <ArrowDown size={12}/> : null;
 
-  const cell = (c: CoinScored, key: SortKey) => {
+  const cell = (c: TableRow, key: SortKey) => {
     const days = METRIC_COLUMN_DAYS[key];
     if (days) {
-      const holder = key.startsWith("phr");
-      const metric = holder ? "holders" : "revenue";
-      const value = referenceMultiple(c, metric, days, prefs.capital);
-      const reason = referenceReason(c, metric, days, prefs.capital);
-      const reading = referenceReading(c, metric, days);
-      return <span className={value === null ? "unavailable-metric" : "ratio-reading"} title={reason}>{fmtMult(value)}{value === null ? <><small>{metricStatus(reason)}</small><span className="sr-only"> · {reason}</span></> : reading.basis === "provider_total" && <small className="source-badge">{days === 365 ? "원천 1년" : "제공처 집계"}</small>}</span>;
+      const { value, reason, basis } = tableCell(c, key)!;
+      return <span className={value === null ? "unavailable-metric" : "ratio-reading"} title={reason}>{fmtMult(value)}{value === null ? <><small>{metricStatus(reason)}</small><span className="sr-only"> · {reason}</span></> : basis === "provider_total" && <small className="source-badge">{days === 365 ? "원천 1년" : "제공처 집계"}</small>}</span>;
     }
     return null;
   };
@@ -118,13 +136,13 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
   const exportResults = async () => {
     setExporting(true); setStatus("전체 검색 결과를 모으고 있습니다.");
     try {
-      const coins: CoinScored[] = []; let at: string | undefined;
+      const coins: CoinScored[] = []; let at: string | undefined, publicationId: string | undefined;
       for (let p = 1; ; p++) {
         const response = await fetch(pageUrl(prefs, favorites, p, 100), { cache: "no-store", signal: AbortSignal.timeout(90000) });
         if (!response.ok) throw new Error("내보낼 자료를 가져오지 못했습니다.");
         const next = await response.json() as ScreenerPage;
-        if (at && at !== next.updatedAt) throw new Error("수집 자료가 갱신되었습니다. 다시 내보내 주세요.");
-        at = next.updatedAt; coins.push(...next.coins);
+        if (at && (at !== next.updatedAt || publicationId !== next.publication?.published?.id)) throw new Error("수집 자료가 갱신되었습니다. 다시 내보내 주세요.");
+        at = next.updatedAt; publicationId = next.publication?.published?.id; coins.push(...next.coins);
         if (coins.length >= next.pagination.filtered) break;
       }
       const url = URL.createObjectURL(new Blob([JSON.stringify({ updatedAt: at, preferences: prefs, coins, referenceMultiples: Object.fromEntries(coins.map(c => [c.slug, referenceMultiples(c, prefs.capital)])) })], { type: "application/json" }));
@@ -182,7 +200,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
             if ((event.target as Element).closest("button, a")) return;
             openDetail(c.slug);
           }}>
-            <th scope="row" className="coin-column"><div className="coin-identity"><button className={"favorite-button " + (favorites.has(c.slug) ? "saved" : "")} aria-pressed={favorites.has(c.slug)} aria-label={c.name + " 관심종목 " + (favorites.has(c.slug) ? "해제" : "추가")} onClick={() => toggleFavorite(c.slug)}><Star size={13} fill={favorites.has(c.slug) ? "currentColor" : "none"}/></button><button className="coin-open" ref={el => { if (el) rowButtons.current.set(c.slug, el); else rowButtons.current.delete(c.slug); }} aria-label={c.name + " 상세 보기"} aria-haspopup="dialog" aria-expanded={selectedSlug === c.slug} aria-controls={selectedSlug === c.slug ? `detail-${c.slug}` : undefined} onClick={event => openDetail(c.slug, event.currentTarget)}>{selectedSlug === c.slug ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} {c.logo && <img src={c.logo} alt="" width={32} height={32} loading="lazy"/>}<span><strong>{c.name} <em>{c.symbol}</em></strong><small>{c[prefs.capital] === null ? `${capitalName} 미확인` : `${capitalName} ${fmtUsd(c[prefs.capital])}`}{c.identityStatus !== "verified" && " · 연결 확인"}{!!c.dataQuality?.issues.length && <span className="caution-text"> · 자료 확인</span>}</small></span></button></div></th>
+            <th scope="row" className="coin-column"><div className="coin-identity"><button className={"favorite-button " + (favorites.has(c.slug) ? "saved" : "")} aria-pressed={favorites.has(c.slug)} aria-label={c.name + " 관심종목 " + (favorites.has(c.slug) ? "해제" : "추가")} onClick={() => toggleFavorite(c.slug)}><Star size={13} fill={favorites.has(c.slug) ? "currentColor" : "none"}/></button><button className="coin-open" ref={el => { if (el) rowButtons.current.set(c.slug, el); else rowButtons.current.delete(c.slug); }} aria-label={c.name + " 상세 보기"} aria-haspopup="dialog" aria-expanded={selectedSlug === c.slug} aria-controls={selectedSlug === c.slug ? `detail-${c.slug}` : undefined} onClick={event => openDetail(c.slug, event.currentTarget)}>{selectedSlug === c.slug ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} {c.logo && <img src={c.logo} alt="" width={32} height={32} loading="lazy"/>}<span><strong>{c.name} <em>{c.symbol}</em></strong><small>{c[prefs.capital] === null ? `${capitalName} 미확인` : `${capitalName} ${fmtUsd(c[prefs.capital])}`}{c.identityStatus !== "verified" && " · 연결 확인"}{c.hasIssues && <span className="caution-text"> · 자료 확인</span>}</small></span></button></div></th>
             {selectedCols.map((col, i) => <td key={col.key} className={i === 5 ? "band-start" : ""}><button className="metric-open" tabIndex={-1} aria-label={c.name + " " + col.label + " 계산 근거"} onClick={event => openDetail(c.slug, event.currentTarget)}>{cell(c, col.key)}</button></td>)}
             {(["pr", "phr"] as const).map(metric => <td key={metric} className={"history-cell " + (metric === "pr" ? "history-band-start" : "band-start")}><button className="metric-open history-open" aria-label={c.name + (metric === "pr" ? " P/R" : " P/HR") + " 과거 비교와 상세 보기"} onClick={event => openDetail(c.slug, event.currentTarget)}><span className="comparison-mobile-name" aria-hidden="true">{c.name}</span><ValuationComparisonCell reading={data?.coverage.capital !== prefs.capital ? {status: "loading"} : comparisonReading(data?.valuationComparison, prefs.capital, c.slug, metric)} label={metric === "pr" ? "P/R" : "P/HR"} capitalLabel={capitalName}/></button></td>)}
           </tr>
@@ -194,7 +212,7 @@ export function ScreenerClient({ initialData }: { initialData: ScreenerPage | nu
     <div className="table-legend"><span><b className="source-badge">제공처 집계</b> 제공처 기간 집계 · 완료일 이력과 구분</span><span><b>자료 부족</b> 기간 이력 미확보</span><span><b>미연결</b> 원천 자료 미연결</span></div>
     <div className="scan-footer"><p>원천 참고 배수 · 짧은 기간은 연환산 · 제공처 집계와 원천 1년 금액은 별도 표시<span className="app-version-persistent" aria-label="앱 버전">{`v${APP_VERSION}`}</span></p><Pagination total={total} page={currentPage} size={pageSize} position="top" onPage={goPage} onSize={s => { setPageSize(s); setPage(1); }}/></div>
     <span className="sr-only" role="status" aria-live="polite">{status}</span>
-    {selectedCoin && <CoinDetailDialog key={selectedCoin.slug} coin={selectedCoin} capital={prefs.capital} onClose={() => setSelectedSlug(null)} returnFocus={detailTrigger.current}/>}
+    {selectedCoin && detail && <CoinDetailDialog key={selectedCoin.slug} coin={selectedCoin} capital={prefs.capital} publicationId={detail.publicationId} snapshotUpdatedAt={detail.updatedAt} onRefreshPublication={() => { refresh(); setDetailRetry(value => value + 1); }} onClose={() => setSelectedSlug(null)} returnFocus={detailTrigger.current}/>}
 
     {popup === "filters" && <SettingsDialog title="필터" onClose={() => setPopup(null)} headerAction={<button className="text-button" onClick={resetFilters}><RotateCcw size={15}/>초기화</button>}><div className="sidebar-body filter-settings" aria-label="필터 설정">
       <p className="sidebar-hint">조건은 전체 프로젝트에 적용합니다. 가격 하락만으로 종목을 제외하지 않습니다.</p>

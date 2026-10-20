@@ -1,5 +1,6 @@
 import {expect,it} from "vitest";
-import {mergePublicationResponse,type PublicationRequest,type PublicationResponseState} from "../components/useScreenerPage";
+import {mergePublicationResponse,publicationRefreshNeeded,pageUrl,type PublicationRequest,type PublicationResponseState} from "../components/useScreenerPage";
+import {defaultPreferences} from "./workspacePreferences";
 import type {PublicationJournal} from "./publicationTypes";
 
 function journal(schedule:"legacy"|"four-daily"|"paused",id="data-same"):PublicationJournal {
@@ -10,6 +11,22 @@ function initial():PublicationResponseState {return {publication:journal("legacy
 function begin(state:PublicationResponseState,source:PublicationRequest["source"]):PublicationRequest {
  return {source,sequence:++state.nextRequest,statusVersion:state.statusVersion};
 }
+it("lets the first page finish when status wins the initial race, and refreshes only after an actual publication advance",()=>{
+ let displayed:string|undefined,pending=true,requests=1;
+ if(publicationRefreshNeeded("data-first",displayed,pending))requests++;
+ expect(requests).toBe(1); // the former undefined-data comparison restarted this in-flight request
+ displayed="data-first";pending=false;
+ if(publicationRefreshNeeded("data-first",displayed,pending))requests++;
+ expect(requests).toBe(1);
+ if(publicationRefreshNeeded("data-second",displayed,pending)){requests++;pending=true;}
+ if(publicationRefreshNeeded("data-second",displayed,pending))requests++;
+ expect(requests).toBe(2);
+});
+it("requests explicit table mode for the UI while exports keep the original full endpoint contract",()=>{
+ const prefs=defaultPreferences(),favorites=new Set(["parent#alpha"]),full=new URL(pageUrl(prefs,favorites,2,100),"https://test"),table=new URL(pageUrl(prefs,favorites,2,100,"table"),"https://test");
+ expect(full.searchParams.has("view")).toBe(false);expect(table.searchParams.get("view")).toBe("table");expect(table.searchParams.get("favorites")).toBe("parent#alpha");
+ for(const key of ["prefs","favorites","page","size"])expect(table.searchParams.get(key)).toBe(full.searchParams.get(key));
+});
 it("manual data refresh on the same publication ID immediately follows legacy ->four-daily ->paused live mode",()=>{
  let state=initial(),id=state.publication!.published!.id;
  for(const schedule of ["four-daily","paused"] as const) {

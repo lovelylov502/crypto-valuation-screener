@@ -11,7 +11,7 @@ const date = (time: number) => new Date(time).toISOString().slice(0, 10);
 const validDate = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
   && Number.isFinite(Date.parse(value)) && date(Date.parse(value)) === value;
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
-const validPoint = (point: unknown): point is DetailHistoryPoint => record(point)
+export const isDetailHistoryPoint = (point: unknown): point is DetailHistoryPoint => record(point)
   && ["price", "mcap", "fdv", "fees", "revenue", "holders"].every(metric => {
     const cell = point[metric];
     return record(cell) && ["missing", "positive", "zero", "negative", "partial", "conflict"].includes(String(cell.state)) && typeof cell.source === "string"
@@ -64,7 +64,7 @@ export async function loadDetailHistory(options: {
     if (result.schema !== 2 || result.capital !== capital || result.revenueDays !== 1 || !validDate(result.asOf) || result.asOf >= date(Date.now()) || typeof result.rawRevision !== "string" || !result.rawRevision
       || !Array.isArray(result.points)
       || !Array.isArray(result.sources) || result.points.length > HISTORY_PAGE_LIMIT
-      || result.points.some((point, index) => !validPoint(point) || !validDate(point.day) || point.day < bounds.from || point.day > result.asOf || point.day > bounds.to
+      || result.points.some((point, index) => !isDetailHistoryPoint(point) || !validDate(point.day) || point.day < bounds.from || point.day > result.asOf || point.day > bounds.to
         || !!after && point.day <= after || index > 0 && point.day <= result.points[index - 1].day)
       || result.nextCursor !== null && !validDate(result.nextCursor)) throw new DetailHistoryError(502, "이력 응답을 확인할 수 없습니다.");
     data ??= result;

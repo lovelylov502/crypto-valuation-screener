@@ -5,7 +5,7 @@ import type { ScreenerResponse } from "@/lib/types";
 import { fmtKstMinute } from "@/lib/format";
 import { BRAND } from "@/lib/brand";
 
-export function DataGuide({ onClose, data, checkedAt }: { onClose: () => void; data: ScreenerResponse | null; checkedAt: string | null }) {
+export function DataGuide({ onClose, data, checkedAt }: { onClose: () => void; data: Pick<ScreenerResponse, "collection" | "sources"> | null; checkedAt: string | null }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { const previous = document.activeElement as HTMLElement | null; dialog.current?.showModal(); return () => previous?.focus({ preventScroll: true }); }, []);
   return <dialog ref={dialog} className="guide-dialog" aria-labelledby="guide-title" onCancel={onClose} onClick={e => { if (e.target === e.currentTarget) onClose(); }}><div><header className="detail-header"><h2 id="guide-title">어떤 숫자를 비교하나요?</h2><button className="icon-button" aria-label="데이터 안내 닫기" onClick={onClose}><X size={18}/></button></header>

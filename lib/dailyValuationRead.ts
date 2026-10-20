@@ -145,6 +145,13 @@ export async function readDailyValuationHistory(db: Client, options: {
   coin: DailyValuationCoin; snapshot: DailyValuationSnapshot; capital: CapitalBasis;
   from?: string; to?: string; after?: string; limit?: number; expectedIdentity?: string; expectedRevision?: string; now?: Date;
 }): Promise<DailyValuationHistory | null> {
+  return readHistory(db, options, false);
+}
+/** Bounded internal full-range read for preparing/serving the compact representation. */
+export function readDailyValuationHistoryFull(db: Client, options: Omit<Parameters<typeof readDailyValuationHistory>[1], "after" | "limit">) {
+  return readHistory(db, options, true);
+}
+async function readHistory(db: Client, options: Parameters<typeof readDailyValuationHistory>[1], full: boolean): Promise<DailyValuationHistory | null> {
   const { coin, snapshot, capital } = options, now = options.now ?? new Date(); assertCapital(capital);
   const identity = historyIdentity(coin);
   if (options.expectedIdentity && options.expectedIdentity !== identity) throw new DailyValuationIdentityChanged();
@@ -179,7 +186,7 @@ export async function readDailyValuationHistory(db: Client, options: {
   }
   if (options.expectedRevision && options.expectedRevision !== entry.revision) throw new DailyValuationRevisionChanged();
   if (!entry.found) return null;
-  const available = entry.points.filter(point => !options.after || point.day > options.after), points = available.slice(0, limit);
+  const available = entry.points.filter(point => !options.after || point.day > options.after), points = available.slice(0, full ? DAILY_HISTORY_MAX_POINTS : limit);
   const sourceKeys = new Set(points.flatMap(point => DAILY_RAW_METRICS.map(metric => point[metric].source)));
-  return { schema: 2, calculationVersion: DAILY_VALUATION_VERSION, asset: { slug: coin.slug, identity, snapshotId: snapshot.publication?.published?.id ?? snapshot.updatedAt }, capital, revenueDays: 1, asOf: period.asOf, rawRevision: entry.revision, freshness: period.freshness, convention: "Capital(D) / (daily flow(D) * 365); same UTC date; completed days; no carry-forward", points: structuredClone(points), sources: structuredClone(entry.sources.filter(item => sourceKeys.has(item.key))), nextCursor: available.length > limit ? points.at(-1)!.day : null };
+  return { schema: 2, calculationVersion: DAILY_VALUATION_VERSION, asset: { slug: coin.slug, identity, snapshotId: snapshot.publication?.published?.id ?? snapshot.updatedAt }, capital, revenueDays: 1, asOf: period.asOf, rawRevision: entry.revision, freshness: period.freshness, convention: "Capital(D) / (daily flow(D) * 365); same UTC date; completed days; no carry-forward", points: structuredClone(points), sources: structuredClone(entry.sources.filter(item => sourceKeys.has(item.key))), nextCursor: !full && available.length > limit ? points.at(-1)!.day : null };
 }

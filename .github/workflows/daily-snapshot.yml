@@ -129,3 +129,53 @@ jobs:
           path: snapshot-output/
           retention-days: 60
           if-no-files-found: warn
+
+  prepare-table:
+    needs: capture
+    if: needs.capture.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --no-audit --no-fund
+      - name: Prepare bounded table reads from the verified publication
+        run: npx tsx scripts/prepare-table-read-model.ts --apply --max-estimated-writes 50000 --minimum-reserve 500000
+
+  prepare-history:
+    needs: capture
+    if: needs.capture.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    concurrency:
+      group: daily-history-model-preparation
+      cancel-in-progress: false
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --no-audit --no-fund
+      - name: Refresh complete-history models for the latest verified completion date
+        run: npx tsx scripts/prepare-daily-history.ts --cache "$RUNNER_TEMP/daily-history-model" --run-id "history-model-${{ github.run_id }}-${{ github.run_attempt }}" --time-budget-seconds 900 --max-estimated-writes 50000 --workers 4 --apply
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: snapshot-history-model-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/daily-history-model/daily-history-model-report.json
+          retention-days: 30
+          if-no-files-found: warn

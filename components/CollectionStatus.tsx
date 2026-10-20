@@ -13,7 +13,7 @@ const count = (value: number | undefined) => typeof value === "number" && Number
 const time = (value: string | null | undefined) => value && Number.isFinite(Date.parse(value)) ? fmtKstMinute(value) : "미확인";
 
 export function CollectionStatus({ data, publication, error, refreshing, checkedAt, onRefresh }: {
-  data: ScreenerResponse | null; error: string; refreshing: boolean; checkedAt: string | null; onRefresh: () => void;
+  data: (Omit<ScreenerResponse, "coins"> & { coverage?: ScreenerPage["coverage"] }) | null; error: string; refreshing: boolean; checkedAt: string | null; onRefresh: () => void;
   publication?: PublicationJournal;
 }) {
   const [open, setOpen] = useState(false);
@@ -28,7 +28,7 @@ export function CollectionStatus({ data, publication, error, refreshing, checked
   const p = publication ?? data?.publication;
   const recovery=health.recovery;
   const economic=p?.publicEconomicReview??data?.economicReview;
-  const coverage=(data as ScreenerPage|null)?.coverage;
+  const coverage=data?.coverage;
   const Icon = health.state === "healthy" ? CheckCircle2 : health.state === "checking" ? LoaderCircle
     : health.state === "stale" ? Clock3 : health.state === "unknown" ? CircleHelp : AlertTriangle;
   const groups = [...new Set(health.failures.map(s => sourceProvider(s.url)))].map(provider => {

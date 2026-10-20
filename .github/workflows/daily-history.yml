@@ -148,3 +148,35 @@ jobs:
           path: ${{ runner.temp }}/daily-raw-cache/*report.json
           retention-days: 30
           if-no-files-found: ignore
+
+  prepare-history:
+    needs: sync
+    if: needs.sync.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    concurrency:
+      group: daily-history-model-preparation
+      cancel-in-progress: false
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --no-audit --no-fund
+      - name: Prepare current history after the durable raw queue is published
+        run: npx tsx scripts/prepare-daily-history.ts --cache "$RUNNER_TEMP/daily-history-model-cache" --run-id "daily-history-model-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 900 --workers 4 --apply
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: daily-history-model-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/daily-history-model-cache/daily-history-model-report.json
+          retention-days: 30
+          if-no-files-found: ignore

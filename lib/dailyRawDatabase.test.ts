@@ -161,9 +161,9 @@ it("retains a partial daily total and records its later complete source", async 
 it("counts rows in one bulk INSERT, not the SQL statement count", async () => {
   const before = await budget();
   const result = await write([1, 2, 3, 4, 5].map(day => ({ day: `2020-01-0${day}`, revenue: observed(day) })));
-  // Three indexed metadata rows count twice; five day rows and four bookkeeping/safety credits count once.
-  expect(result).toMatchObject({ rowsWritten: 9, daysWritten: 5, estimatedWrites: 15 });
-  expect(await budget() - before).toBe(15);
+  // Three indexed metadata rows count twice; five days, one asset revision and four bookkeeping/safety credits count once.
+  expect(result).toMatchObject({ rowsWritten: 10, daysWritten: 5, estimatedWrites: 16 });
+  expect(await budget() - before).toBe(16);
 });
 
 it("counts deduplicated receipts and every row from a batched source import", async () => {
@@ -171,7 +171,7 @@ it("counts deduplicated receipts and every row from a batched source import", as
   const result = await write(sources.map((receipt, i) => ({ day: new Date(Date.UTC(2020, 0, 1 + i)).toISOString().slice(0, 10), revenue: observed(i, receipt.key) })), sources);
   expect((await db.execute("SELECT COUNT(*) AS n FROM daily_raw_receipts")).rows[0].n).toBe(1);
   expect((await db.execute("SELECT COUNT(*) AS n FROM daily_raw_sources")).rows[0].n).toBe(100);
-  expect(result).toMatchObject({ rowsWritten: 203, daysWritten: 100, estimatedWrites: 308 });
+  expect(result).toMatchObject({ rowsWritten: 204, daysWritten: 100, estimatedWrites: 309 });
 });
 
 it("keeps old run reservations and accounting unchanged when resuming after the weighted migration", async () => {
@@ -187,8 +187,8 @@ it("keeps old run reservations and accounting unchanged when resuming after the 
     expect(await openDailyRawRun(legacy, { id: "legacy", maxEstimatedWrites: 1_000, now })).toMatchObject({ estimatedWrites: 8, rowsWritten: 2, accountingVersion: "raw-double-v1" });
     expect((await legacy.execute("SELECT reserved FROM history_budget")).rows[0].reserved).toBe(1234);
     const result = await upsertDailyRaw(legacy, { runId: "legacy", asset, sources: [source("revenue")], points: [1, 2, 3, 4, 5].map(day => ({ day: `2020-01-0${day}`, revenue: observed(day) })), now });
-    expect(result).toMatchObject({ rowsWritten: 9, estimatedWrites: 22 });
-    expect((await getDailyRawRun(legacy, "legacy"))?.estimatedWrites).toBe(30);
+    expect(result).toMatchObject({ rowsWritten: 10, estimatedWrites: 24 });
+    expect((await getDailyRawRun(legacy, "legacy"))?.estimatedWrites).toBe(32);
     expect((await openDailyRawRun(legacy, { id: "weighted", maxEstimatedWrites: 1_000, now })).accountingVersion).toBe(DAILY_RAW_ACCOUNTING_VERSION);
     await expect(legacy.execute("UPDATE daily_raw_runs SET accounting_version='raw-double-v1' WHERE id='weighted'")).rejects.toThrow("immutable");
   } finally { legacy.close(); }
@@ -204,15 +204,29 @@ it("bounds weighted conflict witnesses before writes and counts their indexed au
   expect((await db.execute("SELECT COUNT(*) AS n FROM daily_raw_sources")).rows[0].n).toBe(0);
   const result = await write(points, sources);
   // asset + three receipts + three sources + two audit rows are nine indexed rows.
-  expect(result).toMatchObject({ rowsWritten: 11, daysWritten: 1, estimatedWrites: 23 });
+  expect(result).toMatchObject({ rowsWritten: 12, daysWritten: 1, estimatedWrites: 24 });
   expect(required).toBeGreaterThanOrEqual(result.estimatedWrites);
   expect((await auditDailyRawReferences(db)).ok).toBe(true);
+});
+
+it("tracks one charged asset revision per changed batch, preserving replays, checkpoints and failed preflights", async () => {
+  const points = [{ day: "2020-01-01", revenue: observed(3) }];
+  await write(points);
+  const revision = async () => Number((await db.execute("SELECT revision FROM daily_raw_asset_revisions")).rows[0].revision);
+  expect(await revision()).toBe(1);
+  await write(points); await write([], [], { checkpoint: { key: "only-checkpoint", cursor: "complete" } });
+  expect(await revision()).toBe(1);
+  await write([{ day: "2020-01-02", revenue: observed(5) }, { day: "2020-01-03", revenue: observed(7) }]);
+  expect(await revision()).toBe(2);
+  await db.execute({ sql: "UPDATE history_budget SET reserved=? WHERE month='2026-10'", args: [HISTORY_WRITE_LIMIT - 1] });
+  await expect(write([{ day: "2020-01-04", revenue: observed(9) }])).rejects.toBeInstanceOf(HistoryBudgetExceeded);
+  expect(await revision()).toBe(2); expect((await readDailyRaw(db, { asset }))?.points).toHaveLength(3);
 });
 
 it("rolls back source references, daily rows and checkpoints if the shared monthly budget is exceeded", async () => {
   await db.execute({ sql: "UPDATE history_budget SET reserved=? WHERE month='2026-10'", args: [HISTORY_WRITE_LIMIT - 1] });
   await expect(write([{ day: "2020-01-01", revenue: observed(3) }], undefined, { checkpoint: { key: "a", cursor: "2020-01-01" } })).rejects.toBeInstanceOf(HistoryBudgetExceeded);
-  for (const table of ["daily_raw_assets", "daily_raw_sources", "daily_raw_receipts", "daily_raw_days", "daily_raw_checkpoints"]) expect((await db.execute(`SELECT COUNT(*) AS n FROM ${table}`)).rows[0].n).toBe(0);
+  for (const table of ["daily_raw_assets", "daily_raw_sources", "daily_raw_receipts", "daily_raw_days", "daily_raw_checkpoints", "daily_raw_asset_revisions"]) expect((await db.execute(`SELECT COUNT(*) AS n FROM ${table}`)).rows[0].n).toBe(0);
   expect(await budget()).toBe(HISTORY_WRITE_LIMIT - 1);
   expect((await db.execute("SELECT estimated_writes FROM daily_raw_runs")).rows[0].estimated_writes).toBe(5);
 });
