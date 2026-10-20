@@ -73,7 +73,8 @@ export function calculateDailyValuation(options: {
 export function dailyComparisonMetric(points: DailyValuationHistoryPoint[], metric: "pr" | "phr", asOf: string, stale: boolean): ValuationComparisonMetric {
   const byDay = new Map(points.map(point => [point.day, point])), latest = byDay.get(asOf)?.[metric];
   const from = shiftValuationDay(asOf, -365), baseline = [...byDay.values()].filter(point => point.day >= from && point.day < asOf);
-  const valid = baseline.map(point => point[metric]).filter(ratio => ratio.value !== null && ratio.reason === null);
+  const usable = (ratio: DailyValuationRatio) => ratio.value !== null && Number.isFinite(ratio.value) && ratio.value > 0 && ratio.reason === null;
+  const valid = baseline.map(point => point[metric]).filter(usable);
   const definitions = new Set(valid.map(ratio => ratio.financialDefinition));
   if (latest?.financialDefinition) definitions.add(latest.financialDefinition);
   const validDays = definitions.size > 1 ? valid.filter(ratio => ratio.financialDefinition === latest?.financialDefinition).length : valid.length;
@@ -81,12 +82,13 @@ export function dailyComparisonMetric(points: DailyValuationHistoryPoint[], metr
   if (stale) return unavailable("stale_data");
   if (definitions.size > 1 || baseline.some(point => point[metric].reason === "invalid_definition")) return unavailable("definition_changed");
   if (!latest) return unavailable("not_collected");
-  if (latest.value === null) {
+  if (!usable(latest)) {
     const reason = latest.reason;
     return unavailable(reason === "invalid_definition" ? "definition_changed" : reason === "non_positive_revenue" ? reason
       : reason?.includes("capital") || reason === "ineligible_asset" ? "missing_capital" : "missing_revenue");
   }
-  if (validDays !== 365) return { status: "insufficient", validDays, latest: { date: asOf, value: latest.value } };
+  if (!validDays) return { status: "insufficient", validDays, latest: { date: asOf, value: latest.value! } };
   const values = valid.map(ratio => ratio.value!).sort((a, b) => a - b);
-  return { status: "ready", validDays, latest: { date: asOf, value: latest.value }, minimum: values[0], median: values[182], maximum: values[364] };
+  const middle = Math.floor(values.length / 2), median = values.length % 2 ? values[middle] : values[middle - 1] + (values[middle] - values[middle - 1]) / 2;
+  return { status: "ready", validDays, latest: { date: asOf, value: latest.value! }, minimum: values[0], median, maximum: values.at(-1)! };
 }

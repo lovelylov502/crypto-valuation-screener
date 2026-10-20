@@ -13,6 +13,10 @@ describe("daily valuation comparison boundary", () => {
     expect(read(page())).toEqual(ready);
     expect(read(page(), "phr")).toEqual({ status: "unavailable", validDays: 300, reason: "non_positive_revenue" });
   });
+  it.each([1, 2, 8, 364, 365])("accepts a ready distribution with %i available prior dates and its actual statistics", validDays => {
+    const metric = { ...ready, validDays, ...(validDays === 1 ? { minimum: 4, median: 4, maximum: 4 } : validDays === 2 ? { minimum: 3, median: 16.5, maximum: 30 } : {}) };
+    expect(read(withMetric(metric))).toEqual(metric);
+  });
   it("distinguishes an unconnected API, missing rows, short coverage and zero revenue", () => {
     expect(read(undefined)).toEqual({ status: "unconnected" });
     expect(read({ ...page(), rows: {} })).toEqual({ status: "invalid" });
@@ -36,7 +40,8 @@ describe("daily valuation comparison boundary", () => {
   it("rejects corrupt coverage, ranges and amounts rather than drawing a misleading signal", () => {
     for (const metric of [
       { ...ready, validDays: 366 }, { ...ready, validDays: 0 }, { ...ready, validDays: 22.5 },
-      { ...ready, validDays: 364 },
+      { ...ready, validDays: -1 }, { ...ready, validDays: NaN }, { ...ready, validDays: Infinity },
+      { ...ready, validDays: 1 }, { ...ready, validDays: 2 },
       { ...ready, minimum: 16 }, { ...ready, maximum: 14 }, { ...ready, median: NaN },
       { ...ready, minimum: -1 }, { ...ready, maximum: Infinity },
       { ...ready, latest: { date: page().asOf, value: "5" } },

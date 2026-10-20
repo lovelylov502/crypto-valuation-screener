@@ -9,12 +9,13 @@ import { canonicalReadModelJSON, readModelMetadata, readModelRow, writeDailyRead
 import { compactDailyHistory, type CompactHistoryData, type CompactHistoryEnvelope, type DailyHistoryVersion } from "./dailyValuationCompact";
 import { calculateDailyValuation, dailyComparisonMetric, dailyValuationAsOf, DAILY_VALUATION_VERSION } from "./dailyValuation";
 import { connectDailyValuationReader, DAILY_COMPARISON_TIMEOUT_MS, DailyValuationIdentityChanged, DailyValuationRevisionChanged, readDailyValuationHistoryFull, type DailyValuationCoin, type DailyValuationSnapshot } from "./dailyValuationRead";
-import { comparisonReading, type ComparisonUnavailableReason, type ValuationComparisonMetric, type ValuationComparisonPage } from "./valuationComparison";
+import { comparisonReading, DAILY_COMPARISON_POLICY_VERSION, type ComparisonUnavailableReason, type ValuationComparisonMetric, type ValuationComparisonPage } from "./valuationComparison";
 import type { CapitalBasis } from "./valuationMetrics";
 
 export const DAILY_HISTORY_MODEL_NAMESPACE = "daily-history-v1";
 interface HistoryMetadata {
   schema: 1; calculationVersion: string; assetId: number; slug: string; identity: string; assetRevision: number; asOf: string; eligible: boolean; rawRevision: string; points: number;
+  comparisonPolicyVersion: string;
   summaries: Record<CapitalBasis, { pr: ValuationComparisonMetric; phr: ValuationComparisonMetric }>;
 }
 const convention = "Capital(D) / (daily flow(D) * 365); same UTC date; completed days; no carry-forward";
@@ -31,7 +32,7 @@ function metadata(row: Row, coin: DailyValuationCoin, asOf: string): HistoryMeta
     && value.assetId === Number(row.asset_id) && value.assetRevision === Number(row.asset_revision) && value.asOf === asOf && value.eligible === eligibleCapital(coin)
     && value.rawRevision === stamp(coin, Number(row.asset_revision), asOf) && row.model_revision === value.rawRevision ? value : null;
 }
-export const dailyHistoryModelCurrent = (row: Row, coin: DailyValuationCoin, asOf: string) => metadata(row, coin, asOf) !== null;
+export const dailyHistoryModelCurrent = (row: Row, coin: DailyValuationCoin, asOf: string) => metadata(row, coin, asOf)?.comparisonPolicyVersion === DAILY_COMPARISON_POLICY_VERSION;
 async function state(db: Client, coin: DailyValuationCoin, payload = false) {
   const result = await historyRead(db, { sql: `SELECT a.id asset_id,COALESCE(r.revision,0) asset_revision,m.revision model_revision,m.model_key,m.sha256,m.metadata,m.metadata_sha256,m.built_at${payload ? ",m.payload" : ""} FROM daily_raw_assets a LEFT JOIN daily_raw_asset_revisions r ON r.asset_id=a.id LEFT JOIN daily_read_models m ON m.namespace=? AND m.model_key=CAST(a.id AS TEXT) WHERE a.slug=? AND a.identity=?`, args: [DAILY_HISTORY_MODEL_NAMESPACE, coin.slug, historyIdentity(coin)] });
   return result.rows[0];
@@ -49,13 +50,13 @@ export async function prepareDailyValuationHistory(db: Client, options: {
   }
   if (!current || coin.identityStatus !== "verified") return { status: "absent" as const, changed: false, estimatedWrites: 0, compressedBytes: 0, points: 0 };
   const prior = metadata(current, coin, asOf);
-  if (prior) return { status: "current" as const, changed: false, estimatedWrites: 0, compressedBytes: 0, points: prior.points };
+  if (prior?.comparisonPolicyVersion === DAILY_COMPARISON_POLICY_VERSION) return { status: "current" as const, changed: false, estimatedWrites: 0, compressedBytes: 0, points: prior.points };
   const fdv = await readDailyValuationHistoryFull(db, { coin, snapshot, capital: "fdv", from: "1900-01-01", to: asOf, now });
   if (!fdv) return { status: "absent" as const, changed: false, estimatedWrites: 0, compressedBytes: 0, points: 0 };
   const sources = new Map(fdv.sources.map(source => [source.key, source]));
   const mcap = fdv.points.map(point => calculateDailyValuation({ point, sources, capital: "mcap", eligible: eligibleCapital(coin), completedThrough: asOf }));
   const data = compactDailyHistory(fdv.points, mcap, fdv.sources), rawRevision = stamp(coin, Number(current.asset_revision), asOf);
-  const model: HistoryMetadata = { schema: 1, calculationVersion: DAILY_VALUATION_VERSION, assetId: Number(current.asset_id), slug: coin.slug, identity: historyIdentity(coin), assetRevision: Number(current.asset_revision), asOf, eligible: eligibleCapital(coin), rawRevision, points: data.points.length,
+  const model: HistoryMetadata = { schema: 1, calculationVersion: DAILY_VALUATION_VERSION, comparisonPolicyVersion: DAILY_COMPARISON_POLICY_VERSION, assetId: Number(current.asset_id), slug: coin.slug, identity: historyIdentity(coin), assetRevision: Number(current.asset_revision), asOf, eligible: eligibleCapital(coin), rawRevision, points: data.points.length,
     summaries: { fdv: { pr: dailyComparisonMetric(fdv.points, "pr", asOf, false), phr: dailyComparisonMetric(fdv.points, "phr", asOf, false) }, mcap: { pr: dailyComparisonMetric(mcap, "pr", asOf, false), phr: dailyComparisonMetric(mcap, "phr", asOf, false) } } };
   if (options.dryRun) return { status: "dry-run" as const, changed: false, estimatedWrites: 5, compressedBytes: gzipSync(canonicalReadModelJSON(data), { level: 9 }).byteLength, points: data.points.length };
   const result = await (options.publish ?? (candidate => writeDailyReadModel(db, candidate)))({ runId: options.runId, minimumReserve: options.minimumReserve, now, namespace: DAILY_HISTORY_MODEL_NAMESPACE, key: String(current.asset_id), revision: rawRevision, json: data, metadata: model, expectedRaw: { assetId: Number(current.asset_id), revision: Number(current.asset_revision) } });
@@ -119,7 +120,7 @@ export async function readPreparedDailyComparisonBatch(options: { coins: DailyVa
         if (!eligibleCapital(coin) || coin.identityStatus !== "verified") { rows[coin.slug] = unavailable("missing_capital"); continue; }
         if (!row) { rows[coin.slug] = unavailable(result.length ? "not_collected" : "not_prepared"); continue; }
         const model = metadata(row, coin, period.asOf);
-        if (!model) { rows[coin.slug] = unavailable("not_prepared"); continue; }
+        if (!model || model.comparisonPolicyVersion !== DAILY_COMPARISON_POLICY_VERSION) { rows[coin.slug] = unavailable("not_prepared"); continue; }
         const value = structuredClone(model.summaries[capital]);
         if (period.freshness.status === "stale") for (const metric of ["pr", "phr"] as const) value[metric] = { status: "unavailable", validDays: value[metric].validDays, reason: "stale_data" };
         rows[coin.slug] = value;

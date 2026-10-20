@@ -1,5 +1,7 @@
 import type { CapitalBasis } from "./valuationMetrics";
 
+export const DAILY_COMPARISON_POLICY_VERSION = "available-prior-daily-ratios-v1";
+
 /** Page-level read model; never persisted into the source screener snapshot. */
 export interface ValuationComparisonPage {
   schema: 1;
@@ -44,8 +46,10 @@ export function comparisonReading(value: unknown, capital: CapitalBasis, slug: s
   }
   if (m.status === "unavailable" && reasons.includes(m.reason as ComparisonUnavailableReason)) return m as ValuationComparisonMetric;
   if (Math.floor(now / day) * day - day - Date.parse(value.asOf) > day) return { status: "invalid" };
-  if (m.status !== "ready" || m.validDays !== 365 || !record(m.latest) || m.latest.date !== value.asOf || !positive(m.latest.value)
-    || !positive(m.minimum) || !positive(m.median) || !positive(m.maximum) || m.minimum > m.median || m.median > m.maximum) return { status: "invalid" };
+  if (m.status !== "ready" || (m.validDays as number) < 1 || !record(m.latest) || m.latest.date !== value.asOf || !positive(m.latest.value)
+    || !positive(m.minimum) || !positive(m.median) || !positive(m.maximum) || m.minimum > m.median || m.median > m.maximum
+    || m.validDays === 1 && (m.minimum !== m.median || m.median !== m.maximum)
+    || m.validDays === 2 && m.median !== m.minimum + (m.maximum - m.minimum) / 2) return { status: "invalid" };
   return m as ValuationComparisonMetric;
 }
 

@@ -191,7 +191,7 @@ export function ScreenerClient({ initialData }: { initialData: TablePage | null 
           <tr className="calculation-headings">
             <th className="coin-column" rowSpan={3} scope="col" aria-sort={prefs.sortKey === "name" ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort("name")}>종목 · {capitalName}{sortIcon("name")}</button></th>
             <th colSpan={10} scope="colgroup"><strong>현재 배수 · 기간별 수익 기준</strong><span>최신 {capitalName} ÷ 해당 기간 수익의 연환산액</span><small>아래 기간은 수익 집계 기간입니다.</small></th>
-            <th colSpan={2} scope="colgroup" className="history-band-start"><strong>과거 비교 · 하루 수익 기준</strong><span>해당 날짜 {capitalName} ÷ (그날 24시간 수익 × 365)</span><span className="comparison-key"><i>비교 범위: 이전 365일</i><i className="comparison-blue">파란선: 중앙값보다 낮음</i><i className="comparison-red">붉은선: 높음</i></span></th>
+            <th colSpan={2} scope="colgroup" className="history-band-start"><strong>과거 비교 · 하루 수익 기준</strong><span>해당 날짜 {capitalName} ÷ (그날 24시간 수익 × 365)</span><span className="comparison-key"><i>비교 범위: 이전 365일 중 계산 가능한 날짜</i><i className="comparison-blue">파란선: 중앙값보다 낮음</i><i className="comparison-red">붉은선: 높음</i></span></th>
           </tr>
           <tr><th colSpan={5} scope="colgroup" className="band-heading">P/R · Revenue</th><th colSpan={5} scope="colgroup" className="band-heading">P/HR · Holders Revenue</th><th rowSpan={2} scope="col" className="band-heading history-band-start">P/R 과거 비교</th><th rowSpan={2} scope="col" className="band-heading">P/HR 과거 비교</th></tr>
           <tr>{selectedCols.map((col, i) => <th key={col.key} className={(i === 5 ? "band-start " : "") + (prefs.sortKey === col.key ? "active-sort" : "")} scope="col" title={col.title} aria-sort={prefs.sortKey === col.key ? prefs.sortDir === "asc" ? "ascending" : "descending" : "none"}><button onClick={() => onSort(col.key)} aria-label={col.label + " 정렬"}>{windowLabel(METRIC_COLUMN_DAYS[col.key]!)}{sortIcon(col.key)}</button></th>)}</tr>
@@ -208,7 +208,7 @@ export function ScreenerClient({ initialData }: { initialData: TablePage | null 
       </table>
     </div>
     {!rows.length && <div className="empty-state"><Search size={26}/><h3>{!data ? "자료를 준비하고 있습니다" : prefs.view === "favorites" && !favorites.size ? "별표로 관심종목을 모아 보세요" : "조건에 맞는 종목이 없습니다"}</h3><p>{!data ? "공개 자료 응답을 기다립니다." : "검색어 또는 필터 조건을 조절하세요."}</p><button className="button" onClick={!data ? refresh : resetFilters}>{!data ? "다시 확인" : "조건 초기화"}</button></div>}
-    <div className="comparison-method"><p><strong>현재 배수</strong> 24시간·7일·30일·90일 수익은 연환산, 1년은 원천 수익 합계 기준입니다.</p><p><strong>과거 비교</strong> 이전 365일의 일별 배수를 비교합니다. 매일 그날의 가치와 24시간 수익으로 계산하며, 최신 시세와 관측 시점이 다를 수 있습니다.</p></div>
+    <div className="comparison-method"><p><strong>현재 배수</strong> 24시간·7일·30일·90일 수익은 연환산, 1년은 원천 수익 합계 기준입니다.</p><p><strong>과거 비교</strong> 이전 365일 중 배수를 계산할 수 있는 날짜만 비교하고, 사용한 일수를 표시합니다. 매일 그날의 가치와 24시간 수익으로 계산하며, 최신 시세와 관측 시점이 다를 수 있습니다.</p></div>
     <div className="table-legend"><span><b className="source-badge">제공처 집계</b> 제공처 기간 집계 · 완료일 이력과 구분</span><span><b>자료 부족</b> 기간 이력 미확보</span><span><b>미연결</b> 원천 자료 미연결</span></div>
     <div className="scan-footer"><p>원천 참고 배수 · 짧은 기간은 연환산 · 제공처 집계와 원천 1년 금액은 별도 표시<span className="app-version-persistent" aria-label="앱 버전">{`v${APP_VERSION}`}</span></p><Pagination total={total} page={currentPage} size={pageSize} position="top" onPage={goPage} onSize={s => { setPageSize(s); setPage(1); }}/></div>
     <span className="sr-only" role="status" aria-live="polite">{status}</span>

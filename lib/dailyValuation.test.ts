@@ -69,9 +69,36 @@ it("derives asOf from captured UTC day minus one, bounds future capture, and per
 it("takes min/median/max of all 365 distinct prior daily ratios, excluding the current point", () => {
   const values = year(); values.at(-1)!.pr.value = 99_999;
   expect(dailyComparisonMetric([...values, values[0]], "pr", asOf, false)).toEqual({ status: "ready", validDays: 365, latest: { date: asOf, value: 99_999 }, minimum: 1, median: 183, maximum: 365 });
-  expect(dailyComparisonMetric(values.slice(1), "pr", asOf, false)).toEqual({ status: "insufficient", validDays: 364, latest: { date: asOf, value: 99_999 } });
+  expect(dailyComparisonMetric(values.slice(1), "pr", asOf, false)).toEqual({ status: "ready", validDays: 364, latest: { date: asOf, value: 99_999 }, minimum: 2, median: 183.5, maximum: 365 });
   expect(dailyComparisonMetric(values.slice(0, -1), "pr", asOf, false)).toEqual({ status: "unavailable", validDays: 365, reason: "not_collected" });
   expect(dailyComparisonMetric(values, "pr", asOf, true)).toEqual({ status: "unavailable", validDays: 365, reason: "stale_data" });
+});
+
+it("uses distinct available dates inside the prior 365 days, preserving holes and excluding invalid cells and latest from even statistics", () => {
+  const prior = (offset: number, value: number) => calculate(point(shiftValuationDay(asOf, offset), value * 365, 1));
+  const values = [prior(-366, 0.1), prior(-365, 8), prior(-100, 6), prior(-10, 2), prior(-1, 4), prior(-1, 4), prior(0, 99_999)];
+  for (const [index, state] of (["zero", "negative", "missing", "partial", "conflict"] as const).entries()) {
+    const raw = point(shiftValuationDay(asOf, -200 + index)); raw.revenue = { ...raw.revenue, state, value: state === "zero" ? 0 : state === "negative" ? -1 : state === "missing" || state === "conflict" ? null : 100 };
+    values.push(calculate(raw));
+  }
+  const before = structuredClone(values);
+  expect(dailyComparisonMetric(values, "pr", asOf, false)).toEqual({ status: "ready", validDays: 4, latest: { date: asOf, value: 99_999 }, minimum: 2, median: 5, maximum: 8 });
+  expect(values).toEqual(before);
+});
+
+it("uses the middle available observation for odd coverage and a flat range for one valid prior date", () => {
+  const prior = (offset: number, value: number) => calculate(point(shiftValuationDay(asOf, offset), value * 365, 1));
+  const latest = prior(0, 10), only = prior(-30, 4);
+  expect(dailyComparisonMetric([only, only, latest], "pr", asOf, false)).toEqual({ status: "ready", validDays: 1, latest: { date: asOf, value: 10 }, minimum: 4, median: 4, maximum: 4 });
+  expect(dailyComparisonMetric([prior(-300, 8), prior(-100, 2), only, latest], "pr", asOf, false)).toEqual({ status: "ready", validDays: 3, latest: { date: asOf, value: 10 }, minimum: 2, median: 4, maximum: 8 });
+});
+
+it("never counts a nonfinite, zero or negative ratio as an available comparison day", () => {
+  const latest = calculate(point());
+  const invalid = [NaN, Infinity, 0, -1].map((value, index) => {
+    const result = calculate(point(shiftValuationDay(asOf, -index - 1))); result.pr.value = value; return result;
+  });
+  expect(dailyComparisonMetric([...invalid, latest], "pr", asOf, false)).toEqual({ status: "insufficient", validDays: 0, latest: { date: asOf, value: 1 } });
 });
 
 it("retains a valid same-day latest ratio with no prior year but never substitutes an older, zero or missing latest value", () => {

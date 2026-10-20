@@ -2,6 +2,27 @@
 
 final result: passed
 
+## Available-day historical comparison bars — 2026-10-20 / v0.6.2
+
+Scope: apply the user's confirmed bar mockup to actual DB comparisons with 1–365 available prior daily ratios. Every ready bar shows the number of distinct dates used. Missing dates remain absent. The older 365-day readiness requirement in the historical QA records below is superseded by this section.
+
+Source: `C:/Users/TAE/.codex/generated_images/01a151cf-16bb-7f53-af8d-481d6145e64b/exec-f76647ce-9aa1-4257-923f-1b065bde42ce.png` (1660 × 948).
+Evidence: `C:/Users/TAE/.codex/tmp/available-bars-20261020` (outside Git). `reference-implementation-context.png` and `reference-implementation-rails.png` combine the source and final production-build screenshots in the same images; both were reopened and inspected. The full-context reference is proportionally scaled for the contact sheet; the focused rail crops retain native pixels. The implementation is horizontally scrolled to the comparison columns at a 1280 × 720 CSS viewport, document client/scroll width 1265px, reported devicePixelRatio 1.75. The screenshot service returns 1265 × 712 pixels. Different viewport widths and real values are not presented as pixel-identical mockup reproduction.
+
+Five fidelity surfaces: existing Inter/system/Korean font stack and tabular figures; existing fixed table groups, dividers and compact rows; shared dark/light tokens with blue below-median and red above-median segments; unchanged TOVENIT identity, token logos and icons; explicit Korean comparison basis, real date count and unavailable-state copy. No CSS, fonts, images, layout components or financial daily-ratio formula changed in this release. The count beneath every ready bar is the user's requested addition to the reference.
+
+Actual-data checks: Hydrex FDV P/R shows 6.22x against an 8-day median of 5.59x (red), and P/HR shows 9.51x against 9.83x (blue). The median ticks are at 49.4799% and 58.2703%; the segments meet those coordinates, rather than forcing a central tick. Both show `비교에 사용: 8일 / 365일`. `local-hydrex-dark.png`, `local-hydrex-light.png` and `local-dom-proof.json` retain the results. The local read-only QA proxy verified the original publication hash/row identity and selected actual raw DB rows; it did not write data or invent fixture values.
+
+Empty states: Papertrade has an exact latest ratio but no prior FDV ratio, so `local-no-prior.png` shows recent values, `과거 비교 자료 없음` and 0/365 without a rail, min/median/max or fabricated baseline. Snake Finance's zero holders revenue remains unavailable with no P/HR rail. Switching to market cap re-queries that basis and shows its distinct 102-date sample rather than reusing FDV's 12 dates.
+
+Interactions checked in the final production build: search, market-cap/FDV switching, both themes, detail opening from the P/R comparison, Escape, and focus return to that exact trigger. Final warning/error console logs are empty. The document has no horizontal overflow; the comparison table retains its own horizontal scroller. Existing narrow-screen CSS is unchanged; fresh mobile viewport QA was not performed in this release.
+
+Validation: 114 test files / 1262 tests, typecheck, production build and whitespace checks passed. An independent review checked 2920 distributions covering every available count from 1 through 365, including even-sample medians, and compared representative stored raw rows. Tests retain exact latest-day, missing-data, source-definition, staleness and prepared-model revision guards. Reader deployment precedes the bounded prepared-model policy rebuild; production DB/readback evidence is retained outside Git after deployment.
+
+No remaining actionable P0/P1/P2 finding. Intentional differences are actual DB dates/amounts, the requested visible date counts, existing page chrome and responsive horizontal scrolling.
+
+final result: passed
+
 ## Fixed valuation comparison table — 2026-10-20
 
 Scope: the approved second corrected table mockup. Current P/R and P/HR retain their five revenue windows on the left; same-date daily historical comparisons sit on the right. Revenue amount columns and column customization are removed. This is UI verification with an explicit DB handoff, not production or remote-data verification.
