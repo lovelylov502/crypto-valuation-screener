@@ -2,6 +2,26 @@
 
 final result: passed
 
+## Viewport-fitting comparison table — 2026-10-20 / v0.6.3
+
+Scope: fix the user's reported horizontal scrolling while retaining all ten current-period metrics, both daily-history comparison bars, real date counts, financial qualifications and existing controls. This section supersedes the horizontal-scroll behavior in the older reports below. No collection, database, formula, missing-value or readiness policy changes are included.
+
+Evidence directory: `C:/Users/TAE/.codex/tmp/fit-table-fdv-20261020` (outside Git). `01-before.png` records the actual deployed v0.6.2; `08-after-matched-light.png` records the final local v0.6.3 production build. Both use a 1280 × 720 CSS viewport, reported devicePixelRatio 1.75, the same Chainflip search, FDV basis, 24-hour P/R ascending sort, 0.1M minimum circulating-cap condition, 100 rows per page and light theme. The screenshot service returns 1265 × 712 pixels. The regular collector advanced between captures, so current source amounts and observation times differ. `comparison-full.png` and `comparison-bars.png` combine the full contexts and focused table regions; both were reopened and visually inspected. Their different table geometry is the requested correction, not a claim of pixel-identical reproduction.
+
+Measured cause and result: the previous table required 1540px inside a 1209px region. The final table and region both measure 1209px; page client/scroll widths both measure 1265px. The last P/HR comparison is visible without horizontal scrolling. `desktop-all-rows.json` checks 100 real rows, including missing reasons and provider badges: no visible cell/control overflows internally or extends outside the page. The fix removes the minimum table width and uses proportional desktop columns; it does not hide overflow or remove metrics.
+
+Responsive measurements (`responsive-measurements.json`) cover genuine child CSS viewports 320, 390, 768, 1024, 1199, 1200, 1440 and 1920px. Each has equal page and comparison-region client/scroll widths, no cell overflow and zero cells outside the page. These are same-origin iframe viewports, proportionally scaled only at the outer QA display to fit the browser; they do not claim physical mobile-device testing. The harness forwards the actual read-only app without API substitution or synthetic rows. At 1199px and below, one native coin row reflows into its identity, two labeled five-period rows and two comparisons. At 600px and below, comparisons stack vertically. The 320px and 390px top/history screenshots confirm full rails, min/median/max and 14/365 date counts remain visible with vertical scrolling. The compact header is not translated over its rows.
+
+Five fidelity surfaces: existing Inter/system/Korean typography with tabular numbers (desktop ratios 13px, compact ratios 14px, source badges 10px and range labels 11px); preserved current/history grouping, dividers and accurate median rails with intentional responsive reflow; unchanged light/dark tokens and blue/red meanings; unchanged TOVENIT identity, token logos and icons; Korean labels retaining period, source, same-date formula, unavailable reasons and actual comparison-day counts. No new visual assets, icon sets or invented values are introduced. Changed Korean labels and release copy were checked for meaning and wording.
+
+Interactions verified in the final production build: search and ten retained sort controls; FDV/circulating-cap switching (Chainflip changes from 14 prior FDV dates to 363 circulating-cap dates); filter editing and persistence; light/dark switching; opening detail from the P/HR history bar, Escape and return focus to that exact trigger. The source qualification, missing 90-day holders amount and both comparison counts remain visible. Export and pagination controls remain present; downloaded export bytes and a fresh browser pagination cycle were not part of this CSS change's manual checks. Regression coverage verifies one coin row with every period, source and missing-state labels, both comparisons and their counts, sorting labels and header associations. Final browser warning/error logs are empty.
+
+Validation: all 114 test files / 1263 tests, TypeScript, final production build and whitespace checks passed. Production deployment and canonical live readback are recorded separately outside Git; local QA alone does not establish deployment or future collector recovery.
+
+No remaining actionable P0/P1/P2 finding in this scope. Intentional changes are narrower desktop columns, wrapping qualifications and vertical compact layout. Historical source availability and provider failures remain independent of this UI correction.
+
+final result: passed
+
 ## Available-day historical comparison bars — 2026-10-20 / v0.6.2
 
 Scope: apply the user's confirmed bar mockup to actual DB comparisons with 1–365 available prior daily ratios. Every ready bar shows the number of distinct dates used. Missing dates remain absent. The older 365-day readiness requirement in the historical QA records below is superseded by this section.

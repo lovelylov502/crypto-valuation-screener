@@ -1,10 +1,12 @@
 .fixed-valuation-workspace { --comparison-blue:#1d4ed8; --comparison-red:#b42335; max-width:2200px; }
 [data-theme="dark"] .fixed-valuation-workspace { --comparison-blue:#60a5fa; --comparison-red:#ff8592; }
-.scan-workspace .fixed-valuation-table { table-layout:fixed; min-width:1540px; }
-.fixed-coin-col { width:15.3%; }
-.fixed-metric-col { width:4.52%; }
-.fixed-history-col { width:19.75%; }
-.scan-workspace .fixed-valuation-table > :is(thead,tbody) > tr > .coin-column { width:auto; min-width:190px; max-width:none; }
+.fixed-valuation-workspace .scan-table-scroll { overflow:visible; contain:none; }
+.scan-workspace .fixed-valuation-table { table-layout:fixed; min-width:0; }
+.fixed-coin-col { width:17%; }
+.fixed-metric-col { width:4.2%; }
+.fixed-history-col { width:20.5%; }
+.scan-workspace .fixed-valuation-table > :is(thead,tbody) > tr > .coin-column { width:auto; min-width:0; max-width:none; }
+.scan-workspace .fixed-valuation-table > thead > tr > th { padding-left:3px; padding-right:3px; }
 .scan-workspace .fixed-valuation-table > thead > .calculation-headings > th { padding:8px 12px; white-space:normal; }
 .calculation-headings strong { display:block; font-size:17px; font-weight:650; color:var(--color-text); line-height:1.3; }
 .calculation-headings span { display:block; margin-top:3px; font-size:12px; line-height:1.4; font-weight:400; }
@@ -17,10 +19,13 @@
 .comparison-key i { font-style:normal; }
 .comparison-blue,.comparison-below .comparison-latest strong { color:var(--comparison-blue); }
 .comparison-red,.comparison-above .comparison-latest strong { color:var(--comparison-red); }
-.scan-workspace .fixed-valuation-table > tbody > tr > td { font-size:14px; }
-.scan-workspace .fixed-valuation-table > tbody > tr > .history-cell { padding:10px 16px; }
+.scan-workspace .fixed-valuation-table > tbody > tr > td { min-width:0; padding:12px 3px; font-size:14px; white-space:normal; overflow-wrap:anywhere; }
+.scan-workspace .fixed-valuation-table .metric-open { min-width:0; }
+.fixed-valuation-table .ratio-reading { font-size:13px; white-space:normal; }
+.fixed-valuation-table .unavailable-metric small { white-space:normal; }
+.scan-workspace .fixed-valuation-table > tbody > tr > .history-cell { padding:10px 10px; }
 .history-comparison { display:flex; flex-direction:column; gap:4px; text-align:left; width:100%; color:var(--color-text); font-variant-numeric:tabular-nums; }
-.comparison-latest { display:flex; align-items:baseline; gap:9px; font-size:13px; line-height:1.25; }
+.comparison-latest { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 7px; font-size:13px; line-height:1.25; }
 .comparison-latest strong { font-size:17px; font-weight:650; }
 .comparison-latest small { margin-left:auto; font-size:10px; color:var(--color-muted); }
 .comparison-rail { display:block; position:relative; height:3px; background:color-mix(in srgb,var(--color-muted) 42%,var(--color-panel)); margin:5px 0; border-radius:2px; }
@@ -28,7 +33,7 @@
 .comparison-below .comparison-segment { background:var(--comparison-blue); }
 .comparison-above .comparison-segment { background:var(--comparison-red); }
 .comparison-median { display:block; position:absolute; top:-5px; width:2px; height:13px; transform:translateX(-50%); background:var(--color-text); }
-.comparison-labels { display:flex; justify-content:space-between; gap:7px; font-size:11px; line-height:1.4; white-space:nowrap; color:var(--color-muted); }
+.comparison-labels { display:flex; flex-wrap:wrap; justify-content:space-between; gap:2px 7px; font-size:11px; line-height:1.4; color:var(--color-muted); }
 .comparison-labels b { color:var(--color-text); font-weight:400; }
 .comparison-insufficient,.comparison-unavailable,.comparison-unconnected,.comparison-invalid,.comparison-loading { align-items:center; text-align:center; line-height:1.5; }
 .history-comparison > strong { font-size:13px; font-weight:600; }
@@ -47,16 +52,42 @@
 .comparison-method { display:flex; flex-wrap:wrap; gap:5px 24px; padding:12px 0 4px; font-size:11px; color:var(--color-muted); line-height:1.7; }
 .comparison-method p { margin:0; }
 .comparison-method strong { color:var(--color-text); margin-right:6px; font-weight:600; }
-.fixed-valuation-table .ratio-reading .source-badge { display:block; width:max-content; margin:5px auto 0; max-width:100%; font-size:9px; padding:2px 4px; }
-.comparison-mobile-name { display:none; }
-@media (max-width:700px) {
-  .scan-workspace .fixed-valuation-table { min-width:1490px; }
-  .scan-workspace .fixed-valuation-table > :is(thead,tbody) > tr > .coin-column { position:static; min-width:170px; }
-  .fixed-coin-col { width:12%; }
-  .fixed-metric-col { width:5.1%; }
-  .fixed-history-col { width:18.5%; }
-  .calculation-headings > th > :is(strong,span,small) { position:sticky; left:0; max-width:calc(100vw - 46px); }
-  .comparison-mobile-name { display:block; text-align:left; margin-bottom:7px; color:var(--color-muted); font-size:11px; }
+.fixed-valuation-table .ratio-reading .source-badge { display:block; width:max-content; margin:5px auto 0; max-width:100%; font-size:10px; padding:2px 3px; white-space:normal; }
+.comparison-mobile-name,.compact-period-label,.compact-metric-name { display:none; }
+@media (max-width:1199px) {
+  .scan-workspace .fixed-valuation-table { display:block; }
+  .fixed-valuation-table colgroup { display:none; }
+  /* The compact rows repeat their metric labels; the wide spanning labels are redundant. */
+  .fixed-valuation-table > thead > .current-group-headings { display:none; }
+  .fixed-valuation-table > thead { display:block; transform:none !important; }
+  .fixed-valuation-table .calculation-headings { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .scan-workspace .fixed-valuation-table > thead > .calculation-headings > th { height:auto; }
+  .scan-workspace .fixed-valuation-table > thead > .calculation-headings > .coin-column { grid-column:1 / -1; padding:8px 10px; }
+  .fixed-valuation-table .current-period-headings { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); }
+  .scan-workspace .fixed-valuation-table .current-period-headings button { flex-wrap:wrap; gap:3px 6px; }
+  .compact-metric-name { display:inline; font-weight:600; }
+  .fixed-valuation-table > tbody { display:grid; gap:16px; }
+  .fixed-valuation-table .coin-row { display:grid; grid-template-columns:repeat(10,minmax(0,1fr)); }
+  .scan-workspace .fixed-valuation-table > :is(thead,tbody) > tr > .coin-column { position:static; min-width:0; border-right:0; }
+  .scan-workspace .fixed-valuation-table > tbody > tr > .coin-column { grid-column:1 / -1; height:auto; padding:10px; }
+  .scan-workspace .fixed-valuation-table > tbody > tr > td { grid-column:span 2; height:auto; padding:10px 4px; }
+  .scan-workspace .fixed-valuation-table > tbody > tr > .history-cell { grid-column:span 5; padding:14px; }
+  .scan-workspace .fixed-valuation-table > tbody > tr > .history-band-start { border-left:0; }
+  .fixed-valuation-table .coin-open strong { max-width:none; font-size:14px; }
+  .fixed-valuation-table .coin-open small { font-size:11px; }
+  .fixed-valuation-table .ratio-reading { font-size:14px; }
+  .compact-period-label { display:flex; flex-direction:column; gap:2px; margin-bottom:6px; color:var(--color-muted); font-size:11px; line-height:1.4; }
+  .compact-period-label b { color:var(--color-text); font-weight:600; }
+  .comparison-mobile-name { display:block; text-align:left; margin-bottom:9px; color:var(--color-text); font-size:13px; font-weight:600; }
+}
+@media (max-width:600px) {
+  .fixed-valuation-table .calculation-headings { grid-template-columns:minmax(0,1fr); }
+  .scan-workspace .fixed-valuation-table > thead > .calculation-headings > th { padding:10px; }
+  .calculation-headings strong { font-size:15px; }
+  .scan-workspace .fixed-valuation-table > tbody > tr > .history-cell { grid-column:1 / -1; border-left:0; }
+  .scan-workspace .fixed-valuation-table .current-period-headings button { gap:2px; }
+  .fixed-valuation-table .compact-metric-name { width:100%; }
+  .scan-workspace .fixed-valuation-table .current-period-headings th { height:auto; min-height:49px; }
   .fixed-valuation-workspace .coin-open:not(:has(img)) > span { margin-left:31px; }
   .fixed-valuation-workspace .comparison-asof { width:100%; margin-left:0; }
   .comparison-method { display:block; font-size:11px; }
