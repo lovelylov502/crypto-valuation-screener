@@ -2,6 +2,28 @@
 
 final result: passed
 
+## Quiet Research Desk and full introductions — 2026-10-23 / v0.8.0
+
+Scope: the approved light map mockup with a current-cap range bar, name-only hover and shared navigation, plus the user's report that nearly all coin introductions were cut off. The source image is `C:/Users/TAE/.codex/generated_images/01a16326-7efc-72d3-b9c1-e9d59e950f94/exec-ceb4d7ef-1d70-499d-b057-a60999281611.png`. Browser evidence is outside Git under `C:/Users/TAE/.codex/visualizations/2026/10/22/01a16326-7efc-72d3-b9c1-e9d59e950f94/release-qa/`.
+
+The source and `map-hover-favorite.png` were reopened together for the final comparison at a requested 1488 × 1060 browser frame. The browser image retains its scrollbar and actual data. Differences in plot distribution, axis extent, labels, cap-handle position and arrow counts are intentional: the reference uses illustrative values; the app uses real log coordinates and the table's existing logarithmic cap slider. The real cap-filtered view has 117 points and 85 verified 30-day arrows. The unfiltered final view has 462 points and 342 arrows; one-year comparison has 242 arrows with all 462 current coordinates unchanged. Unavailable history remains explicit. No data was fabricated to resemble the mockup.
+
+Typography and spacing: self-hosted Pretendard replaces inconsistent system fallbacks, with 32px titles, 14–15px principal controls and 12px chart ticks. The shared header, two filter rows, top legend and collapsed bottom list follow the approved hierarchy. Existing green/amber direction colors and a separate violet favorite color support both themes. Existing TOVENIT raster artwork and Lucide icons are retained; SVG is used only for the data plot. There are no decorative replacement images or new icon families. Source/period qualifications remain readable; Korean controls, hints, explanations and release notes were reviewed for meaning and wording.
+
+The review loop corrected small control text, excessive heading gaps, text selection during map dragging, range values being clamped while typing, inability to reload an already-selected modified condition, a misleading empty-list message while loading, and overlapping mobile status/theme controls. Mouse movement now enlarges a current point from 3.5px to 8px and displays only its name; clicking the verified Chainflip dot opens its own detail. Current dots win over crossing lines. Region selection retained all 117 points/85 arrows while exposing 44 matches below. A favorite added in detail becomes a violet map point and appears in the watchlist. Keyboard Home/Enter opens Aark Digital; Escape returns to a visible map list control. No map search, playback, zoom or adjacent list remains.
+
+Filter checks cover direct dollar input, keyboard slider changes, combined Revenue/P/R conditions, the optional ceiling, named save/change/load/delete and reload persistence. Table search plus FDV imports into the map; subsequently changing the map numerator leaves the table's FDV and search intact. Map state uses its own key. Existing favorites and notes are not migrated or rewritten. Short-lived QA-only favorites and saved conditions were removed after verification.
+
+The root cause of the introduction bug was a hard-coded 50-character slice. `chainflip-full-description.png` shows the complete translated introduction. `yeti-long-description-1280.png` and `yeti-description-scrolled.png` show all 623 characters and the last sentence while the charts remain in place: the 584px summary scrolls its 1203px contents independently. The paragraph's content and client heights both measure 630px, with no clamp. `yeti-description-mobile.png` shows the complete text in the existing compact dialog flow. English original and research evidence navigation still work.
+
+Viewport checks used actual browser overrides at 320, 390, 768, 1280 and 1488px, not device testing. No page horizontal overflow was found. In the existing table, all 100 rows and every visible cell fit at 1280 and 390px; current/history periods, source badges, sorting controls and both comparisons remain present. The responsive header was rechecked after the overlap fix. Focus indicators, accessible control names, missing/empty states and both themes were exercised; reduced-motion CSS disables dot transitions. Final local browser warning/error logs are empty. Evidence includes `map-final-desktop.png`, `map-mobile-390-top.png`, `map-mobile-390-dark.png`, `map-mobile-320.png`, `map-tablet-768.png`, and both `table-regression-*.png` captures.
+
+Validation: 117 test files / 1282 tests, TypeScript and production build passed. The introduction render regression and seven map condition/picking tests cover the new logic. The final deployment wrapper reruns all local gates and separately verifies the canonical live publication. This local report does not establish future data collection health.
+
+No remaining actionable P0/P1/P2 finding within this scope.
+
+final result: passed
+
 ## Viewport-fitting comparison table — 2026-10-20 / v0.6.3
 
 Scope: fix the user's reported horizontal scrolling while retaining all ten current-period metrics, both daily-history comparison bars, real date counts, financial qualifications and existing controls. This section supersedes the horizontal-scroll behavior in the older reports below. No collection, database, formula, missing-value or readiness policy changes are included.

@@ -26,8 +26,6 @@ const valuationSeries: DetailChartSeries[] = [
 ];
 type HistoryState = { key: string; status: "loading"; count: number } | { key: string; status: "ready"; data: DetailHistoryData }
   | { key: string; status: "error"; error: DetailHistoryError };
-const INTRO_PREVIEW_LENGTH = 50;
-const shortDescription = (text: string) => text.length > INTRO_PREVIEW_LENGTH ? `${text.slice(0, INTRO_PREVIEW_LENGTH - 3).trimEnd()}…` : text;
 
 export function CoinDetailOverview({ coin: c, capital: initialCapital, onClose, publicationId, snapshotUpdatedAt, onRefreshPublication, favorite, onFavorite }: { coin: CoinScored; capital: CapitalBasis; onClose: () => void; publicationId?: string; snapshotUpdatedAt?: string; onRefreshPublication?: () => void; favorite?: boolean; onFavorite?: () => void }) {
   const [view, setView] = useState<"overview" | "research">("overview");
@@ -113,8 +111,8 @@ export function CoinDetailOverview({ coin: c, capital: initialCapital, onClose, 
     </header>
 
     {view === "overview" ? <div className="detail-overview-body">
-      <aside className="detail-overview-summary" aria-label="프로젝트 소개와 최신 지표">
-        <section className="detail-overview-intro"><h3>어떤 프로젝트인가요?</h3><p>{shortDescription(introduction)}</p><div className="detail-intro-actions"><span>{koreanDetailDescription(c.description) ?? c.descriptionKo ? "DefiLlama 소개 번역" : research ? "공식 자료 검토" : "프로젝트 소개"}</span>{c.description && <button onClick={() => openResearch(true)}>영문 원문 보기</button>}{introduction.length > INTRO_PREVIEW_LENGTH && <button onClick={() => openResearch()}>소개 더 보기</button>}</div></section>
+      <aside className="detail-overview-summary" aria-label="프로젝트 소개와 최신 지표" tabIndex={0}>
+        <section className="detail-overview-intro"><h3>어떤 프로젝트인가요?</h3><p>{introduction}</p><div className="detail-intro-actions"><span>{koreanDetailDescription(c.description) ?? c.descriptionKo ? "DefiLlama 소개 번역" : research ? "공식 자료 검토" : "프로젝트 소개"}</span>{c.description && <button onClick={() => openResearch(true)}>영문 원문 보기</button>}</div></section>
         <section className="detail-overview-core"><div className="detail-rail-title"><h3>핵심 지표</h3><span>최신 공개본</span></div>
           <div className="detail-current-price"><span>현재 가격</span><strong>{fmtPrice(c.price)}</strong><div><span>24시간 <b className={tone(c.change1d)}>{fmtPct(c.change1d)}</b></span><span>7일 <b className={tone(c.priceChange7d)}>{fmtPct(c.priceChange7d)}</b></span></div></div>
           <dl className="detail-capital-pair"><div><dt>시가총액</dt><dd>{fmtUsd(c.mcap)}</dd></div><div><dt>FDV</dt><dd>{fmtUsd(c.fdv)}</dd></div></dl>

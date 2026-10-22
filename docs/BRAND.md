@@ -16,6 +16,8 @@ TOVENIT is a crypto fundamentals research tool for comparing protocol revenue, v
 
 ## Assets
 
+The v0.8.0 Quiet Research Desk refinement uses the self-hosted Pretendard Variable font for consistent Korean and Latin UI text. The unmodified v1.3.9 WOFF2 is from [the official repository](https://github.com/orioncactus/pretendard/tree/v1.3.9/packages/pretendard/dist/web/variable/woff2); its SIL Open Font License and copyright notice ship in `public/fonts/Pretendard-LICENSE.txt`. Font loading uses `swap` with the previous system stack as fallback. SHA-256: `9599f12fd42fc0bce1cd50b47a0c022e108d7aa64dd0d1bb0ed44f3282d900b4`.
+
 | File | Use |
 | --- | --- |
 | `public/brand/tovenit-mark.png` | Transparent 256 × 256 screen symbol |

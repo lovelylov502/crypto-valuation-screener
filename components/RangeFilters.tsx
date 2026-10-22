@@ -11,7 +11,7 @@ function multipleToSlider(v: number): number {
   return Math.max(0, Math.min(100, ((Math.log10(v) + 1) / 4) * 100));
 }
 
-function DualRangeSlider({
+export function DualRangeSlider({
   minPosition,
   maxPosition,
   onMinChange,

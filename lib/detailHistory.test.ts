@@ -144,6 +144,15 @@ describe("same-date financial meaning and independent gaps", () => {
 });
 
 describe("daily chart render contract", () => {
+  it("renders the full long project introduction in the initial overview without a preview cut", () => {
+    const introduction = "서로 다른 블록체인 사이에서 자산을 교환하는 프로젝트입니다. " + "소개 문장의 중간이나 끝이 잘리지 않고 모두 읽혀야 합니다. ".repeat(12) + "마지막 소개 문장입니다.";
+    const c = scoreCoins([sample({ slug: "long-introduction", description: "", descriptionKo: introduction })], now.toISOString())[0];
+    const html = renderToStaticMarkup(createElement(CoinDetailOverview, { coin: c, capital: "mcap", onClose: () => {} }));
+    const intro = html.match(/class="detail-overview-intro"[\s\S]*?<\/section>/)?.[0];
+    expect(intro).toContain(introduction);
+    expect(intro).not.toContain("소개 더 보기");
+    expect(html).toContain('aria-label="프로젝트 소개와 최신 지표" tabindex="0"');
+  });
   it.each(["market", "valuation"])("keeps both crosshairs synchronized while only the active %s chart shows source evidence", activeChart => {
     const raw = point("2026-03-05"), shared = { points: detailChartPoints([raw]), historyPoints: [raw], sources, capital: "mcap" as const, domain: [Date.parse("2026-03-04"), Date.parse("2026-03-06")] as [number, number], activeDay: "2026-03-05", onActiveDay: () => {} };
     const html = renderToStaticMarkup(createElement(Fragment, null,

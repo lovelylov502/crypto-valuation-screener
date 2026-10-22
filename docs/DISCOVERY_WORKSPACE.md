@@ -10,6 +10,16 @@ The October 22 product decision adds three connected views: the unchanged screen
 4. Review desktop and narrow screens in both themes; exercise discovery → detail → save → revisit → restore. Fix observed issues and repeat the affected checks.
 5. Run arithmetic/storage/API regression tests, typecheck and build. Preserve owner files in the canonical checkout before its clean-main deployment gate, then restore them after deployment. Verify canonical production and real browser flows.
 
+## October 23 refinement (v0.8.0)
+
+The approved Quiet Research Desk mockup replaces map search/playback with a current circulating-cap range bar and optional Revenue growth, falling P/R and P/R ceiling conditions. These combine with AND. Growth compares rolling 30-day Revenue at the selected historical endpoint with the current 30-day amount; falling P/R uses the same two endpoints. A missing historical point cannot pass either change condition. The cap range always uses the latest circulating market cap, including when P/R uses FDV. Dollar inputs retain exact numeric values; only their blurred Korean-unit presentation is rounded.
+
+Map filters and named conditions live in `tovenit-map-workspace-v1`, independently of the table preferences. An explicit table-to-map action imports table filters. A table P/R threshold is mapped into the map's 30-day control only when its original window is 30 days; other windows retain their original server-side filter. All other inherited conditions stay visible through the import banner and can be cleared. Favorites still share the existing key. No notes are copied or transmitted.
+
+Hover prioritizes nearby current points over crossing arrow segments, enlarges the active point and places only its name beside it. A small proximity tolerance avoids flicker. Favorite points use violet; arrows retain their P/R direction colors. Region selection keeps all arrows and opens the matching list below the plot. The list is collapsed initially. Keyboard arrows move between coins, Enter opens detail, and closing detail restores focus to a visible control. The plot domains stay fixed while changing local filters or historical dates. No zoom/pan or adjacent list is introduced.
+
+Coin introductions no longer have a 50-character preview. The full source-matched translation or available source text is rendered. Desktop summary panels scroll independently without shrinking their sections, and compact layouts use the existing single scrollable dialog. English originals and research evidence remain accessible.
+
 ## Data contract
 
 Current map positions use the same 30-day source-reference P/R and Revenue as the table. Historical endpoints require the exact date's verified capital and all 30 completed UTC revenue dates. Definitions must agree across both windows, and the current raw-window total must reproduce the published amount. No carry-forward, current-supply backfill, partial sums or fabricated zeroes. All available arrows are visible; unavailable endpoints retain their current point and a reason.
