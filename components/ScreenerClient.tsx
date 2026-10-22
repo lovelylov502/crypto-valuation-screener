@@ -30,6 +30,10 @@ import { version as APP_VERSION } from "@/package.json";
 
 import { ValuationComparisonCell } from "./ValuationComparisonCell";
 import { comparisonEnvelopeValid, comparisonReading } from "@/lib/valuationComparison";
+import { CandidateMap, type DiscoveryDetail } from "./CandidateMap";
+import { Watchlist } from "./Watchlist";
+import { useWatchNotes } from "./useWatchNotes";
+import type { DiscoveryPage, DiscoveryRow } from "@/lib/discoveryTypes";
 
 const FAVORITES_KEY = "crypto-valuation-favorites-v1";
 
@@ -64,6 +68,13 @@ export function ScreenerClient({ initialData }: { initialData: TablePage | null 
   const [detail, setDetail] = useState<TableDetail | null>(null);
   const [detailRetry, setDetailRetry] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [tab, setTab] = useState<"table" | "map" | "watchlist">("table");
+  const [visited, setVisited] = useState({ map: false, watchlist: false });
+  const [mapImport, setMapImport] = useState<WorkspacePreferences | null>(null);
+  const [externalDetail, setExternalDetail] = useState<{ row: DiscoveryRow; page: DiscoveryPage } | null>(null);
+  const notebook = useWatchNotes();
+  const changeTab = (next: typeof tab) => { setTab(next); if (next !== "table") setVisited(prev => ({ ...prev, [next]: true })); setPopup(null); history.replaceState(null, "", `#${next}`); };
+  useEffect(() => { const sync = () => { const next = location.hash.slice(1); if (next === "map" || next === "watchlist" || next === "table") { setTab(next); if (next !== "table") setVisited(prev => ({ ...prev, [next]: true })); } }; sync(); window.addEventListener("hashchange", sync); return () => window.removeEventListener("hashchange", sync); }, []);
   const resultsRef = useRef<HTMLDivElement>(null);
   const rowButtons = useRef(new Map<string, HTMLButtonElement>());
   const detailTrigger = useRef<HTMLButtonElement | null>(null);
@@ -78,6 +89,9 @@ export function ScreenerClient({ initialData }: { initialData: TablePage | null 
       setPageSize(parsePageSize(localStorage.getItem(PAGE_SIZE_KEY)));
     } catch { setStorageError(true); }
     setReady(true);
+    const sync = (event: StorageEvent) => { if (event.key === FAVORITES_KEY) setFavorites(parseFavoriteSlugs(event.newValue)); };
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
   }, []);
   useEffect(() => {
     if (!ready) return;
@@ -93,32 +107,35 @@ export function ScreenerClient({ initialData }: { initialData: TablePage | null 
   const onSort = (key: SortKey) => { setPrefs(p => ({ ...p, sortKey: key, sortDir: p.sortKey === key ? p.sortDir === "asc" ? "desc" : "asc" : METRIC_COLUMN_DAYS[key] || key === "name" ? "asc" : "desc" })); setPage(1); };
   const goPage = (n: number) => { setPage(n); setSelectedSlug(null); resultsRef.current?.scrollIntoView({ block: "start" }); };
   const openDetail = (slug: string, trigger?: HTMLButtonElement) => {
+    setExternalDetail(null);
     detailTrigger.current = trigger ?? rowButtons.current.get(slug) ?? null;
     setSelectedSlug(slug);
   };
+  const openDiscoveryDetail: DiscoveryDetail = (row, page, trigger) => { detailTrigger.current = trigger; setExternalDetail({ row, page }); setSelectedSlug(row.slug); };
   const selectedCols = DEFAULT_VISIBLE_COLUMNS.map(k => COLS.find(c => c.key === k)!);
   const comparison = comparisonEnvelopeValid(data?.valuationComparison, prefs.capital) ? data!.valuationComparison! : null;
   const activeFilters = [!!prefs.search, prefs.view !== "all", prefs.growingOnly, prefs.holderOnly, !!prefs.category, prefs.available !== "all", prefs.minMcap > 0 || prefs.maxMcap > 0, prefs.maxPr > 0, prefs.maxPhr > 0, prefs.minSourceAmount !== null, prefs.hideDilution, prefs.verifiedOnly].filter(Boolean).length;
   const capitalName = prefs.capital === "mcap" ? "유통 시총" : "FDV";
   const rows = data?.rows ?? [];
-  const selectedRow = rows.find(c => c.slug === selectedSlug) ?? (detail?.coin.slug === selectedSlug ? { slug: detail.coin.slug, identity: detail.identity } : undefined);
-  const selectedCoin = detail?.coin.slug === selectedSlug ? detail.coin : null;
+  const selectedRow = externalDetail?.row.slug === selectedSlug ? externalDetail.row : rows.find(c => c.slug === selectedSlug) ?? (detail?.coin.slug === selectedSlug ? { slug: detail.coin.slug, identity: detail.identity } : undefined);
+  const detailPage = externalDetail?.page ?? data;
+  const selectedCoin = detail?.coin.slug === selectedSlug && detail.publicationId === detailPage?.publicationId && detail.snapshotSha256 === detailPage?.snapshotSha256 && detail.identity === selectedRow?.identity ? detail.coin : null;
   useEffect(() => {
-    if (!selectedRow || !data) { setDetail(null); return; }
+    if (!selectedRow || !detailPage) { setDetail(null); return; }
     setDetail(previous => previous?.coin.slug === selectedRow.slug ? previous : null);
-    const controller = new AbortController(), expected = { slug: selectedRow.slug, identity: selectedRow.identity, publicationId: data.publicationId, snapshotSha256: data.snapshotSha256, updatedAt: data.updatedAt };
+    const controller = new AbortController(), expected = { slug: selectedRow.slug, identity: selectedRow.identity, publicationId: detailPage.publicationId, snapshotSha256: detailPage.snapshotSha256, updatedAt: detailPage.updatedAt };
     setStatus("상세 근거를 불러오고 있습니다.");
     void (async () => {
       try {
         const response = await fetch("/api/coin?" + new URLSearchParams({ slug: expected.slug, identity: expected.identity, publicationId: expected.publicationId }), { cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]) });
-        if (response.status === 409) { refresh(); setStatus("자료가 갱신되었습니다. 새 검증본의 상세 근거를 불러옵니다."); return; }
+        if (response.status === 409) { refresh(); setSelectedSlug(null); setStatus("자료가 갱신되었습니다. 새 검증본을 확인한 뒤 종목을 다시 열어 주세요."); return; }
         if (!response.ok) throw Error("상세 근거를 불러오지 못했습니다. 다시 시도해 주세요.");
         const next = validateTableDetail(JSON.parse(await readJsonText(response)), expected);
         if (!controller.signal.aborted) { setDetail(next); setStatus(""); }
       } catch (error) { if (!controller.signal.aborted) { setSelectedSlug(null); setStatus(error instanceof Error ? error.message : "상세 조회 실패"); } }
     })();
     return () => controller.abort();
-  }, [selectedSlug, selectedRow?.identity, data?.publicationId, data?.snapshotSha256, data?.updatedAt, detailRetry]);
+  }, [selectedSlug, selectedRow?.identity, detailPage?.publicationId, detailPage?.snapshotSha256, detailPage?.updatedAt, detailRetry]);
   const total = data?.pagination.filtered ?? 0;
   const currentPage = data?.pagination.page ?? 1;
   const coverage = data?.coverage;
@@ -153,7 +170,7 @@ export function ScreenerClient({ initialData }: { initialData: TablePage | null 
   };
 
   return <main className="research-app valuation-workspace scan-workspace fixed-valuation-workspace">
-    <a className="skip-link" href="#screener-results">결과 표로 이동</a>
+    <a className="skip-link" href={tab === "table" ? "#screener-results" : `#panel-${tab}`}>내용으로 이동</a>
     <header className="valuation-header">
       <a className="brand-home" href="/" aria-label={`${BRAND.name} ${BRAND.koreanName} 홈`}>
         <img className="brand-mark" src="/brand/tovenit-mark.png" alt="" width={44} height={44}/>
@@ -170,6 +187,8 @@ export function ScreenerClient({ initialData }: { initialData: TablePage | null 
     {error && <div className="workspace-status" role="alert">{error} {data && "기존 결과를 표시하고 있습니다."}<button className="text-button" onClick={refresh}>다시 시도</button></div>}
     {storageError && <p className="notice">브라우저 저장소를 사용할 수 없어 설정·관심종목이 유지되지 않을 수 있습니다.</p>}
     {migrationNotice && <div className="migration-notice" role="status"><Info size={15}/><span>{migrationNotice}</span><button className="icon-button" aria-label="설정 변경 안내 닫기" onClick={() => setMigrationNotice(null)}><X size={16}/></button></div>}
+    <nav className="workspace-tabs" aria-label="작업 공간"><div role="tablist" aria-label="종목 탐색 탭">{([{ id: "table", label: "전체종목", step: "01" }, { id: "map", label: "후보 지도", step: "02" }, { id: "watchlist", label: "관심종목", step: "03" }] as const).map((item, i, items) => <button key={item.id} id={`tab-${item.id}`} role="tab" aria-selected={tab === item.id} aria-controls={`panel-${item.id}`} tabIndex={tab === item.id ? 0 : -1} onClick={() => changeTab(item.id)} onKeyDown={e => { const next = e.key === "ArrowRight" ? (i + 1) % 3 : e.key === "ArrowLeft" ? (i + 2) % 3 : e.key === "Home" ? 0 : e.key === "End" ? 2 : -1; if (next >= 0) { e.preventDefault(); changeTab(items[next].id); document.getElementById(`tab-${items[next].id}`)?.focus(); } }}><span>{item.step}</span>{item.label}{item.id === "watchlist" && favorites.size > 0 && <small>{favorites.size}</small>}</button>)}</div><span className="workspace-tabs-hint">찾고 · 살펴보고 · 기록하기</span></nav>
+    <section id="panel-table" role="tabpanel" aria-labelledby="tab-table" hidden={tab !== "table"}>
     <div className="scan-heading"><h2 aria-label="DefiLlama 전체 종목">전체 종목</h2><p>DefiLlama 원천 금액으로 참고 배수를 계산합니다. 수익 분류와 검토 상태는 따로 확인하세요.</p></div>
     <div className="scan-toolbar">
       <label className="search-box"><Search size={18}/><input aria-label="코인 또는 심볼 검색" placeholder="코인 또는 심볼 검색…" value={prefs.search} onChange={e => update("search", e.target.value)}/>{prefs.search && <button aria-label="검색 지우기" onClick={() => update("search", "")}><X size={15}/></button>}</label>
@@ -177,6 +196,7 @@ export function ScreenerClient({ initialData }: { initialData: TablePage | null 
       <div className="capital-switch"><span>배수 기준</span><div className="choice-buttons" role="group" aria-label="배수 분자"><button aria-pressed={prefs.capital === "mcap"} onClick={() => update("capital", "mcap")}>유통 시총</button><button aria-pressed={prefs.capital === "fdv"} onClick={() => update("capital", "fdv")}>FDV</button></div></div>
       <button className="button filter-trigger" aria-label="필터" title="필터" onClick={() => { setMcapRangeOpen(prefs.minMcap > 0 || prefs.maxMcap > 0); setPopup("filters"); }}><SlidersHorizontal size={18}/>필터{activeFilters > 0 && <small>{activeFilters}</small>}</button>
       <button className="icon-button export-trigger" aria-label="검색 결과 전체 내보내기" title="검색 결과 전체 내보내기" disabled={exporting || !data} onClick={() => void exportResults()}><Download size={16}/></button>
+      <button className="button table-to-map" onClick={() => { setMapImport({ ...prefs }); changeTab("map"); }}>지도에서 보기<ChevronRight size={14}/></button>
     </div>
     <div className="scan-meta" ref={resultsRef} id="screener-results" tabIndex={-1}>
       <button className="text-button" onClick={() => setPopup("coverage")}><span>프로젝트 {data?.pagination.total.toLocaleString() ?? "–"}개</span><span>·</span><span>연결 토큰 {data?.universe.linkedTokens.toLocaleString() ?? "–"}개</span><Info size={12}/></button>
@@ -211,8 +231,11 @@ export function ScreenerClient({ initialData }: { initialData: TablePage | null 
     <div className="comparison-method"><p><strong>현재 배수</strong> 24시간·7일·30일·90일 수익은 연환산, 1년은 원천 수익 합계 기준입니다.</p><p><strong>과거 비교</strong> 이전 365일 중 배수를 계산할 수 있는 날짜만 비교하고, 사용한 일수를 표시합니다. 매일 그날의 가치와 24시간 수익으로 계산하며, 최신 시세와 관측 시점이 다를 수 있습니다.</p></div>
     <div className="table-legend"><span><b className="source-badge">제공처 집계</b> 제공처 기간 집계 · 완료일 이력과 구분</span><span><b>자료 부족</b> 기간 이력 미확보</span><span><b>미연결</b> 원천 자료 미연결</span></div>
     <div className="scan-footer"><p>원천 참고 배수 · 짧은 기간은 연환산 · 제공처 집계와 원천 1년 금액은 별도 표시<span className="app-version-persistent" aria-label="앱 버전">{`v${APP_VERSION}`}</span></p><Pagination total={total} page={currentPage} size={pageSize} position="top" onPage={goPage} onSize={s => { setPageSize(s); setPage(1); }}/></div>
-    <span className="sr-only" role="status" aria-live="polite">{status}</span>
-    {selectedCoin && detail && <CoinDetailDialog key={selectedCoin.slug} coin={selectedCoin} capital={prefs.capital} publicationId={detail.publicationId} snapshotUpdatedAt={detail.updatedAt} onRefreshPublication={() => { refresh(); setDetailRetry(value => value + 1); }} onClose={() => setSelectedSlug(null)} returnFocus={detailTrigger.current}/>}
+    </section>
+    <section id="panel-map" role="tabpanel" aria-labelledby="tab-map" tabIndex={-1} hidden={tab !== "map"}>{ready && visited.map && <CandidateMap favorites={favorites} onFavorite={toggleFavorite} onDetail={openDiscoveryDetail} imported={mapImport} onClearImport={() => setMapImport(null)} publicationId={data?.publicationId} onWatchlist={() => changeTab("watchlist")}/>}</section>
+    <section id="panel-watchlist" role="tabpanel" aria-labelledby="tab-watchlist" tabIndex={-1} hidden={tab !== "watchlist"}>{ready && visited.watchlist && <Watchlist favorites={favorites} onFavorite={toggleFavorite} onRestoreFavorites={setFavorites} notes={notebook} onDetail={openDiscoveryDetail} publicationId={data?.publicationId} onMap={() => changeTab("map")} onTable={() => changeTab("table")}/>}</section>
+    {status && <div className="discovery-status" role="status" aria-live="polite">{status}<button className="icon-button" aria-label="상세 조회 안내 닫기" onClick={() => { setStatus(""); if (!selectedCoin) setSelectedSlug(null); }}><X size={14}/></button></div>}
+    {selectedCoin && detail && <CoinDetailDialog key={selectedCoin.slug} coin={selectedCoin} capital={externalDetail?.page.capital ?? prefs.capital} publicationId={detail.publicationId} snapshotUpdatedAt={detail.updatedAt} onRefreshPublication={() => { refresh(); setDetailRetry(value => value + 1); }} onClose={() => setSelectedSlug(null)} returnFocus={detailTrigger.current} favorite={favorites.has(selectedCoin.slug)} onFavorite={() => toggleFavorite(selectedCoin.slug)}/>}
 
     {popup === "filters" && <SettingsDialog title="필터" onClose={() => setPopup(null)} headerAction={<button className="text-button" onClick={resetFilters}><RotateCcw size={15}/>초기화</button>}><div className="sidebar-body filter-settings" aria-label="필터 설정">
       <p className="sidebar-hint">조건은 전체 프로젝트에 적용합니다. 가격 하락만으로 종목을 제외하지 않습니다.</p>

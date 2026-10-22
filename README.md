@@ -3,16 +3,18 @@
 **토큰의 가치를 읽는 기준.** 브랜드 표기·색상·이미지 사용 기준은 [브랜드 가이드](./docs/BRAND.md)를 참고한다.
 
 DefiLlama 원천 금액과 토큰 시총으로 참고 배수를 계산하고, 수익 분류·검토 상태·수령 조건을 함께 보여주는 스크리너.
-주식·일반 기업 리서치, 조사노트, 후보 큐 같은 별도 워크플로는 다루지 않는다.
+전체종목에서 후보를 찾고, 후보 지도에서 변화를 살핀 뒤, 관심종목에 메모와 다시 볼 날짜를 남긴다. 주식·일반 기업 리서치는 다루지 않는다.
 
 **🌐 라이브: https://crypto-valuation-screener.vercel.app**
 데이터: [DefiLlama](https://defillama.com) · [CoinMarketCap Keyless](https://coinmarketcap.com/api/documentation/pro-api-reference/keyless-public-api) · [CoinGecko](https://coingecko.com)
 
 종목 상세의 차트와 목록 오른쪽의 과거 비교는 일별 원자료 DB를 조회한다. 같은 UTC 날짜의 FDV·유통 시총과 하루 수익으로 P/R·P/HR을 계산하고, 없는 날짜는 빈 구간으로 남긴다. 목록 왼쪽의 최신 배수는 검증된 스크리너 공개본과 기간별 원천 금액을 사용한다. 현재 DB와 계산 기준은 [날짜별 원자료](./docs/DAILY_RAW_DATA.md), 이전 이력 구조는 [날짜별 밸류에이션 이력](./docs/DAILY_VALUATION_HISTORY.md)을 참고한다.
 
-앱 버전: **v0.6.3**. 변경 내역은 [CHANGELOG.md](./CHANGELOG.md)에 기록한다. 화면 하단과 `/api/status`의 `appVersion`은 `package.json`의 같은 버전을 사용한다. 데이터 공개본 ID·수집 revision·계산 규칙 버전은 각각 별도로 보존한다.
+앱 버전: **v0.7.0**. 변경 내역은 [CHANGELOG.md](./CHANGELOG.md)에 기록한다. 화면 하단과 `/api/status`의 `appVersion`은 `package.json`의 같은 버전을 사용한다. 데이터 공개본 ID·수집 revision·계산 규칙 버전은 각각 별도로 보존한다.
 
 목록과 상세 조회는 Turso에 미리 준비한 압축 조회 결과를 사용한다. 목록은 필요한 숫자와 상태만 받고, 상세의 원천 근거는 선택한 종목에 한해 읽는다. 차트는 양쪽 분자의 전체 MAX 이력을 한 번 받고 기간 전환 때 재사용한다. 현재 공개본·토큰·완료일·원자료 revision을 확인한 뒤 사용하며, 원본 공개본과 재현 검사는 유지한다. 운영 방법과 이전 구조와의 차이는 [조회 성능 구조](./docs/FAST_READ_MODELS.md)에 정리했다.
+
+세 탭의 동작과 지도 계산 기준은 [Discovery workspace](./docs/DISCOVERY_WORKSPACE.md)에 정리했다. `/#map`, `/#watchlist` 주소로 해당 탭을 바로 열 수 있다.
 
 ## Current product and data engine
 

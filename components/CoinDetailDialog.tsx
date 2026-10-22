@@ -5,7 +5,7 @@ import type { CoinScored } from "@/lib/types";
 import type { CapitalBasis } from "@/lib/valuationMetrics";
 import { CoinDetailOverview } from "./CoinDetailOverview";
 
-export function CoinDetailDialog({ coin, capital, publicationId, snapshotUpdatedAt, onRefreshPublication, onClose, returnFocus }: {
+export function CoinDetailDialog({ coin, capital, publicationId, snapshotUpdatedAt, onRefreshPublication, onClose, returnFocus, favorite, onFavorite }: {
   coin: CoinScored;
   capital: CapitalBasis;
   publicationId?: string;
@@ -13,6 +13,8 @@ export function CoinDetailDialog({ coin, capital, publicationId, snapshotUpdated
   onRefreshPublication?: () => void;
   onClose: () => void;
   returnFocus: HTMLButtonElement | null;
+  favorite?: boolean;
+  onFavorite?: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -36,7 +38,7 @@ export function CoinDetailDialog({ coin, capital, publicationId, snapshotUpdated
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }}>
-    <div className="coin-detail-surface"><CoinDetailOverview coin={coin} capital={capital} publicationId={publicationId} snapshotUpdatedAt={snapshotUpdatedAt} onRefreshPublication={onRefreshPublication} onClose={onClose}/></div>
+    <div className="coin-detail-surface"><CoinDetailOverview coin={coin} capital={capital} publicationId={publicationId} snapshotUpdatedAt={snapshotUpdatedAt} onRefreshPublication={onRefreshPublication} onClose={onClose} favorite={favorite} onFavorite={onFavorite}/></div>
     <p className="sr-only" id="coin-detail-dismiss-hint">팝업 밖을 클릭하거나 Escape 키를 누르면 닫힙니다.</p>
   </dialog>;
 }

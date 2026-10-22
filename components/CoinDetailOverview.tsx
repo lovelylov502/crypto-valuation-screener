@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowUpRight, CalendarDays, ChevronRight, ExternalLink, FileText, Info, LoaderCircle, RefreshCw, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CalendarDays, ChevronRight, ExternalLink, FileText, Info, LoaderCircle, RefreshCw, Star, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { version as APP_VERSION } from "@/package.json";
 import type { CoinScored } from "@/lib/types";
@@ -29,7 +29,7 @@ type HistoryState = { key: string; status: "loading"; count: number } | { key: s
 const INTRO_PREVIEW_LENGTH = 50;
 const shortDescription = (text: string) => text.length > INTRO_PREVIEW_LENGTH ? `${text.slice(0, INTRO_PREVIEW_LENGTH - 3).trimEnd()}…` : text;
 
-export function CoinDetailOverview({ coin: c, capital: initialCapital, onClose, publicationId, snapshotUpdatedAt, onRefreshPublication }: { coin: CoinScored; capital: CapitalBasis; onClose: () => void; publicationId?: string; snapshotUpdatedAt?: string; onRefreshPublication?: () => void }) {
+export function CoinDetailOverview({ coin: c, capital: initialCapital, onClose, publicationId, snapshotUpdatedAt, onRefreshPublication, favorite, onFavorite }: { coin: CoinScored; capital: CapitalBasis; onClose: () => void; publicationId?: string; snapshotUpdatedAt?: string; onRefreshPublication?: () => void; favorite?: boolean; onFavorite?: () => void }) {
   const [view, setView] = useState<"overview" | "research">("overview");
   const [originalOpen, setOriginalOpen] = useState(false);
   const [capital, setCapital] = useState(initialCapital);
@@ -108,6 +108,7 @@ export function CoinDetailOverview({ coin: c, capital: initialCapital, onClose, 
         <a className="button" href={llama} target="_blank" rel="noreferrer">DefiLlama<ExternalLink size={13}/></a>
         {market ? <a className="button" href={market.url} target="_blank" rel="noreferrer">{market.label}<ExternalLink size={13}/></a> : <button className="button" disabled title="확인된 CoinGecko ID 또는 CoinMarketCap 주소가 없습니다.">시세 페이지 미연결</button>}
       </nav>
+      {onFavorite && <button className="icon-button detail-favorite" aria-pressed={favorite} aria-label={`${c.name} 관심종목 ${favorite ? "해제" : "추가"}`} title={favorite ? "관심종목에 저장됨" : "관심종목에 담기"} onClick={onFavorite}><Star size={18} fill={favorite ? "currentColor" : "none"}/></button>}
       <button data-detail-close onClick={onClose} className="icon-button detail-overview-close" aria-label={`${c.name} 상세 닫기`}><X size={22}/></button>
     </header>
 

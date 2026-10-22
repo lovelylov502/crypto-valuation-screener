@@ -7,6 +7,8 @@ import { DAILY_VALUATION_VERSION, calculateDailyValuation, dailyComparisonMetric
 import type { CoinRaw } from "./types";
 import type { CapitalBasis } from "./valuationMetrics";
 import type { ValuationComparisonMetric, ValuationComparisonPage } from "./valuationComparison";
+import { MAP_PERIODS, mapDate } from "./discoveryTypes";
+import { mapHistoricalPositions } from "./discoveryMetrics";
 
 export type { DailyValuationCell, DailyValuationHistoryPoint, DailyValuationRatio, DailyValuationReason } from "./dailyValuation";
 export type DailyValuationCoin = Pick<CoinRaw, "slug" | "geckoId" | "cmcId" | "identityStatus" | "capitalExclusionReason">;
@@ -45,6 +47,35 @@ const revisionValue = (result: Pick<ResultSet, "rows" | "columns">) => dailyRawH
 
 export async function readDailyValuationRevision(db: Client) {
   return revisionValue(await historyRead(db, revisionSql));
+}
+
+/** Read-only, bounded map history. Exact identities and one transaction fence source revisions. */
+export async function readMapHistoryBatch(options: {
+  coins: (DailyValuationCoin & { revenue30d: number })[]; capital: CapitalBasis; snapshot: DailyValuationSnapshot; db?: Client;
+}) {
+  const { coins, capital, snapshot } = options;
+  if (coins.length > 200 || new Set(coins.map(c => c.slug)).size !== coins.length) throw Error("map_history_invalid_batch");
+  assertCapital(capital);
+  const { asOf } = dailyValuationAsOf(snapshot), result = new Map<string, ReturnType<typeof mapHistoricalPositions>>();
+  if (!coins.length) return result;
+  const db = options.db ?? connectDailyValuationReader();
+  let tx: Transaction | undefined;
+  try {
+    tx = await db.transaction("read");
+    const selected = [capital, "revenue"] as const;
+    const fields = selected.flatMap(metric => [`CAST(d.${metric} AS REAL) ${metric}`, `d.${metric}_state`, `d.${metric}_source`, `d.${metric}_at`]).join(",");
+    const ends = [asOf, ...MAP_PERIODS.map(days => mapDate(asOf, -days))];
+    const data = await transactionRead(db, tx, { sql: `SELECT a.id asset_id,a.slug,d.day,${fields} FROM json_each(?) w CROSS JOIN daily_raw_assets a ON a.slug=json_extract(w.value,'$.slug') AND a.identity=json_extract(w.value,'$.identity') CROSS JOIN daily_raw_days d ON d.asset_id=a.id AND d.day>=? AND d.day<=? WHERE EXISTS (SELECT 1 FROM json_each(?) e WHERE d.day BETWEEN date(e.value,'-29 days') AND e.value) ORDER BY a.id,d.day`, args: [JSON.stringify(coins.map(c => ({ slug: c.slug, identity: historyIdentity(c) }))), mapDate(asOf, -394), asOf, JSON.stringify(ends)] });
+    if (data.rows.length > coins.length * 210) throw Error("map_history_invalid_rows");
+    const ids = [...new Set(data.rows.flatMap(row => selected.map(metric => row[`${metric}_source`])).filter(id => id !== null))];
+    const receiptRows = ids.length ? (await transactionRead(db, tx, { sql: `${sourceSql} WHERE s.id IN (SELECT value FROM json_each(?))`, args: [JSON.stringify(ids)] })).rows : [];
+    const sources = new Map(receiptRows.map(row => [Number(row.id), { owner: Number(row.asset_id), value: source(row) }]));
+    const bySlug = new Map<string, DailyRawStoredPoint[]>(), ownerBySlug = new Map<string, number>(), sourcesByOwner = new Map<number, DailyRawSource[]>();
+    for (const row of data.rows) { const slug = String(row.slug), points = bySlug.get(slug) ?? []; points.push(rowPoint(row, sources)); bySlug.set(slug, points); ownerBySlug.set(slug, Number(row.asset_id)); }
+    for (const entry of sources.values()) { const list = sourcesByOwner.get(entry.owner) ?? []; list.push(entry.value); sourcesByOwner.set(entry.owner, list); }
+    for (const coin of coins) result.set(coin.slug, mapHistoricalPositions({ points: linked(coin) && eligibleCapital(coin) ? bySlug.get(coin.slug) ?? [] : [], sources: sourcesByOwner.get(ownerBySlug.get(coin.slug)!) ?? [], asOf, capital, currentRevenue: coin.revenue30d }));
+    await tx.commit(); return result;
+  } finally { tx?.close(); if (!options.db) db.close(); }
 }
 function source(row: Row): DailyRawSource {
   return { key: String(row.source_key), metric: String(row.metric) as DailyRawMetric, provider: String(row.provider), url: String(row.url), observedAt: String(row.observed_at), sha256: String(row.sha256), ...(row.archive_url === null ? {} : { archiveUrl: String(row.archive_url) }), scope: String(row.scope), definition: String(row.definition), basis: String(row.basis), ...(row.revision_key === null ? {} : { revisionOf: String(row.revision_key) }) };

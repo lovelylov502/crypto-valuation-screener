@@ -26,7 +26,7 @@ async function preparedCatalog(ref: PublishedSnapshot) {
     return remember(catalogs, cacheKey, checkCatalog(decodeDailyReadModel<TableCatalog>(row), ref), 2);
   } finally { db.close(); }
 }
-async function currentCatalog() {
+export async function currentCatalog() {
   const publication = await getPublication(), ref = publication.published;
   if (ref) try { const catalog = await preparedCatalog(ref); if (catalog) return { catalog, publication, readModel: "prepared" as const }; } catch { console.error("table_catalog_unavailable"); }
   const data = await getScreener(), actualPublication = data.publication, actual = actualPublication?.published;

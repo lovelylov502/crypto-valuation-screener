@@ -1,5 +1,7 @@
 # Crypto Rediscovery Screener — Product Brief
 
+2026-10-23 변경: 아래의 단일 화면·탭 추가 금지 지침은 [세 탭 작업 공간](./DISCOVERY_WORKSPACE.md) 결정으로 대체한다. 전체종목의 기존 기능을 보존하고 후보 지도와 개인 관심종목을 연결한다. 나머지 지표·출처 원칙은 유지한다.
+
 > Current v4 contract (2026-09-08): [SCREENER_V4.md](./SCREENER_V4.md). The sections below preserve the v3 baseline. For the current independent discovery signals, same-period accounting, refresh, history and UI, follow the v4 contract.
 
 ## 제품 정의

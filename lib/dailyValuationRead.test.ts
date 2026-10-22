@@ -3,7 +3,7 @@ import { createClient, type Client, type InStatement, type TransactionMode } fro
 import * as historyDatabase from "./historyDatabase";
 import { initializeDailyRaw, openDailyRawRun, upsertDailyRaw } from "./dailyRawDatabase";
 import { shiftValuationDay } from "./dailyValuation";
-import { DAILY_COMPARISON_TIMEOUT_MS, DAILY_HISTORY_MAX_POINTS, DailyValuationIdentityChanged, DailyValuationRevisionChanged, readDailyComparisonBatch, readDailyValuationHistory, type DailyValuationCoin } from "./dailyValuationRead";
+import { DAILY_COMPARISON_TIMEOUT_MS, DAILY_HISTORY_MAX_POINTS, DailyValuationIdentityChanged, DailyValuationRevisionChanged, readDailyComparisonBatch, readDailyValuationHistory, readMapHistoryBatch, type DailyValuationCoin } from "./dailyValuationRead";
 import type { DailyRawMetric, DailyRawPoint, DailyRawSource } from "./dailyRawData";
 
 let db: Client;
@@ -27,8 +27,40 @@ async function correct(metric: DailyRawMetric, day: string, value: number) {
 const batch = (changes: Partial<Parameters<typeof readDailyComparisonBatch>[0]> = {}) => readDailyComparisonBatch({ coins: [coin], capital: "fdv", snapshot, db, now, ...changes });
 const history = (changes: Partial<Parameters<typeof readDailyValuationHistory>[1]> = {}) => readDailyValuationHistory(db, { coin, capital: "fdv", snapshot, now, ...changes });
 const sql = (statement: InStatement) => typeof statement === "string" ? statement : statement.sql;
+const mapHistory = (changes: Partial<Parameters<typeof readMapHistoryBatch>[0]> = {}) => readMapHistoryBatch({ coins: [{ ...coin, revenue30d: 30 }], capital: "fdv", snapshot, db, ...changes });
 beforeEach(async () => { db = createClient({ url: ":memory:" }); await initializeDailyRaw(db); await openDailyRawRun(db, { id: "fixture", maxEstimatedWrites: 2_000_000, now }); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.useRealTimers(); db.close(); });
+
+it("maps all six exact historical dates with a complete 30-day denominator in a read-only transaction", async () => {
+  await seed(points(395));
+  const transaction = vi.spyOn(db, "transaction"), before = await db.execute("SELECT rows_written FROM daily_raw_runs");
+  const result = (await mapHistory()).get(coin.slug)!;
+  for (const days of [1, 7, 30, 90, 180, 365] as const) expect(result[days].point).toEqual({ date: shiftValuationDay(asOf, -days), pr: 395 - days, revenue: 30 });
+  expect(transaction).toHaveBeenCalledWith("read");
+  expect((await db.execute("SELECT rows_written FROM daily_raw_runs")).rows).toEqual(before.rows);
+  expect((await mapHistory({ capital: "mcap" })).get(coin.slug)![30].point?.pr).toBe(730);
+});
+
+it("does not draw arrows for gaps, a changed current total, token replacement or excluded capital", async () => {
+  const values = points(395); values.splice(355, 1); await seed(values);
+  const history = (await mapHistory()).get(coin.slug)!;
+  expect(history[30].point).toBeNull(); expect(history[1].point).not.toBeNull();
+  expect((await mapHistory({ coins: [{ ...coin, revenue30d: 31 }] })).get(coin.slug)![1].point).toBeNull();
+  expect((await mapHistory({ coins: [{ ...coin, geckoId: "replacement", revenue30d: 30 }] })).get(coin.slug)![1].point).toBeNull();
+  expect((await mapHistory({ coins: [{ ...coin, capitalExclusionReason: "liability", revenue30d: 30 }] })).get(coin.slug)![1].point).toBeNull();
+});
+
+it("allows verified zero days in the window but rejects changed financial scope and missing exact capital", async () => {
+  const values = points(395), changed = { ...source("revenue"), key: "changed-scope", scope: "another-product" };
+  values[10].revenue = { value: 0, source: source("revenue").key, state: "complete", at: null };
+  values[214].revenue!.source = changed.key;
+  values[304].fdv = { value: null, state: "missing", source: "", at: null };
+  await seed(values, undefined, [...metrics.map(metric => source(metric)), changed]);
+  const result = (await mapHistory()).get(coin.slug)!;
+  expect(result[365].point?.revenue).toBe(29);
+  expect(result[180].point).toBeNull(); expect(result[90].point).toBeNull();
+  expect(result[30].point).not.toBeNull();
+});
 
 it("seeks exact identities and the 366-day range, returning a read-only 365-day distribution", async () => {
   await seed(); const execute = vi.spyOn(db, "execute"), result = await batch();
