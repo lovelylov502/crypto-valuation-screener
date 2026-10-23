@@ -2,6 +2,7 @@ import { MAP_PERIODS, positive, type DiscoveryRow, type MapPeriod } from "./disc
 import { parseWorkspace, type WorkspacePreferences } from "./workspacePreferences";
 
 export const MAP_WORKSPACE_KEY = "tovenit-map-workspace-v1";
+export const MAP_MIN_MCAP = 100_000;
 export interface MapFilters {
   capital: "mcap" | "fdv"; period: MapPeriod;
   minMcap: number; maxMcap: number; revenueGrowing: boolean; prFalling: boolean;
@@ -9,13 +10,13 @@ export interface MapFilters {
 }
 export interface MapCondition { name: string; filters: MapFilters; inherited: WorkspacePreferences | null }
 export interface MapWorkspace { filters: MapFilters; inherited: WorkspacePreferences | null; saved: MapCondition[]; selected: string }
-export const defaultMapFilters = (): MapFilters => ({ capital: "mcap", period: 30, minMcap: 0, maxMcap: 0, revenueGrowing: false, prFalling: false, prLimit: false, maxPr: 30 });
+export const defaultMapFilters = (): MapFilters => ({ capital: "mcap", period: 30, minMcap: MAP_MIN_MCAP, maxMcap: 0, revenueGrowing: false, prFalling: false, prLimit: false, maxPr: 30 });
 export const defaultMapWorkspace = (): MapWorkspace => ({ filters: defaultMapFilters(), inherited: null, saved: [], selected: "" });
 
 function parseFilters(value: unknown): MapFilters {
   const p = (value && typeof value === "object" ? value : {}) as Partial<MapFilters>;
   const finite = (n: unknown, fallback = 0) => typeof n === "number" && Number.isFinite(n) && n >= 0 ? n : fallback;
-  const minMcap = finite(p.minMcap), maxMcap = finite(p.maxMcap);
+  const minMcap = Math.max(MAP_MIN_MCAP, finite(p.minMcap)), maxMcap = finite(p.maxMcap);
   return { capital: p.capital === "fdv" ? "fdv" : "mcap", period: MAP_PERIODS.includes(p.period!) ? p.period! : 30,
     minMcap, maxMcap: maxMcap ? Math.max(minMcap, maxMcap) : 0,
     revenueGrowing: p.revenueGrowing === true, prFalling: p.prFalling === true, prLimit: p.prLimit === true, maxPr: finite(p.maxPr, 30) };
@@ -38,7 +39,8 @@ export function parseMapWorkspace(raw: string | null): MapWorkspace {
   } catch { return defaultMapWorkspace(); }
 }
 export function mapFiltersFromTable(prefs: WorkspacePreferences): MapFilters {
-  return { ...defaultMapFilters(), capital: prefs.capital, minMcap: prefs.minMcap, maxMcap: prefs.maxMcap, prLimit: prefs.rangeWindow === 30 && prefs.maxPr > 0, maxPr: prefs.rangeWindow === 30 && prefs.maxPr > 0 ? prefs.maxPr : 30 };
+  const minMcap = Math.max(MAP_MIN_MCAP, prefs.minMcap);
+  return { ...defaultMapFilters(), capital: prefs.capital, minMcap, maxMcap: prefs.maxMcap > 0 ? Math.max(minMcap, prefs.maxMcap) : 0, prLimit: prefs.rangeWindow === 30 && prefs.maxPr > 0, maxPr: prefs.rangeWindow === 30 && prefs.maxPr > 0 ? prefs.maxPr : 30 };
 }
 export function matchesMapFilters(row: DiscoveryRow, filters: MapFilters): boolean {
   if ((filters.minMcap > 0 || filters.maxMcap > 0) && (!positive(row.mcap) || row.mcap < filters.minMcap || filters.maxMcap > 0 && row.mcap > filters.maxMcap)) return false;

@@ -198,7 +198,7 @@ export function CandidateMap({ favorites, onFavorite, onDetail, imported, onClea
       e.preventDefault(); const name = saveName.trim(); if (!name) return;
       setWorkspace(previous => ({ ...previous, selected: name, saved: [...previous.saved.filter(item => item.name !== name), { name, filters: { ...filters }, inherited }] }));
       setSaveOpen(false); setMessage("‘" + name + "’ 조건을 저장했습니다.");
-    }}><label>조건 이름<input aria-label="지도 조건 이름" maxLength={60} value={saveName} onChange={e => setSaveName(e.target.value)} placeholder="예: 시총 1억 이하 · 수익 증가"/></label>
+    }}><label>조건 이름<input aria-label="지도 조건 이름" maxLength={60} value={saveName} onChange={e => setSaveName(e.target.value)} placeholder="예: 시총 100M 이하 · 수익 증가"/></label>
       <p>시총 범위·변화 조건·과거 시점·P/R 분자를 함께 저장합니다.{inherited && " 전체종목에서 가져온 조건도 포함합니다."}{saved.some(item => item.name === saveName.trim()) && " 같은 이름의 조건은 현재 값으로 바뀝니다."}</p><button type="submit" className="button primary-button" disabled={!saveName.trim()}>이 이름으로 저장</button></form></SettingsDialog>}
   </div>;
 }

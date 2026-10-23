@@ -10,6 +10,10 @@ The October 22 product decision adds three connected views: the unchanged screen
 4. Review desktop and narrow screens in both themes; exercise discovery → detail → save → revisit → restore. Fix observed issues and repeat the affected checks.
 5. Run arithmetic/storage/API regression tests, typecheck and build. Preserve owner files in the canonical checkout before its clean-main deployment gate, then restore them after deployment. Verify canonical production and real browser flows.
 
+## October 23 map units (v0.8.1)
+
+Map cap inputs use $M (millions of USD), matching the table's unit. Their stored values and filtering remain in USD: 0.1 means $100,000 and 100 means $100,000,000. The map's default and lowest selectable minimum is 0.1M; the existing logarithmic USD slider is mapped from that floor to its upper endpoint. A blank maximum retains the unbounded sentinel. Restoring older saved conditions or importing table filters clamps sub-0.1M minima and any lower positive maximum to this floor, without changing the table preferences or other saved dollar amounts. This supersedes the Korean-unit display described in v0.8.0 below.
+
 ## October 23 refinement (v0.8.0)
 
 The approved Quiet Research Desk mockup replaces map search/playback with a current circulating-cap range bar and optional Revenue growth, falling P/R and P/R ceiling conditions. These combine with AND. Growth compares rolling 30-day Revenue at the selected historical endpoint with the current 30-day amount; falling P/R uses the same two endpoints. A missing historical point cannot pass either change condition. The cap range always uses the latest circulating market cap, including when P/R uses FDV. Dollar inputs retain exact numeric values; only their blurred Korean-unit presentation is rounded.

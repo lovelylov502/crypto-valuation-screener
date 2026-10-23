@@ -2,6 +2,16 @@
 
 final result: passed
 
+## Map cap inputs in millions — 2026-10-23 / v0.8.1
+
+Scope: the user's cap-range correction. The map now follows the existing table's $M unit with minimum/maximum number inputs and the same dual-handle logarithmic interaction. The map's left endpoint and default minimum are 0.1M. Stored values remain USD; restoring old map conditions or importing a lower table range applies the new map floor. The table's controls and preferences are unchanged.
+
+Browser checks at 1280 × 900 and 390 × 844 confirmed the labels, 0.1M left endpoint, unbounded maximum, no horizontal overflow, and values retained after reload. Entering 12836 represents the screenshot's 12.836 billion dollars; entering 20 produces a $20M cap ceiling with 239 matching current points in the checked publication. Entering 0.01 is clamped to 0.1. Keyboard Home on the upper handle gives a 0.1M maximum; End restores the unbounded maximum. The existing dark theme and typography remain in place. Korean unit labels and release copy were checked for meaning and wording. Mobile evidence: `release-qa/map-cap-m-units-mobile-v081.png` under the external October 22 visualization folder recorded below.
+
+Validation: 21 targeted map/range tests and TypeScript passed. The new boundary/storage regression checks $100,000 inclusively and preserves existing dollar amounts. Final full-suite, production build and canonical live verification are performed by the guarded deployment wrapper. No remaining actionable layout or interaction finding in this scope.
+
+final result: passed
+
 ## Quiet Research Desk and full introductions — 2026-10-23 / v0.8.0
 
 Scope: the approved light map mockup with a current-cap range bar, name-only hover and shared navigation, plus the user's report that nearly all coin introductions were cut off. The source image is `C:/Users/TAE/.codex/generated_images/01a16326-7efc-72d3-b9c1-e9d59e950f94/exec-ceb4d7ef-1d70-499d-b057-a60999281611.png`. Browser evidence is outside Git under `C:/Users/TAE/.codex/visualizations/2026/10/22/01a16326-7efc-72d3-b9c1-e9d59e950f94/release-qa/`.

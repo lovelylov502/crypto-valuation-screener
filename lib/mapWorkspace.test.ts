@@ -18,7 +18,16 @@ describe("map conditions", () => {
     expect(matchesMapFilters(row, filters)).toBe(true);
     expect(matchesMapFilters({ ...row, mcap: 9_999_999.99 }, filters)).toBe(false);
     expect(matchesMapFilters({ ...row, mcap: null }, filters)).toBe(false);
-    expect(matchesMapFilters({ ...row, mcap: null }, defaultMapFilters())).toBe(true);
+    expect(matchesMapFilters({ ...row, mcap: null }, defaultMapFilters())).toBe(false);
+  });
+  it("starts at 0.1M and upgrades older stored/imported ranges without changing dollar units", () => {
+    const filters = defaultMapFilters();
+    expect(filters.minMcap).toBe(100_000);
+    expect(matchesMapFilters({ ...coin(), mcap: 99_999.99 }, filters)).toBe(false);
+    expect(matchesMapFilters({ ...coin(), mcap: 100_000 }, filters)).toBe(true);
+    expect(parseMapWorkspace(JSON.stringify({ filters: { minMcap: 0, maxMcap: 12_836_000_000 } })).filters).toMatchObject({ minMcap: 100_000, maxMcap: 12_836_000_000 });
+    expect(parseMapWorkspace(JSON.stringify({ saved: [{ name: "old", filters: { minMcap: 0, maxMcap: 50_000 } }] })).saved[0].filters).toMatchObject({ minMcap: 100_000, maxMcap: 100_000 });
+    expect(mapFiltersFromTable({ ...defaultPreferences(), minMcap: 0, maxMcap: 50_000 })).toMatchObject({ minMcap: 100_000, maxMcap: 100_000 });
   });
   it("combines growth and falling multiples using the chosen historical 30-day endpoint", () => {
     const filters = { ...defaultMapFilters(), revenueGrowing: true, prFalling: true };
