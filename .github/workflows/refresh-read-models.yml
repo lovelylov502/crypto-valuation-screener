@@ -14,7 +14,7 @@ jobs:
   refresh:
     if: github.repository == 'lovelylov502/crypto-valuation-screener' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
       TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
@@ -28,6 +28,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Refresh recent financial dates from verified originals
         run: npx tsx scripts/refresh-daily-financials.ts --cache "$RUNNER_TEMP/verified-read-maintenance" --run-id "read-maintenance-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 600 --recent-days 3 --apply
+      - name: Capture every verified current FDV independently of CSV readiness
+        run: npx tsx scripts/capture-current-fdv.ts --cache "$RUNNER_TEMP/verified-read-maintenance" --reference "$RUNNER_TEMP/verified-read-maintenance/reference.json" --run-id "read-maintenance-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 300 --apply
       - name: Prepare current full-history reads from the same publication
         run: |
           npx tsx scripts/prepare-daily-history.ts --cache "$RUNNER_TEMP/verified-read-maintenance" --reference "$RUNNER_TEMP/verified-read-maintenance/reference.json" --run-id "read-maintenance-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 900 --workers 4 --apply

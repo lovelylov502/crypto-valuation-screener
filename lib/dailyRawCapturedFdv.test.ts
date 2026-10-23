@@ -4,6 +4,7 @@ import { indexCapturedFdvQuotes } from "./dailyRawFdvValidation";
 import { originalCapturedFdv, snapshotDailyRaw } from "./dailyRawCollection";
 import type { CoinRaw } from "./types";
 import type { PublishedSnapshot } from "./publicationTypes";
+import { collectCurrentFdv } from "./dailyRawFdvRecovery";
 
 const observedAt = "2026-10-12T00:01:00Z", quoteAt = "2026-10-11T23:59:00Z";
 const reference = { url: "https://github.com/lovelylov502/crypto-valuation-screener/releases/download/data-test-complete/data.json.gz", sha256: "a".repeat(64), dataAt: observedAt, validatedAt: observedAt } as PublishedSnapshot;
@@ -50,4 +51,11 @@ it("retains the explicit Snowbank supply review hold even with a verified timest
   const source = indexCapturedFdvQuotes([{ url: "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=snowbank", requestedAt: observedAt, observedAt, status: 200, headers: {}, body, sha256: contentHash(body) }]);
   const result = originalCapturedFdv(snowbank, snowbank, reference, source);
   expect(result.points).toEqual([]); expect(result.issues?.[0].reason).toContain("supply_basis_under_review");
+});
+it("collects today's FDV for all verified tokens without requiring CSV or financial history", () => {
+  const at = "2026-10-23T12:00:00Z", received = "2026-10-23T12:01:00Z", body = JSON.stringify([{ id: "sample", current_price: 2, fully_diluted_valuation: 200, max_supply: 100, last_updated: at }]);
+  const receipt: SourceReceipt = { url: "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=sample", requestedAt: received, observedAt: received, status: 200, headers: {}, body, sha256: contentHash(body) };
+  const current = { ...coin, marketDataUpdatedAt: at, marketSources: { ...coin.marketSources!, fdv: "CoinGecko", gecko: { id: "sample", status: "received", observedAt: received } } } as CoinRaw;
+  const result = collectCurrentFdv({ coins: [current, { ...current, slug: "unverified", identityStatus: "review" }] }, { receipts: [receipt] } as never, { ...reference, dataAt: received }, new Date(received));
+  expect(result.assets).toHaveLength(1); expect(result.assets[0].points[0]).toMatchObject({ day: "2026-10-23", fdv: { value: 200, at } });
 });

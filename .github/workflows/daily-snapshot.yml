@@ -154,7 +154,7 @@ jobs:
     needs: capture
     if: needs.capture.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     concurrency:
       group: daily-history-model-preparation
       cancel-in-progress: false
@@ -172,6 +172,9 @@ jobs:
       - name: Patch recent financial dates from the latest verified source archive
         id: financial
         run: npx tsx scripts/refresh-daily-financials.ts --cache "$RUNNER_TEMP/daily-history-model" --run-id "history-model-${{ github.run_id }}-${{ github.run_attempt }}" --time-budget-seconds 600 --max-estimated-writes 50000 --recent-days 3 --apply
+      - name: Capture current FDV for every verified token independently of CSV readiness
+        if: steps.financial.outcome == 'success'
+        run: npx tsx scripts/capture-current-fdv.ts --cache "$RUNNER_TEMP/daily-history-model" --reference "$RUNNER_TEMP/daily-history-model/reference.json" --run-id "history-model-${{ github.run_id }}-${{ github.run_attempt }}" --time-budget-seconds 300 --max-estimated-writes 50000 --apply
       - name: Refresh complete-history models for the latest verified completion date
         if: steps.financial.outcome == 'success'
         run: |

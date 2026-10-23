@@ -12,6 +12,16 @@ export interface FdvRecoveryManifest {
   schema: 1; reference: PublishedSnapshot;
   sources: { url: string; sha256: string; bundleSha256: string }[];
 }
+/** Capture every verified current FDV independently of CSV/MAX readiness.
+ * Today's market observations may be stored; completed-day readers still hide
+ * that day until its UTC financial period is complete. */
+export function collectCurrentFdv(snapshot: { coins: CoinRaw[] }, bundle: SourceBundle, reference: PublishedSnapshot, now = new Date()) {
+  const index = indexCapturedFdvQuotes(bundle.receipts);
+  if (index.issues.length) throw Error("daily_fdv_capture_original_receipt");
+  const assets = snapshot.coins.map(coin => originalCapturedFdv(coin, coin, reference, index));
+  for (const item of assets) item.points = item.points.filter(point => point.day <= now.toISOString().slice(0, 10));
+  return { assets: assets.filter(item => item.points.length), heldQuotes: assets.reduce((n, item) => n + (item.issues?.length ?? 0), 0) };
+}
 const archive = /^https:\/\/github\.com\/lovelylov502\/crypto-valuation-screener\/releases\/download\/data-[A-Za-z0-9-]+\/data\.json\.gz$/;
 const hash = /^[a-f0-9]{64}$/;
 /** A reviewed repair replays existing primary originals. It never accepts a supplied FDV value. */

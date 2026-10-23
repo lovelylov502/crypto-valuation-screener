@@ -141,7 +141,7 @@ it("serializes the daily raw workflow and retains queue archival after failed or
 
 it("prepares history after the complete raw job even when the import used its entire deadline", () => {
   const workflow = parse(readFileSync(new URL("../.github/workflows/daily-history.yml", import.meta.url), "utf8")), model = workflow.jobs["prepare-history"];
-  expect(model.needs).toBe("sync"); expect(model.if).toBe("needs.sync.result == 'success'"); expect(model["timeout-minutes"]).toBe(30);
+  expect(model.needs).toBe("sync"); expect(model.if).toBe("needs.sync.result == 'success'"); expect(model["timeout-minutes"]).toBe(35);
   expect(model.permissions).toEqual({ contents: "read" });
   expect(model.concurrency).toEqual({ group: "daily-history-model-preparation", "cancel-in-progress": false });
   expect(model.concurrency.group).not.toBe(workflow.concurrency.group);

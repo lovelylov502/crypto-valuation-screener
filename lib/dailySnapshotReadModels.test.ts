@@ -10,7 +10,7 @@ import { decodeCompactHistory, expandCompactHistory } from "./dailyValuationComp
 it("refreshes history after verified snapshot publication in its own bounded job, independently of raw import time", () => {
   const workflow = parse(readFileSync(new URL("../.github/workflows/daily-snapshot.yml", import.meta.url), "utf8")), job = workflow.jobs["prepare-history"], command = job.steps.find((step: { run?: string }) => step.run?.includes("scripts/prepare-daily-history.ts")).run;
   expect(workflow.concurrency.group).toBe("screener-publication");
-  expect(job.needs).toBe("capture"); expect(job.if).toBe("needs.capture.result == 'success'"); expect(job["timeout-minutes"]).toBeLessThanOrEqual(30); expect(job["continue-on-error"]).not.toBe(true);
+  expect(job.needs).toBe("capture"); expect(job.if).toBe("needs.capture.result == 'success'"); expect(job["timeout-minutes"]).toBeLessThanOrEqual(35); expect(job["continue-on-error"]).not.toBe(true);
   expect(job.concurrency).toEqual({ group: "daily-history-model-preparation", "cancel-in-progress": false });
   expect(command).toContain('--cache "$RUNNER_TEMP/daily-history-model"'); expect(command).toContain('--run-id "history-model-${{ github.run_id }}-${{ github.run_attempt }}"');
   expect(command).toContain("--time-budget-seconds 900"); expect(command).toContain("--max-estimated-writes 50000"); expect(command).toContain("--apply");

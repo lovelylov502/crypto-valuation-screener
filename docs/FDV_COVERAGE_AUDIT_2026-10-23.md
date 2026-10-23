@@ -38,6 +38,14 @@ The subsequent full stored-FDV primary audit exposed five additional snapshot or
 
 Measured serial transaction latency requires a longer wall-clock allowance for the second batch: the manual job allows 50 minutes of replay/import inside a 60-minute job. Its hard 50,000-credit allowance, shared 8M/4GB limits, expected-empty-cell guards and manual-only trigger are unchanged. The expanded wall-clock allowance grants no additional write credits. The follow-up's runtime completion is verified separately.
 
+The second import completed all 2,831 dates for 1,081 projects, using 14,994 credits. Independent SELECT-only verification matched all 2,831 original amounts, measurement times, source keys and receipt hashes. Combined with the first import, this restores **7,788 dates across 1,776 distinct projects**, for 33,212 credits. The runtime receipts are Actions runs `39901306270` and `39905671935`; each repair's read-model preparation is checked separately from the raw import.
+
+## Preventing new gaps
+
+The existing raw import coupled captured FDV storage to CSV/MAX selection. A valid quote could therefore remain absent from dated storage while a project's full-history acquisition was pending. Regular snapshot, raw-history and manual read maintenance now capture every eligible verified current FDV independently of that queue, using the same pinned snapshot and original source bundle. The first valid quote for its actual UTC date fills only a genuinely empty FDV cell. Today's observation can be stored, while completed-day chart/calculation readers continue to exclude today.
+
+The new FDV-only path bounds transactions to 300 asset/date cells and checks source ownership, immutable original evidence, expected empty cells, shared quotas and storage before mutations. It preserves existing values, holds and all five other daily metrics. Exact replay costs zero data writes. It shares the existing 50,000-credit financial/history maintenance run and introduces no provider requests, scheduler or new credentials. Tests exercise a full 300-identity batch with bounded transport requests, unfinished-day exclusion, financial preservation, no-op replay, mixed occupied-cell rejection and pre-mutation quota refusal. A SELECT-only production dry run at `data-39901716557-1-complete` finds 1,517 verified quotes, with 34 already present and 1,483 missing cells; hosted completion must be verified separately.
+
 ## Current quote quality
 
 The baseline contains eight selected positive FDV amounts above their same-record price × finite maximum-supply bound (including LINQ) and Snowbank's existing CoinGecko supply-unit hold. Acquisition revision 10 applies these gates before selecting current FDV, allowing only otherwise verified consistent alternatives. A failed maximum bound supplies no replacement value. Missing maxima alone do not reject a provider-reported FDV. Original revision 1–9 archives retain their exact replay behavior.

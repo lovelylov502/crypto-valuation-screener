@@ -324,6 +324,85 @@ export async function upsertDailyRaw(db: Client, options: DailyRawUpsertOptions)
   } finally { tx.close(); }
 }
 
+/** Bounded, missing-only FDV capture across assets. One transaction retains the
+ * same ownership, empty-cell CAS, immutable evidence and quota guarantees as a
+ * single-asset upsert, without a network round trip for every asset. */
+export async function captureMissingDailyFdv(db: Client, options: {
+  runId: string; entries: { asset: DailyRawAsset; day: string; fdv: NonNullable<DailyRawPoint["fdv"]>; source: DailyRawSource }[];
+  checkpoint: DailyRawCheckpoint; now?: Date; minimumReserve?: number;
+}) {
+  const now = options.now ?? new Date(), entries = options.entries, minimumReserve = options.minimumReserve ?? 0;
+  if (!entries.length) return { rowsWritten: 0, daysWritten: 0, estimatedWrites: 0 };
+  if (entries.length > 300 || !Number.isSafeInteger(minimumReserve) || minimumReserve < 0 || minimumReserve > HISTORY_WRITE_LIMIT || !options.checkpoint.key.trim()) throw Error("Invalid FDV capture batch");
+  const assets = new Map<string, DailyRawAsset>(), sources = new Map<string, { asset: DailyRawAsset; source: DailyRawSource }>(), keys = new Set<string>();
+  const assetKey = (asset: DailyRawAsset) => dailyRawHash([asset.slug, asset.identity]);
+  for (const entry of entries) {
+    assertDailyRawAsset(entry.asset); assertDailyRawDay(entry.day); assertDailyRawSource(entry.source);
+    if (entry.source.metric !== "fdv" || entry.source.revisionOf !== undefined || entry.fdv.state !== "complete" || !(entry.fdv.value! > 0) || !entry.fdv.at || entry.fdv.source !== entry.source.key) throw Error("FDV capture requires a verified positive observation");
+    assertDailyRawObservation("fdv", { day: entry.day, fdv: entry.fdv }, entry.source, now);
+    const key = dailyRawHash([entry.asset.slug, entry.asset.identity, entry.day]); if (keys.has(key)) throw Error("Duplicate FDV capture cell"); keys.add(key);
+    const existing = sources.get(entry.source.key);
+    if (existing && (assetKey(existing.asset) !== assetKey(entry.asset) || sourceFingerprint(0, existing.source) !== sourceFingerprint(0, entry.source))) throw Error("FDV capture source ownership conflict");
+    assets.set(assetKey(entry.asset), entry.asset); sources.set(entry.source.key, { asset: entry.asset, source: entry.source });
+  }
+  const wanted = JSON.stringify(entries.map(entry => ({ ...entry.asset, day: entry.day }))), sourceKeys = JSON.stringify([...sources.keys()]);
+  const tx = await db.transaction("write");
+  try {
+    const local = unmeteredLocalClients.has(db), reads = await tx.batch([
+      { sql: "SELECT * FROM daily_raw_runs WHERE id=?", args: [options.runId] },
+      { sql: "SELECT reserved FROM history_budget WHERE month=?", args: [now.toISOString().slice(0, 7)] },
+      { sql: `SELECT w.key idx,a.id asset_id,d.fdv,d.fdv_state,d.fdv_source,d.fdv_at FROM json_each(?) w LEFT JOIN daily_raw_assets a ON a.slug=json_extract(w.value,'$.slug') AND a.identity=json_extract(w.value,'$.identity') LEFT JOIN daily_raw_days d ON d.asset_id=a.id AND d.day=json_extract(w.value,'$.day') ORDER BY CAST(w.key AS INTEGER)`, args: [wanted] },
+      { sql: `${sourceSelect} WHERE s.source_key IN (SELECT value FROM json_each(?))`, args: [sourceKeys] },
+      "PRAGMA page_count", "PRAGMA page_size",
+    ]);
+    if (!reads[0].rows.length) throw Error("Daily raw run has not been opened");
+    const run = readRun(reads[0].rows[0]), known = new Map(reads[3].rows.map(row => [String(row.source_key), row]));
+    const assetIds = new Map<string, number>();
+    for (let i = 0; i < entries.length; i++) if (reads[2].rows[i].asset_id !== null) assetIds.set(assetKey(entries[i].asset), Number(reads[2].rows[i].asset_id));
+    for (const { asset, source } of sources.values()) {
+      const old = known.get(source.key), id = assetIds.get(assetKey(asset));
+      if (old && (id === undefined || old.content_hash !== sourceFingerprint(id, source))) throw Error("Daily raw source key was reused with different evidence");
+    }
+    const replay = entries.every((entry, i) => { const row = reads[2].rows[i], source = known.get(entry.source.key); return row.fdv_state === 1 && row.fdv === entry.fdv.value && row.fdv_at === entry.fdv.at && source && row.fdv_source === source.id; });
+    if (replay) { await tx.commit(); return { rowsWritten: 0, daysWritten: 0, estimatedWrites: 0 }; }
+    for (const row of reads[2].rows) if (row.fdv !== null || row.fdv_state !== null && row.fdv_state !== 0 || row.fdv_source !== null || row.fdv_at !== null) throw Error("Daily raw expected cell changed");
+    const pending = [...sources.values()].filter(item => !known.has(item.source.key));
+    const required = estimatedCost({ plain: entries.length + assets.size + 1, indexed: assets.size - assetIds.size + pending.length * 2 }, run.accountingVersion);
+    const monthlyRemaining = HISTORY_WRITE_LIMIT - Number(reads[1].rows[0]?.reserved ?? 0), runRemaining = run.maxEstimatedWrites - run.estimatedWrites;
+    if (!local && required + minimumReserve > monthlyRemaining) throw new DailyRawPreflightBudgetExceeded("monthly", required + minimumReserve, monthlyRemaining);
+    if (required > runRemaining) throw new DailyRawPreflightBudgetExceeded("run", required, runRemaining);
+    const size = Number(reads[4].rows[0][0]) * Number(reads[5].rows[0][0]), bytes = Buffer.byteLength(JSON.stringify(entries)) * 2 + Number(reads[5].rows[0][0]) * (entries.length + pending.length * 2 + assets.size - assetIds.size);
+    if (!local && size + bytes >= HISTORY_STORAGE_LIMIT) throw new HistoryBudgetExceeded("history_storage_budget");
+    const counts: RawWriteCounts = { plain: 0, indexed: 0 }, assetJson = JSON.stringify([...assets.values()]);
+    const receipts = pending.map(({ source }) => ({ ...source, sha256: source.sha256.toLowerCase(), receiptKey: dailyRawHash([source.url, source.observedAt, source.sha256.toLowerCase(), source.archiveUrl ?? null]) }));
+    const registered = await tx.batch([
+      { sql: "INSERT INTO daily_raw_assets(slug,identity) SELECT json_extract(value,'$.slug'),json_extract(value,'$.identity') FROM json_each(?) WHERE 1 ON CONFLICT(slug,identity) DO NOTHING", args: [assetJson] },
+      { sql: "INSERT INTO daily_raw_receipts(receipt_key,url,observed_at,sha256,archive_url) SELECT DISTINCT json_extract(value,'$.receiptKey'),json_extract(value,'$.url'),json_extract(value,'$.observedAt'),json_extract(value,'$.sha256'),json_extract(value,'$.archiveUrl') FROM json_each(?) WHERE 1 ON CONFLICT(receipt_key) DO NOTHING", args: [JSON.stringify(receipts)] },
+      { sql: "SELECT a.id,a.slug,a.identity FROM json_each(?) w JOIN daily_raw_assets a ON a.slug=json_extract(w.value,'$.slug') AND a.identity=json_extract(w.value,'$.identity')", args: [assetJson] },
+    ]);
+    counts.indexed += registered[0].rowsAffected + registered[1].rowsAffected;
+    for (const row of registered[2].rows) assetIds.set(assetKey({ slug: String(row.slug), identity: String(row.identity) }), Number(row.id));
+    const pendingJson = JSON.stringify(pending.map(({ asset, source }, i) => { const assetId = assetIds.get(assetKey(asset))!; return { ...source, assetId, receiptKey: receipts[i].receiptKey, fingerprint: sourceFingerprint(assetId, source) }; }));
+    const refs = await tx.batch([
+      { sql: "INSERT INTO daily_raw_sources(source_key,asset_id,receipt_id,metric,provider,scope,definition,basis,content_hash) SELECT json_extract(j.value,'$.key'),json_extract(j.value,'$.assetId'),r.id,'fdv',json_extract(j.value,'$.provider'),json_extract(j.value,'$.scope'),json_extract(j.value,'$.definition'),json_extract(j.value,'$.basis'),json_extract(j.value,'$.fingerprint') FROM json_each(?) j JOIN daily_raw_receipts r ON r.receipt_key=json_extract(j.value,'$.receiptKey')", args: [pendingJson] },
+      { sql: "SELECT id,source_key FROM daily_raw_sources WHERE source_key IN (SELECT value FROM json_each(?))", args: [sourceKeys] },
+    ]);
+    if (refs[0].rowsAffected !== pending.length || refs[1].rows.length !== sources.size) throw Error("FDV capture source registration incomplete");
+    counts.indexed += refs[0].rowsAffected;
+    const ids = new Map(refs[1].rows.map(row => [String(row.source_key), Number(row.id)]));
+    const values = entries.map(entry => [assetIds.get(assetKey(entry.asset))!, entry.day, entry.fdv.value, ids.get(entry.source.key)!, entry.fdv.at]);
+    const written = await tx.batch([
+      { sql: "INSERT INTO daily_raw_days(asset_id,day,fdv,fdv_state,fdv_source,fdv_at) SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]'),json_extract(value,'$[2]'),1,json_extract(value,'$[3]'),json_extract(value,'$[4]') FROM json_each(?) WHERE 1 ON CONFLICT(asset_id,day) DO UPDATE SET fdv=excluded.fdv,fdv_state=1,fdv_source=excluded.fdv_source,fdv_at=excluded.fdv_at WHERE daily_raw_days.fdv IS NULL AND daily_raw_days.fdv_state=0 AND daily_raw_days.fdv_source IS NULL AND daily_raw_days.fdv_at IS NULL", args: [JSON.stringify(values)] },
+      { sql: "INSERT INTO daily_raw_asset_revisions(asset_id,revision) SELECT DISTINCT json_extract(value,'$[0]'),1 FROM json_each(?) WHERE 1 ON CONFLICT(asset_id) DO UPDATE SET revision=revision+1", args: [JSON.stringify(values)] },
+    ]);
+    if (written[0].rowsAffected !== entries.length) throw Error("Daily raw expected cell changed");
+    counts.plain += written[0].rowsAffected + written[1].rowsAffected;
+    counts.plain += (await tx.execute({ sql: "INSERT INTO daily_raw_checkpoints(run_id,checkpoint_key,cursor,status,rows_written,days_written) VALUES(?,?,?,?,?,?) ON CONFLICT(run_id,checkpoint_key) DO UPDATE SET cursor=excluded.cursor,status=excluded.status,rows_written=rows_written+excluded.rows_written,days_written=days_written+excluded.days_written", args: [options.runId, options.checkpoint.key, options.checkpoint.cursor, "complete", counts.plain + counts.indexed, entries.length] })).rowsAffected;
+    const estimatedWrites = await reserve(tx, options.runId, counts, entries.length, now, run.accountingVersion, local);
+    await tx.commit(); return { rowsWritten: counts.plain + counts.indexed + 1, daysWritten: entries.length, estimatedWrites };
+  } finally { tx.close(); }
+}
+
 /** One prepared blob row; its CAS, quota reservation and data commit share this transaction. */
 export async function writeDailyRawReadModel(db: Client, options: {
   runId: string; namespace: string; key: string; revision: string; sha256: string; metadata: string; metadataSha256: string; payload: Uint8Array;
