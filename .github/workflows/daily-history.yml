@@ -171,12 +171,11 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci --no-audit --no-fund
-      - name: Patch recent financial dates from the latest verified source archive
-        id: financial
-        run: npx tsx scripts/refresh-daily-financials.ts --cache "$RUNNER_TEMP/daily-history-model-cache" --run-id "daily-history-model-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 600 --recent-days 3 --apply
       - name: Capture every verified current FDV independently of CSV readiness
-        if: steps.financial.outcome == 'success'
-        run: npx tsx scripts/capture-current-fdv.ts --cache "$RUNNER_TEMP/daily-history-model-cache" --reference "$RUNNER_TEMP/daily-history-model-cache/reference.json" --run-id "daily-history-model-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 300 --apply
+        run: npx tsx scripts/capture-current-fdv.ts --cache "$RUNNER_TEMP/daily-history-model-cache" --run-id "daily-history-model-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 300 --apply
+      - name: Patch recent financial dates from the same verified source archive
+        id: financial
+        run: npx tsx scripts/refresh-daily-financials.ts --cache "$RUNNER_TEMP/daily-history-model-cache" --reference "$RUNNER_TEMP/daily-history-model-cache/reference.json" --run-id "daily-history-model-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 600 --recent-days 3 --apply
       - name: Prepare current history after the durable raw queue is published
         if: steps.financial.outcome == 'success'
         run: |

@@ -15,12 +15,12 @@ for (const workflowName of ["daily-snapshot", "daily-history"]) it(`${workflowNa
   const financialIndex = steps.findIndex(step => step.run?.includes("scripts/refresh-daily-financials.ts")), fdvIndex = steps.findIndex(step => step.run?.includes("scripts/capture-current-fdv.ts")), modelIndex = steps.findIndex(step => step.run?.includes("scripts/prepare-daily-history.ts"));
   expect(financialIndex).toBeGreaterThanOrEqual(0); expect(modelIndex).toBeGreaterThan(financialIndex); expect(steps[financialIndex].id).toBe("financial"); expect(steps[modelIndex].if).toBe("steps.financial.outcome == 'success'");
   expect(steps[financialIndex]["continue-on-error"]).not.toBe(true); expect(steps[modelIndex]["continue-on-error"]).not.toBe(true);
-  expect(fdvIndex).toBeGreaterThan(financialIndex); expect(fdvIndex).toBeLessThan(modelIndex); expect(steps[fdvIndex].if).toBe("steps.financial.outcome == 'success'");
+  expect(fdvIndex).toBeGreaterThanOrEqual(0); expect(fdvIndex).toBeLessThan(financialIndex); expect(steps[fdvIndex].if).toBeUndefined();
   const financial = steps[financialIndex].run!, fdv = steps[fdvIndex].run!, model = steps[modelIndex].run!, argument = (command: string, flag: string) => command.match(new RegExp(`${flag} ("[^"\\n]+"|[^ \\n]+)`))?.[1];
   for (const flag of ["--cache", "--run-id", "--max-estimated-writes"]) { expect(argument(model, flag)).toBe(argument(financial, flag)); expect(argument(fdv, flag)).toBe(argument(financial, flag)); }
-  expect(argument(fdv, "--reference")).toBe(argument(model, "--reference")); expect(fdv).toContain("--apply"); expect(steps[fdvIndex]["continue-on-error"]).not.toBe(true);
+  expect(argument(fdv, "--reference")).toBeUndefined(); expect(fdv).toContain("--apply"); expect(steps[fdvIndex]["continue-on-error"]).not.toBe(true);
   expect(argument(financial, "--cache")).toContain("$RUNNER_TEMP/"); expect(argument(financial, "--run-id")).toContain("${{ github.run_id }}-${{ github.run_attempt }}"); expect(argument(financial, "--max-estimated-writes")).toBe("50000");
-  expect(argument(financial, "--reference")).toBeUndefined(); expect(argument(financial, "--recent-days")).toBe("3");
+  expect(argument(financial, "--reference")).toBe(argument(model, "--reference")); expect(argument(financial, "--recent-days")).toBe("3");
   expect(argument(model, "--reference")).toBe(argument(financial, "--cache")!.replace(/"$/, '/reference.json"'));
   expect(Number(argument(financial, "--time-budget-seconds")) + Number(argument(fdv, "--time-budget-seconds")) + Number(argument(model, "--time-budget-seconds"))).toBeLessThanOrEqual(1800); expect(argument(financial, "--time-budget-seconds")).toBe("600"); expect(argument(model, "--time-budget-seconds")).toBe("900"); expect(job["timeout-minutes"]).toBeLessThanOrEqual(35);
   expect(financial).toContain("--apply"); expect(model).toContain("--apply"); expect(job.concurrency).toEqual({ group: "daily-history-model-preparation", "cancel-in-progress": false });
@@ -29,6 +29,17 @@ for (const workflowName of ["daily-snapshot", "daily-history"]) it(`${workflowNa
   expect(job.steps.find((step: { uses?: string }) => step.uses === "actions/upload-artifact@v7").with.path).toContain("*report.json");
   const bash = process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "/bin/bash";
   if (existsSync(bash)) for (const command of [financial, fdv, model]) expect(() => execFileSync(bash, ["--noprofile", "--norc", "-n"], { input: command, encoding: "utf8", windowsHide: true })).not.toThrow();
+});
+
+it("manual maintenance captures FDV before a potentially delayed financial patch, sharing its pinned reference and allowance", () => {
+  const workflow = parse(readFileSync(new URL("../.github/workflows/refresh-read-models.yml", import.meta.url), "utf8")), steps = workflow.jobs.refresh.steps as { run?: string; "continue-on-error"?: boolean }[];
+  const fdvIndex = steps.findIndex(step => step.run?.includes("scripts/capture-current-fdv.ts")), financialIndex = steps.findIndex(step => step.run?.includes("scripts/refresh-daily-financials.ts"));
+  expect(fdvIndex).toBeGreaterThanOrEqual(0); expect(fdvIndex).toBeLessThan(financialIndex);
+  const fdv = steps[fdvIndex].run!, financial = steps[financialIndex].run!, argument = (command: string, flag: string) => command.match(new RegExp(`${flag} ("[^"\\n]+"|[^ \\n]+)`))?.[1];
+  for (const flag of ["--cache", "--run-id", "--max-estimated-writes"]) expect(argument(financial, flag)).toBe(argument(fdv, flag));
+  expect(argument(fdv, "--max-estimated-writes")).toBe("50000"); expect(argument(fdv, "--reference")).toBeUndefined();
+  expect(argument(financial, "--reference")).toBe(argument(fdv, "--cache")!.replace(/"$/, '/reference.json"'));
+  expect(steps[fdvIndex]["continue-on-error"]).not.toBe(true); expect(steps[financialIndex]["continue-on-error"]).not.toBe(true);
 });
 
 for (const workflowName of ["daily-snapshot", "daily-history"]) it(`${workflowName} fails visibly on the actual model pause report even when the CLI returned successfully`, () => {
