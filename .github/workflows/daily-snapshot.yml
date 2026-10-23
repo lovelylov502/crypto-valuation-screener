@@ -148,7 +148,7 @@ jobs:
           node-version: "22"
       - run: npm ci --no-audit --no-fund
       - name: Prepare bounded table reads from the verified publication
-        run: npx tsx scripts/prepare-table-read-model.ts --apply --max-estimated-writes 50000 --minimum-reserve 500000
+        run: npx tsx scripts/prepare-table-read-model.ts --apply --max-estimated-writes 50000 --minimum-reserve 0
 
   prepare-history:
     needs: capture

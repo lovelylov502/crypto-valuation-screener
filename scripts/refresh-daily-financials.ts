@@ -15,7 +15,7 @@ const arg = (argv: string[], name: string) => values(argv, name).at(-1);
 const integer = (argv: string[], name: string, fallback: number, low: number, high: number) => { const value = arg(argv, name), parsed = value === undefined ? fallback : Number(value); if (value !== undefined && !/^\d+$/.test(value) || !Number.isSafeInteger(parsed) || parsed < low || parsed > high) throw Error("daily_financial_invalid_argument"); return parsed; };
 async function atomic(path: string, value: unknown) { const temporary = `${path}.${process.pid}.tmp`; await writeFile(temporary, JSON.stringify(value, null, 2)); await rename(temporary, path); }
 export async function refreshDailyFinancialsMain(argv: string[]) {
-  if (argv.includes("--help")) { console.log("refresh-daily-financials.ts --cache <outside-Git-dir> [--reference latest|<pinned-reference-or-journal.json>] [--database <local.sqlite>] [--run-id <stable-id>] [--max-estimated-writes 50000] [--time-budget-seconds 300] [--recent-days 3] [--max-assets N] [--slug exact (repeatable)] [--apply]\nDefault is a SELECT-only dry-run. --apply enables bounded recent Fees/Revenue/Holders upserts only, retaining500000 monthly credits. Uses verified archived originals; provider requests0. Writes pinned cache/reference.json and recent-financial-patch-report.json. Unchanged cells retain source references and cost0; no CSV/MAX queue or MAX attestation required. Time/budget/source-unavailable exits2; unknown write failure exits1 and is never retried."); return; }
+  if (argv.includes("--help")) { console.log("refresh-daily-financials.ts --cache <outside-Git-dir> [--reference latest|<pinned-reference-or-journal.json>] [--database <local.sqlite>] [--run-id <stable-id>] [--max-estimated-writes 50000] [--time-budget-seconds 300] [--recent-days 3] [--max-assets N] [--slug exact (repeatable)] [--apply]\nDefault is a SELECT-only dry-run. --apply enables bounded recent Fees/Revenue/Holders upserts only, using the reserved maintenance allowance within the shared monthly/storage limits. Uses verified archived originals; provider requests0. Writes pinned cache/reference.json and recent-financial-patch-report.json. Unchanged cells retain source references and cost0; no CSV/MAX queue or MAX attestation required. Time/budget/source-unavailable exits2; unknown write failure exits1 and is never retried."); return; }
   const allowed = new Set(["--cache", "--reference", "--database", "--run-id", "--max-estimated-writes", "--time-budget-seconds", "--recent-days", "--max-assets", "--slug", "--apply"]), seen = new Set<string>();
   for (let i = 0; i < argv.length; i++) { const flag = argv[i]; if (!allowed.has(flag) || seen.has(flag) && flag !== "--slug") throw Error("daily_financial_invalid_argument"); seen.add(flag); if (flag !== "--apply") { if (!argv[i + 1] || argv[i + 1].startsWith("--")) throw Error("daily_financial_missing_argument"); i++; } }
   const cacheArg = arg(argv, "--cache"); if (!cacheArg) throw Error("daily_financial_cache_required");
@@ -29,7 +29,8 @@ export async function refreshDailyFinancialsMain(argv: string[]) {
   await atomic(join(cache, "reference.json"), ref);
   const collected = collectRecentDailyFinancials({ snapshot, bundle, reference: ref, recentDays, slugs: values(argv, "--slug"), now });
   const database = arg(argv, "--database"), db = database ? createClient({ url: pathToFileURL(resolve(database)).href }) : connectHistory();
-  const report = { schema: 1, mode: apply ? "apply" : "dry-run", status: "running", runId, publicationId: ref.id, rawBundleSha256: ref.rawBundleSha256, targetDay: collected.targetDay, from: collected.from, to: collected.to, startedAt: now.toISOString(), completedAt: "", elapsedMs: 0, maxEstimatedWrites: allowance, minimumReserve: 500_000, providerRequests: 0,
+  // Current-data maintenance uses the reserve that bulk historical acquisition leaves untouched.
+  const report = { schema: 1, mode: apply ? "apply" : "dry-run", status: "running", runId, publicationId: ref.id, rawBundleSha256: ref.rawBundleSha256, targetDay: collected.targetDay, from: collected.from, to: collected.to, startedAt: now.toISOString(), completedAt: "", elapsedMs: 0, maxEstimatedWrites: allowance, minimumReserve: 0, providerRequests: 0,
     sourceTargetCoverage: collected.targetCoverage, storedTargetCoverage: null as Awaited<ReturnType<typeof recentDailyFinancialCoverage>> | null, sources: collected.sources, selected: collected.assets.length, unchangedAssets: 0, unchangedCells: 0, changedAssets: 0, processed: 0, pendingAssets: 0, rowsWritten: 0, daysWritten: 0, estimatedWrites: 0, runEstimatedWrites: 0, estimatedWriteUpperBound: 0, lastAttemptedAsset: null as string | null, error: null as string | null,
     assets: [] as { slug: string; identity: string; days: number; rowsWritten: number; daysWritten: number; estimatedWrites: number }[] };
   let initialWrites = 0, runTracked = false;
@@ -43,11 +44,11 @@ export async function refreshDailyFinancialsMain(argv: string[]) {
     else if (Date.now() >= deadline) report.status = "time-paused";
     else {
       await initializeDailyRaw(db); initialWrites = (await getDailyRawRun(db, runId))?.estimatedWrites ?? 0; runTracked = true;
-      await openDailyRawRun(db, { id: runId, maxEstimatedWrites: allowance, minimumReserve: 500_000, now });
+      await openDailyRawRun(db, { id: runId, maxEstimatedWrites: allowance, minimumReserve: 0, now });
       for (const item of plan.assets) {
         if (Date.now() >= deadline || report.processed >= maxAssets) { report.status = Date.now() >= deadline ? "time-paused" : "asset-limit-paused"; break; }
         report.lastAttemptedAsset = `${item.asset.slug}:${item.asset.identity}`;
-        const result = await upsertDailyRaw(db, { runId, asset: item.asset, sources: item.sources, points: item.points, minimumReserve: 500_000, now,
+        const result = await upsertDailyRaw(db, { runId, asset: item.asset, sources: item.sources, points: item.points, minimumReserve: 0, now,
           checkpoint: { key: `recent-financial:${item.asset.slug}:${item.asset.identity}`, cursor: objectHash([ref.id, ref.rawBundleSha256, collected.from, collected.to, item.asset]), status: "complete" } });
         report.processed++; report.pendingAssets--; report.rowsWritten += result.rowsWritten; report.daysWritten += result.daysWritten;
         report.assets.push({ ...item.asset, days: item.points.length, rowsWritten: result.rowsWritten, daysWritten: result.daysWritten, estimatedWrites: result.estimatedWrites });

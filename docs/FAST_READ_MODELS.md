@@ -66,7 +66,7 @@ npx tsx scripts/refresh-daily-financials.ts --cache C:/outside-git/history-model
 npx tsx scripts/prepare-daily-history.ts --cache C:/outside-git/history-model
 
 # 기존 쓰기 전용 환경을 불러온 뒤 명시적으로 적용한다.
-npx tsx scripts/prepare-table-read-model.ts --apply --max-estimated-writes 50000 --minimum-reserve 500000
+npx tsx scripts/prepare-table-read-model.ts --apply --max-estimated-writes 50000 --minimum-reserve 0
 npx tsx scripts/refresh-daily-financials.ts --cache C:/outside-git/history-model --run-id history-model-YYYY-MM-DD --max-estimated-writes 50000 --time-budget-seconds 600 --recent-days 3 --apply
 npx tsx scripts/prepare-daily-history.ts --cache C:/outside-git/history-model --reference C:/outside-git/history-model/reference.json --run-id history-model-YYYY-MM-DD --max-estimated-writes 50000 --time-budget-seconds 900 --workers 4 --apply
 ```

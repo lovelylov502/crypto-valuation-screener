@@ -19,8 +19,18 @@ export async function readDiscovery(prefs: WorkspacePreferences, favorites: stri
   let value = cached && cached.until > Date.now() ? cached.value : null;
   if (!value) {
     let history: Awaited<ReturnType<typeof readMapHistoryBatch>> | null = null;
-    if (mode === "map" && entries.length) try { history = await readMapHistoryBatch({ coins: entries.map(e => ({ ...e.binding, revenue30d: e.features.amounts.revenue[30]! })), capital: prefs.capital, snapshot: { updatedAt: catalog.metadata.updatedAt, publication } }); }
-    catch { console.error("discovery_history_unavailable"); }
+    if (mode === "map" && entries.length) for (let attempt = 0; attempt < 2; attempt++) {
+      try { history = await readMapHistoryBatch({ coins: entries.map(e => ({ ...e.binding, revenue30d: e.features.amounts.revenue[30]! })), capital: prefs.capital, snapshot: { updatedAt: catalog.metadata.updatedAt, publication } }); break; }
+      catch (error) {
+        const codes = new Set<string>();
+        for (let cause: unknown = error, depth = 0; cause && typeof cause === "object" && depth < 5; depth++) {
+          if ("code" in cause && /^[A-Z][A-Z0-9_]{1,63}$/.test(String(cause.code))) codes.add(String(cause.code));
+          cause = "cause" in cause ? cause.cause : null;
+        }
+        if (attempt === 0 && [...codes].some(code => ["UND_ERR_SOCKET", "ECONNRESET", "EPIPE"].includes(code))) continue;
+        console.error("discovery_history_unavailable", { codes: [...codes], reason: error instanceof Error && /^daily_[a-z_]+$/.test(error.message) ? error.message : "history_read_failed" }); break;
+      }
+    }
     const rows: DiscoveryRow[] = entries.map(e => ({ ...e.row, cells: e.cells[prefs.capital], revenue30d: e.features.amounts.revenue[30], holders30d: e.features.amounts.holders[30],
       past: mode === "watchlist" ? {} : history?.get(e.row.slug) ?? Object.fromEntries(MAP_PERIODS.map(days => [days, { point: null, reason: "과거 자료를 불러오지 못했습니다. 다시 확인해 주세요.", revenue: null, revenueReason: "과거 자료를 불러오지 못했습니다. 다시 확인해 주세요." }])) }));
     value = { rows, historyStatus: mode === "watchlist" ? "not-requested" : history ? "ready" : "unavailable" };

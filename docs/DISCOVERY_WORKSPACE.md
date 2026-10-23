@@ -10,6 +10,14 @@ The October 22 product decision adds three connected views: the unchanged screen
 4. Review desktop and narrow screens in both themes; exercise discovery → detail → save → revisit → restore. Fix observed issues and repeat the affected checks.
 5. Run arithmetic/storage/API regression tests, typecheck and build. Preserve owner files in the canonical checkout before its clean-main deployment gate, then restore them after deployment. Verify canonical production and real browser flows.
 
+## October 23 comparison availability and maintenance (v0.8.3)
+
+P/R decline remains unknown without an exact historical capital observation and a positive complete Revenue denominator. The map now distinguishes a failed history query from unavailable history and explains how many rows passing the other conditions cannot be judged. Switching FDV to circulating cap is explicit and changes the ratio basis; no historical FDV is inferred. A disconnected read gets one bounded retry, while integrity failures remain unavailable.
+
+The original reported publication had three eligible FDV comparisons and 110 circulating-cap results satisfying both Revenue growth and declining P/R. Read-only endpoint queries confirmed that the missing FDV was absent in storage, rather than dropped by the map. These counts are publication-specific. The audit also caught a new publication's recent financial refresh and table preparation stopping at the 500,000-credit reserve. Current-data maintenance can now consume that reserved allowance under unchanged monthly/storage and per-run ceilings; bulk backfill still retains it. The manual `refresh-read-models.yml` workflow restores verified current reads without source collection or exposing writer credentials locally.
+
+Stable page scrollbar space preserves chart width, area selection, list page and focus when opening detail. A discovery view that receives a newer publication notifies the parent reader so the shared header and table follow the same publication.
+
 ## October 23 Revenue comparison fix (v0.8.2)
 
 Revenue growth uses an independently verified rolling Revenue window at the historical endpoint. It does not require the historical capital needed for a P/R coordinate. Both 30-day windows must contain every completed UTC date, retain the same financial definition, and reproduce the current published Revenue total. A verified zero historical total remains a valid Revenue comparison, with no past P/R. Missing financial observations, changed definitions and snapshot mismatches remain unavailable.

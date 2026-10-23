@@ -10,10 +10,11 @@ import { buildTableCatalog } from "../lib/tableCatalog";
 import { prepareTableReadModel } from "../lib/tableBuild";
 
 export async function main(args = process.argv.slice(2)) {
-  const { values } = parseArgs({ args, options: { reference: { type: "string" }, snapshot: { type: "string" }, "run-id": { type: "string" }, "max-estimated-writes": { type: "string", default: "50000" }, "minimum-reserve": { type: "string", default: "500000" }, apply: { type: "boolean", default: false }, help: { type: "boolean" } } });
-  if (values.help) { console.log("prepare-table-read-model [--reference journal.json] [--snapshot original.json.gz] [--run-id ID] [--max-estimated-writes 50000] [--minimum-reserve 500000] [--apply]\nDefault: validate/build only. Writes use the existing Turso writer environment and shared quota."); return; }
+  const { values } = parseArgs({ args, options: { reference: { type: "string" }, snapshot: { type: "string" }, "run-id": { type: "string" }, "max-estimated-writes": { type: "string", default: "50000" }, "minimum-reserve": { type: "string", default: "0" }, apply: { type: "boolean", default: false }, help: { type: "boolean" } } });
+  if (values.help) { console.log("prepare-table-read-model [--reference journal.json] [--snapshot original.json.gz] [--run-id ID] [--max-estimated-writes 50000] [--minimum-reserve 0] [--apply]\nDefault: validate/build only. Writes use the existing Turso writer environment and shared quota."); return; }
+  // Current-data maintenance uses the reserve that bulk historical acquisition leaves untouched.
   const maxEstimatedWrites = Number(values["max-estimated-writes"]), minimumReserve = Number(values["minimum-reserve"]);
-  if (!Number.isSafeInteger(maxEstimatedWrites) || maxEstimatedWrites < 8 || maxEstimatedWrites > 50000 || !Number.isSafeInteger(minimumReserve) || minimumReserve < 500000) throw Error("Invalid table model write allowance/reserve");
+  if (!Number.isSafeInteger(maxEstimatedWrites) || maxEstimatedWrites < 8 || maxEstimatedWrites > 50000 || !Number.isSafeInteger(minimumReserve) || minimumReserve < 0) throw Error("Invalid table model write allowance/reserve");
   const journal = values.reference ? parseJournal(JSON.parse(await readFile(values.reference, "utf8"))) : await readJournal(), reference = journal.published;
   if (!reference) throw Error("No verified publication");
   const data = values.snapshot ? decodeSnapshot(await readFile(values.snapshot), reference) : await readAuditSnapshot(reference);

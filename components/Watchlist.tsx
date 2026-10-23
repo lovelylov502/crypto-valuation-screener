@@ -26,9 +26,9 @@ function NoteEditor({ initial, draft, onDraft, disabled, onSave, onCancel }: { i
   </form>;
 }
 
-export function Watchlist({ favorites, onFavorite, onRestoreFavorites, notes, onDetail, publicationId, onMap, onTable }: {
+export function Watchlist({ favorites, onFavorite, onRestoreFavorites, notes, onDetail, publicationId, onPublicationChanged, onMap, onTable }: {
   favorites: Set<string>; onFavorite: (slug: string) => void; onRestoreFavorites: (favorites: Set<string>) => void; notes: Notebook;
-  onDetail: DiscoveryDetail; publicationId?: string; onMap: () => void; onTable: () => void;
+  onDetail: DiscoveryDetail; publicationId?: string; onPublicationChanged?: () => void; onMap: () => void; onTable: () => void;
 }) {
   const [capital, setCapital] = useState<"mcap" | "fdv">("mcap"), [search, setSearch] = useState(""), [filter, setFilter] = useState<"all" | "due" | WatchStage>("all");
   const [editing, setEditing] = useState<string | null>(null), [removed, setRemoved] = useState<{ slug: string; name: string } | null>(null), [message, setMessage] = useState(""), [page, setPage] = useState(1);
@@ -37,7 +37,7 @@ export function Watchlist({ favorites, onFavorite, onRestoreFavorites, notes, on
   useEffect(() => { if (!pending) return; const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); }; window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, [pending]);
   const clearDraft = (slug: string) => setDrafts(prev => { const next = { ...prev }; delete next[slug]; return next; });
   const file = useRef<HTMLInputElement>(null), prefs = useMemo(() => ({ ...defaultPreferences(), capital }), [capital]);
-  const { data, loading, error, refresh } = useDiscoveryData(prefs, favorites, "watchlist", publicationId);
+  const { data, loading, error, refresh } = useDiscoveryData(prefs, favorites, "watchlist", publicationId, onPublicationChanged);
   const today = localDay(), dueCount = [...favorites].filter(slug => isReviewDue(notes.notes[slug], today)).length;
   const indexed = new Map(data?.rows.map(row => [row.slug, row]));
   const all = [...favorites].map(slug => ({ slug, row: indexed.get(slug), note: notes.notes[slug], name: indexed.get(slug)?.name ?? notes.notes[slug]?.name ?? slug }));

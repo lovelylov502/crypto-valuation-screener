@@ -39,6 +39,22 @@ it("defaults to a SELECT-only plan and pins verified inputs without opening a ru
   expect((await db.execute("SELECT COUNT(*) n FROM daily_raw_runs")).rows[0].n).toBe(0); expect((await db.execute("SELECT COUNT(*) n FROM daily_raw_days")).rows[0].n).toBe(0);
   expect(JSON.parse(await readFile(join(directory, "reference.json"), "utf8"))).toMatchObject({ id: "data-test", rawBundleUrl: archive });
 });
+it("uses the maintenance reserve for current financial refreshes while retaining the monthly hard limit", async () => {
+  await db.execute("INSERT INTO history_budget(month,reserved) VALUES('2026-10',7500000)");
+  await refreshDailyFinancialsMain([...argv(), "--apply"]);
+  expect(await report()).toMatchObject({ status: "complete", processed: 2, minimumReserve: 0 });
+  const spent = Number((await db.execute("SELECT reserved FROM history_budget WHERE month='2026-10'")).rows[0].reserved);
+  expect(spent).toBeGreaterThan(7_500_000); expect(spent).toBeLessThan(8_000_000);
+  await refreshDailyFinancialsMain([...argv(), "--apply"]);
+  expect(Number((await db.execute("SELECT reserved FROM history_budget WHERE month='2026-10'")).rows[0].reserved)).toBe(spent);
+});
+it("still stops financial maintenance at the shared monthly hard limit without writing raw observations", async () => {
+  await db.execute("INSERT INTO history_budget(month,reserved) VALUES('2026-10',8000000)");
+  await refreshDailyFinancialsMain([...argv(), "--apply"]);
+  expect(process.exitCode).toBe(2); expect(await report()).toMatchObject({ status: "budget-paused", processed: 0 });
+  expect((await db.execute("SELECT COUNT(*) n FROM daily_raw_days")).rows[0].n).toBe(0);
+  expect((await db.execute("SELECT reserved FROM history_budget WHERE month='2026-10'")).rows[0].reserved).toBe(8_000_000);
+});
 it("returns a nonzero paused status, then resumes the remaining exact asset and replays for zero credits", async () => {
   await refreshDailyFinancialsMain([...argv(), "--apply", "--max-assets", "1"]);
   expect(process.exitCode).toBe(2); expect(await report()).toMatchObject({ status: "asset-limit-paused", processed: 1, pendingAssets: 1, storedTargetCoverage: { revenue: { rows: 1 }, holders: { zero: 1 } } });

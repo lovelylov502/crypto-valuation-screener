@@ -2,6 +2,20 @@
 
 final result: passed
 
+## P/R availability and current-data maintenance — 2026-10-23 / v0.8.3
+
+The reported FDV result was verified against `data-39876998570-1-complete`: of 403 cap-filtered rows, only three had a usable 30-day historical P/R; all three also had growing Revenue and declining P/R. Direct exact-identity/date SQL confirmed that most historical FDV cells were actually missing. Circulating-cap mode had 271 P/R comparisons and 110 combined-condition results. No missing FDV was inferred from current supply or circulating cap.
+
+Independent checks recomputed 932 current amounts and 2,403 historical positions from stored capital plus verified Revenue windows, and compared 1,536 filter combinations (both capital bases, all six periods, eight condition combinations, four cap ranges and four ceilings). No arithmetic, extra-row or omitted-row mismatch was found in that pinned publication. Evidence is outside Git in `C:/Users/TAE/.codex/tmp/map-pr-audit-20261023/`.
+
+The browser loop reproduced a separate defect: opening Axie Infinity from page 2 changed chart width from 1200 to about 1214.86 pixels and reset the list to page 1. Reserving scrollbar space keeps the chart at 1200 pixels; the list remains on page 2 and focus returns to the same button after closing detail. New P/R guidance explains the 139 unknown comparisons among the 142 Revenue-growth candidates and offers an explicit circulating-cap switch. Query failures have a separate visible retry action. The 390px viewport has 375px content width with no horizontal overflow. Discovery-triggered publication refresh also updated the shared header to the new 11:48 KST publication.
+
+During this audit, `data-39891465183-1-complete` published and both current financial refresh and table preparation failed at the maintenance reserve. The archived workflow reports show zero financial writes, an upper bound of 6,987 credits and 500,003 unused monthly credits. The maintenance fix retains 8M/4GB and per-run ceilings while allowing those current-data jobs to consume the reserve left by bulk backfill. Local writer attempts were denied by the read-only credential, with no run record or changed budget; actual repair uses the existing hosted writer workflow. Local DB inspection recorded 1,512,538,112 bytes. No quota or credential was expanded.
+
+118 test files / 1,293 tests passed locally, including bounded disconnected-read recovery, integrity-failure withholding, maintenance at 7.5M reserved credits and refusal at the 8M hard limit. TypeScript passed. Production deployment, hosted maintenance completion and final live counts are verified separately; this section records the local/pinned-publication evidence.
+
+final result: passed
+
 ## Independent map Revenue comparison — 2026-10-23 / v0.8.2
 
 Reproduced the user's three-result filter against publication `data-39876998570-1-complete`, completed through October 22 UTC: FDV, 30 days ago, Revenue growth, minimum current circulating cap 0.1M, unbounded maximum. All three API pages contain 472 map-eligible rows; 403 meet the cap range. The old filter required a historical FDV-backed P/R point even when only Revenue growth was selected.

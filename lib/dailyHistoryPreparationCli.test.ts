@@ -31,6 +31,14 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 30 }).catch(error => { if (error.code !== "EBUSY" && error.code !== "EPERM") throw error; });
 });
 const report = async (directory: string) => JSON.parse(await readFile(join(directory, "daily-history-model-report.json"), "utf8"));
+for (const [reserved, status] of [[7_500_000, "complete"], [8_000_000, "budget-paused"]] as const) it(`prepares current history from the maintenance allowance, respecting ${reserved} reserved credits`, async () => {
+  await db.execute({ sql: "UPDATE history_budget SET reserved=? WHERE month='2026-10'", args: [reserved] });
+  await prepareDailyHistoryMain(["--cache", directory, "--run-id", "maintenance", "--workers", "1", "--apply"]);
+  expect(await report(directory)).toMatchObject({ status, minimumReserve: 0, prepared: status === "complete" ? 4 : 0 });
+  expect((await db.execute("SELECT COUNT(*) n FROM daily_read_models")).rows[0].n).toBe(status === "complete" ? 4 : 0);
+  const spent = Number((await db.execute("SELECT reserved FROM history_budget WHERE month='2026-10'")).rows[0].reserved);
+  expect(spent).toBeGreaterThanOrEqual(reserved); expect(spent).toBeLessThanOrEqual(8_000_000);
+});
 it("defaults to a zero-write dry-run and rejects unknown or duplicated consequential flags", async () => {
   const before = await db.execute("SELECT reserved FROM history_budget");
   await prepareDailyHistoryMain(["--cache", directory, "--run-id", "dry", "--max-assets", "1", "--workers", "1"]);

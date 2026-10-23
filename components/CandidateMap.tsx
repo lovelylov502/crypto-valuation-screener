@@ -17,9 +17,9 @@ const ticks = (domain: readonly [number, number]) => Array.from({ length: domain
 const axisNumber = (n: number) => n >= 1e9 ? n / 1e9 + "B" : n >= 1e6 ? n / 1e6 + "M" : n >= 1000 ? n / 1000 + "K" : n < .001 ? n.toExponential(0) : n.toLocaleString("en-US", { maximumFractionDigits: 6 });
 const inside = (x: number, y: number, a: Area) => x >= Math.min(a.x1, a.x2) && x <= Math.max(a.x1, a.x2) && y >= Math.min(a.y1, a.y2) && y <= Math.max(a.y1, a.y2);
 
-export function CandidateMap({ favorites, onFavorite, onDetail, imported, onClearImport, publicationId }: {
+export function CandidateMap({ favorites, onFavorite, onDetail, imported, onClearImport, publicationId, onPublicationChanged }: {
   favorites: Set<string>; onFavorite: (slug: string) => void; onDetail: DiscoveryDetail;
-  imported: WorkspacePreferences | null; onClearImport: () => void; publicationId?: string;
+  imported: WorkspacePreferences | null; onClearImport: () => void; publicationId?: string; onPublicationChanged?: () => void;
 }) {
   const [workspace, setWorkspace] = useState(defaultMapWorkspace), [ready, setReady] = useState(false);
   const { filters, inherited, saved, selected } = workspace, { capital, period } = filters;
@@ -42,7 +42,7 @@ export function CandidateMap({ favorites, onFavorite, onDetail, imported, onClea
     ...(inherited ?? defaultPreferences()), capital, minMcap: 0, maxMcap: 0,
     maxPr: inherited && inherited.rangeWindow !== 30 ? inherited.maxPr : 0,
   }), [inherited, capital]);
-  const { data, loading, error, refresh } = useDiscoveryData(prefs, favorites, "map", publicationId);
+  const { data, loading, error, refresh } = useDiscoveryData(prefs, favorites, "map", publicationId, onPublicationChanged);
   useEffect(() => {
     const el = wrapper.current; if (!el) return;
     const observer = new ResizeObserver(entries => { const w = entries[0].contentRect.width; if (w > 0) setWidth(w); });
@@ -62,6 +62,8 @@ export function CandidateMap({ favorites, onFavorite, onDetail, imported, onClea
   const comparisonRows = useMemo(() => (data?.rows ?? []).filter(row => matchesMapFilters(row, { ...filters, revenueGrowing: false, prFalling: false })), [data, filters]);
   const revenueComparable = comparisonRows.filter(row => mapRevenueAt(row, period) !== null).length;
   const prComparable = comparisonRows.filter(row => row.past[period]?.point).length;
+  const prCandidates = useMemo(() => (data?.rows ?? []).filter(row => matchesMapFilters(row, { ...filters, prFalling: false })), [data, filters]);
+  const prUnknown = prCandidates.filter(row => !row.past[period]?.point).length;
   const domains = useMemo(() => {
     const x: number[] = [], y: number[] = [];
     for (const row of data?.rows ?? []) {
@@ -124,6 +126,12 @@ export function CandidateMap({ favorites, onFavorite, onDetail, imported, onClea
       {(filters.revenueGrowing || filters.prFalling) && <p className="map-filter-hint">{periodName(period)}과 현재를 비교합니다. 수익 증가는 두 시점의 직전 30일 Revenue 기준이며, 선택한 조건을 모두 충족한 종목만 표시합니다.
         {data && !loading && <span className="map-comparison-coverage">{filters.revenueGrowing && `수익 비교 가능 ${revenueComparable}/${comparisonRows.length}개 · 확인 불가 ${comparisonRows.length - revenueComparable}개`}{filters.revenueGrowing && filters.prFalling && " / "}{filters.prFalling && `P/R 비교 가능 ${prComparable}/${comparisonRows.length}개 · 확인 불가 ${comparisonRows.length - prComparable}개`}</span>}
       </p>}
+      {data?.historyStatus === "unavailable" && !loading && !error && <div className="map-comparison-notice" role="alert"><div><strong>일부 종목의 과거 자료를 불러오지 못했습니다.</strong><p>현재 결과에는 조회에 성공한 자료만 반영됩니다. 잠시 후 다시 불러와 주세요.</p></div><button className="button" onClick={refresh}>과거 자료 다시 불러오기</button></div>}
+      {filters.prFalling && data?.historyStatus === "ready" && !loading && !error && prUnknown > 0 && <div className="map-comparison-notice" role="status">
+        <div><strong>과거 P/R 자료가 없는 종목은 하락 여부를 판단할 수 없습니다.</strong><p>다른 조건을 통과한 {prCandidates.length}개 중 P/R 비교 가능 {prCandidates.length - prUnknown}개 · 자료 부족 {prUnknown}개. 자료 부족 종목은 결과에서 제외합니다.</p>
+          {capital === "fdv" && <p>유통 시총 기준으로 바꾸거나 더 가까운 과거 시점을 선택해 확인할 수 있습니다. 분자를 바꾸면 P/R 값과 결과도 달라집니다.</p>}</div>
+        {capital === "fdv" && <button className="button" onClick={() => update({ capital: "mcap" })}>유통 시총 기준으로 보기</button>}
+      </div>}
     </div>
     <div className="map-panel" aria-busy={loading}>
       <div className="map-topline"><div className="map-applied"><span>{filterCount ? "조건 " + filterCount + "개 적용" : "전체 범위"}{inherited && " · 전체종목 조건"}</span>{(filterCount > 0 || inherited) && <button className="text-button" onClick={reset}>초기화</button>}<span className="map-count">{rows.length.toLocaleString()}개 · {arrows.toLocaleString()}개 화살표</span></div>
