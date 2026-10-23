@@ -38,6 +38,16 @@ describe("map conditions", () => {
     expect(matchesMapFilters(coin(), { ...filters, prLimit: true, maxPr: 8 })).toBe(true);
     expect(matchesMapFilters(coin(), { ...filters, prLimit: true, maxPr: 7.9 })).toBe(false);
   });
+  it("checks Revenue growth without requiring historical capital, and keeps P/R filtering separate", () => {
+    const row = { ...coin(), past: { 30: { point: null, reason: "당시 FDV 없음", revenue: { date: "2026-09-22", value: 100 }, revenueReason: "" } } };
+    const filters = { ...defaultMapFilters(), capital: "fdv" as const, revenueGrowing: true };
+    expect(matchesMapFilters(row, filters)).toBe(true);
+    expect(matchesMapFilters(row, { ...filters, capital: "mcap" })).toBe(true);
+    expect(matchesMapFilters(row, { ...filters, prFalling: true })).toBe(false);
+    expect(matchesMapFilters({ ...row, revenue30d: 100 }, filters)).toBe(false);
+    expect(matchesMapFilters({ ...row, past: { 30: { ...row.past[30], revenue: { date: "2026-09-22", value: 0 } } } }, filters)).toBe(true);
+    expect(matchesMapFilters({ ...row, past: { 30: { ...row.past[30], revenue: null, revenueReason: "수익 자료 부족" } } }, filters)).toBe(false);
+  });
   it("does not relabel the table's seven-day threshold as a 30-day map threshold", () => {
     expect(mapFiltersFromTable({ ...defaultPreferences(), rangeWindow: 7, maxPr: 5 })).toMatchObject({ prLimit: false });
     expect(mapFiltersFromTable({ ...defaultPreferences(), rangeWindow: 30, maxPr: 5 })).toMatchObject({ prLimit: true, maxPr: 5 });

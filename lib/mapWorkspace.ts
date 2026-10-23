@@ -42,10 +42,16 @@ export function mapFiltersFromTable(prefs: WorkspacePreferences): MapFilters {
   const minMcap = Math.max(MAP_MIN_MCAP, prefs.minMcap);
   return { ...defaultMapFilters(), capital: prefs.capital, minMcap, maxMcap: prefs.maxMcap > 0 ? Math.max(minMcap, prefs.maxMcap) : 0, prLimit: prefs.rangeWindow === 30 && prefs.maxPr > 0, maxPr: prefs.rangeWindow === 30 && prefs.maxPr > 0 ? prefs.maxPr : 30 };
 }
+export function mapRevenueAt(row: DiscoveryRow, period: MapPeriod) {
+  const history = row.past[period];
+  if (history?.revenue !== undefined) return history.revenue;
+  return history?.point ? { date: history.point.date, value: history.point.revenue } : null;
+}
 export function matchesMapFilters(row: DiscoveryRow, filters: MapFilters): boolean {
   if ((filters.minMcap > 0 || filters.maxMcap > 0) && (!positive(row.mcap) || row.mcap < filters.minMcap || filters.maxMcap > 0 && row.mcap > filters.maxMcap)) return false;
   const past = row.past[filters.period]?.point, currentPr = row.cells.pr.value;
-  if (filters.revenueGrowing && (!past || !positive(row.revenue30d) || row.revenue30d <= past.revenue)) return false;
+  const revenue = mapRevenueAt(row, filters.period);
+  if (filters.revenueGrowing && (!revenue || !positive(row.revenue30d) || row.revenue30d <= revenue.value)) return false;
   if (filters.prFalling && (!past || !positive(currentPr) || currentPr >= past.pr)) return false;
   return !filters.prLimit || !positive(filters.maxPr) || positive(currentPr) && currentPr <= filters.maxPr;
 }

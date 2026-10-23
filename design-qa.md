@@ -2,6 +2,20 @@
 
 final result: passed
 
+## Independent map Revenue comparison — 2026-10-23 / v0.8.2
+
+Reproduced the user's three-result filter against publication `data-39876998570-1-complete`, completed through October 22 UTC: FDV, 30 days ago, Revenue growth, minimum current circulating cap 0.1M, unbounded maximum. All three API pages contain 472 map-eligible rows; 403 meet the cap range. The old filter required a historical FDV-backed P/R point even when only Revenue growth was selected.
+
+With Revenue comparison separated from historical capital, the same publication has 288 comparable financial windows: 142 increased and 146 decreased. The other 115 remain unknown (99 incomplete current windows, 13 insufficient historical windows, 3 current snapshot/raw-total mismatches). Five fully observed zero baselines are now comparable, without producing a zero-denominator P/R.
+
+Local browser checks show 142 current points and the same three verified FDV arrows. Enabling falling P/R retains only the three genuinely comparable P/R results and exposes independent Revenue/P/R coverage. At 1280 × 1000 and 390 × 844, the coverage text fits without page overflow. Screenshots: `release-qa/v082-local-revenue-growth.png` and `release-qa/v082-local-revenue-growth-mobile.png` under the external October 22 visualization directory below.
+
+Independent read-only raw queries verified 60 dated Revenue observations per project for ALEX (3744 → 3801), Algorand (459 → 563) and Ankr (4431.22 → 11487), covering August 24–September 22 and September 23–October 22 UTC. Both source definitions and provenance receipts were checked. Diagnostic responses and raw-check output are outside Git in `C:/Users/TAE/.codex/tmp/map-growth-audit-20261023-112055/`.
+
+Validation: 38 targeted tests in three files and TypeScript passed. Regression cases cover missing historical FDV, independent market-cap availability, complete zero baselines, changed definitions, current-total mismatches and preserved read-only behavior. Korean UI/release copy was checked for meaning, units, periods and unknown states. The guarded deployment wrapper performs the full suite, build and canonical live readback separately; this section records pre-deployment evidence.
+
+final result: passed
+
 ## Map cap inputs in millions — 2026-10-23 / v0.8.1
 
 Scope: the user's cap-range correction. The map now follows the existing table's $M unit with minimum/maximum number inputs and the same dual-handle logarithmic interaction. The map's left endpoint and default minimum are 0.1M. Stored values remain USD; restoring old map conditions or importing a lower table range applies the new map floor. The table's controls and preferences are unchanged.

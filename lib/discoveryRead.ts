@@ -22,7 +22,7 @@ export async function readDiscovery(prefs: WorkspacePreferences, favorites: stri
     if (mode === "map" && entries.length) try { history = await readMapHistoryBatch({ coins: entries.map(e => ({ ...e.binding, revenue30d: e.features.amounts.revenue[30]! })), capital: prefs.capital, snapshot: { updatedAt: catalog.metadata.updatedAt, publication } }); }
     catch { console.error("discovery_history_unavailable"); }
     const rows: DiscoveryRow[] = entries.map(e => ({ ...e.row, cells: e.cells[prefs.capital], revenue30d: e.features.amounts.revenue[30], holders30d: e.features.amounts.holders[30],
-      past: mode === "watchlist" ? {} : history?.get(e.row.slug) ?? Object.fromEntries(MAP_PERIODS.map(days => [days, { point: null, reason: "과거 자료를 불러오지 못했습니다. 다시 확인해 주세요." }])) }));
+      past: mode === "watchlist" ? {} : history?.get(e.row.slug) ?? Object.fromEntries(MAP_PERIODS.map(days => [days, { point: null, reason: "과거 자료를 불러오지 못했습니다. 다시 확인해 주세요.", revenue: null, revenueReason: "과거 자료를 불러오지 못했습니다. 다시 확인해 주세요." }])) }));
     value = { rows, historyStatus: mode === "watchlist" ? "not-requested" : history ? "ready" : "unavailable" };
     cache.set(key, { value, until: Date.now() + (value.historyStatus === "unavailable" ? 10000 : 60000) });
     while (cache.size > 16) cache.delete(cache.keys().next().value!);

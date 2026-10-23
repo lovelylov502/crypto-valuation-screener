@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, Maximize, RotateCcw, Save, Star, Trash2 } from "lucide-react";
 import { defaultPreferences, type WorkspacePreferences } from "@/lib/workspacePreferences";
 import { MAP_PERIODS, mapDate, periodName, type DiscoveryPage, type DiscoveryRow } from "@/lib/discoveryTypes";
-import { defaultMapFilters, defaultMapWorkspace, mapFilterCount, mapFiltersFromTable, mapNamePosition, matchesMapFilters, nearestMapPoint, parseMapWorkspace, MAP_WORKSPACE_KEY, type MapFilters } from "@/lib/mapWorkspace";
+import { defaultMapFilters, defaultMapWorkspace, mapFilterCount, mapFiltersFromTable, mapNamePosition, mapRevenueAt, matchesMapFilters, nearestMapPoint, parseMapWorkspace, MAP_WORKSPACE_KEY, type MapFilters } from "@/lib/mapWorkspace";
 import { fmtKstMinute, fmtMult, fmtUsd } from "@/lib/format";
 import { MapMarketCapRange } from "./MapMarketCapRange";
 import { SettingsDialog } from "./SettingsDialog";
@@ -59,6 +59,9 @@ export function CandidateMap({ favorites, onFavorite, onDetail, imported, onClea
   const modified = !!currentSaved && JSON.stringify([currentSaved.filters, currentSaved.inherited]) !== JSON.stringify([filters, inherited]);
   const filterCount = mapFilterCount(filters);
   const rows = useMemo(() => (data?.rows ?? []).filter(row => matchesMapFilters(row, filters)), [data, filters]);
+  const comparisonRows = useMemo(() => (data?.rows ?? []).filter(row => matchesMapFilters(row, { ...filters, revenueGrowing: false, prFalling: false })), [data, filters]);
+  const revenueComparable = comparisonRows.filter(row => mapRevenueAt(row, period) !== null).length;
+  const prComparable = comparisonRows.filter(row => row.past[period]?.point).length;
   const domains = useMemo(() => {
     const x: number[] = [], y: number[] = [];
     for (const row of data?.rows ?? []) {
@@ -118,16 +121,18 @@ export function CandidateMap({ favorites, onFavorite, onDetail, imported, onClea
       <div className="discovery-controls map-filter-secondary"><div className="map-period-control"><span className="control-label">과거 시점</span><div className="choice-buttons map-periods" role="group" aria-label="지도 비교 시점">{MAP_PERIODS.map(day => <button key={day} aria-pressed={period === day} onClick={() => update({ period: day })}>{periodName(day)}</button>)}</div></div>
         <div className="map-capital-control"><span className="control-label">P/R 분자</span><div className="choice-buttons" role="group" aria-label="지도 배수 기준"><button aria-pressed={capital === "mcap"} onClick={() => update({ capital: "mcap" })}>유통 시총</button><button aria-pressed={capital === "fdv"} onClick={() => update({ capital: "fdv" })}>FDV</button></div></div>
       </div>
-      {(filters.revenueGrowing || filters.prFalling) && <p className="map-filter-hint">{periodName(period)}과 현재를 비교합니다. 수익 증가는 두 시점의 직전 30일 Revenue 기준이며, 선택한 조건을 모두 충족한 종목만 표시합니다.</p>}
+      {(filters.revenueGrowing || filters.prFalling) && <p className="map-filter-hint">{periodName(period)}과 현재를 비교합니다. 수익 증가는 두 시점의 직전 30일 Revenue 기준이며, 선택한 조건을 모두 충족한 종목만 표시합니다.
+        {data && !loading && <span className="map-comparison-coverage">{filters.revenueGrowing && `수익 비교 가능 ${revenueComparable}/${comparisonRows.length}개 · 확인 불가 ${comparisonRows.length - revenueComparable}개`}{filters.revenueGrowing && filters.prFalling && " / "}{filters.prFalling && `P/R 비교 가능 ${prComparable}/${comparisonRows.length}개 · 확인 불가 ${comparisonRows.length - prComparable}개`}</span>}
+      </p>}
     </div>
     <div className="map-panel" aria-busy={loading}>
       <div className="map-topline"><div className="map-applied"><span>{filterCount ? "조건 " + filterCount + "개 적용" : "전체 범위"}{inherited && " · 전체종목 조건"}</span>{(filterCount > 0 || inherited) && <button className="text-button" onClick={reset}>초기화</button>}<span className="map-count">{rows.length.toLocaleString()}개 · {arrows.toLocaleString()}개 화살표</span></div>
-        <div className="map-legend"><span><ArrowLeft size={18} className="map-legend-down"/>P/R 하락</span><span><ArrowRight size={18} className="map-legend-up"/>P/R 상승</span><span><i className="legend-dot favorite"/>관심종목</span><span><i className="legend-dot same"/>변화 없음·과거 자료 없음</span>
+        <div className="map-legend"><span><ArrowLeft size={18} className="map-legend-down"/>P/R 하락</span><span><ArrowRight size={18} className="map-legend-up"/>P/R 상승</span><span><i className="legend-dot favorite"/>관심종목</span><span><i className="legend-dot same"/>P/R 변화 없음·과거 P/R 없음</span>
           <button className="text-button" disabled={loading || !rows.length} aria-pressed={selecting} onClick={() => { setSelecting(!selecting); setArea(null); setHover(null); }}><Maximize size={15}/>{selecting ? "영역 선택 중" : "영역 선택"}</button>{area && <button className="text-button" onClick={() => { setArea(null); setPage(1); }}><RotateCcw size={13}/>영역 해제</button>}
         </div>
       </div>
       <div className="map-plot" ref={wrapper}>
-        {loading ? <div className="discovery-loading" role="status"><span className="loading-orbit"/><strong>현재 위치와 과거 기록을 불러오고 있습니다</strong><p>전체 종목을 같은 수집본으로 맞춥니다.</p></div> : error ? <div className="discovery-loading" role="alert"><p>{error}</p><button className="button" onClick={refresh}>다시 불러오기</button></div> : !rows.length ? <div className="discovery-loading"><strong>조건에 맞는 지도 종목이 없습니다</strong><p>현재 P/R과 30일 Revenue가 모두 양수인 종목을 표시합니다. 변화 조건에는 과거 자료도 필요합니다.</p><button className="button" onClick={reset}>조건 초기화</button></div> : <>
+        {loading ? <div className="discovery-loading" role="status"><span className="loading-orbit"/><strong>현재 위치와 과거 기록을 불러오고 있습니다</strong><p>전체 종목을 같은 수집본으로 맞춥니다.</p></div> : error ? <div className="discovery-loading" role="alert"><p>{error}</p><button className="button" onClick={refresh}>다시 불러오기</button></div> : !rows.length ? <div className="discovery-loading"><strong>조건에 맞는 지도 종목이 없습니다</strong><p>현재 P/R과 30일 Revenue가 모두 양수인 종목을 표시합니다. 수익 증가에는 과거 30일 Revenue, P/R 하락에는 당시 시총·FDV도 필요합니다.</p><button className="button" onClick={reset}>조건 초기화</button></div> : <>
           <svg className={"candidate-chart" + (selecting ? " selecting" : hovered ? " has-hover" : "")} width="100%" height={height} viewBox={"0 0 " + width + " " + height} role="img" tabIndex={0} aria-describedby={chartId + "-hint"} aria-label={rows.length + "개 종목의 지도. 가로는 30일 P/R, 세로는 30일 Revenue. " + periodName(period) + "에서 현재로 " + arrows + "개 화살표."}
             onFocus={() => setHover(current => current ?? plotted[0]?.slug ?? null)}
             onKeyDown={e => {
@@ -189,7 +194,7 @@ export function CandidateMap({ favorites, onFavorite, onDetail, imported, onClea
     </div>
     <div className="map-explanation"><p>현재 시총은 최신 수집본 기준입니다.{data && " · " + fmtKstMinute(data.updatedAt)}</p>
       {data && <details><summary>지도 읽는 법 · 자료 기준</summary><p>과거 {mapDate(data.asOf, -period)} UTC → 현재 수집본. 현재 30일 수익의 마지막 날짜는 {data.asOf} UTC입니다. 가로·세로는 로그 눈금이며, 같은 간격은 같은 배율을 뜻합니다.</p>
-        <p>왼쪽으로 가면 P/R이 낮아지고, 위로 가면 30일 Revenue가 늘어납니다. 과거 위치는 그날의 {capital === "mcap" ? "유통 시총" : "FDV"}과 직전 30일 수익으로 계산합니다. 수익 증가는 투자 수익률이 아닌 Revenue의 증가입니다.</p>
+        <p>왼쪽으로 가면 P/R이 낮아지고, 위로 가면 30일 Revenue가 늘어납니다. 과거 위치는 그날의 {capital === "mcap" ? "유통 시총" : "FDV"}과 직전 30일 수익으로 계산합니다. 수익 증가는 두 시점의 Revenue로 판별하며, 과거 시총·FDV가 없어도 확인할 수 있습니다. 수익 증가는 투자 수익률이 아닌 Revenue의 증가입니다.</p>
         <p>현재 점만 {rows.length - arrows}개 · 현재 배수나 수익 부족으로 지도에서 제외된 종목 {data.excluded.toLocaleString()}개. 당시 가치와 연속 30일 수익을 모두 확인한 종목에만 화살표가 있습니다. 점이 겹치면 영역을 선택해 아래 목록에서 열 수 있습니다. 축은 필터와 과거 시점 변경 중에도 같은 기준을 유지합니다.</p>
         {data.historyStatus === "unavailable" && <p role="status">불러오지 못한 과거 기록이 있습니다. 해당 종목은 현재 위치만 표시합니다. <button className="text-button" onClick={refresh}>다시 연결</button></p>}
       </details>}

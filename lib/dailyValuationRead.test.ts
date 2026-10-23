@@ -45,7 +45,7 @@ it("does not draw arrows for gaps, a changed current total, token replacement or
   const values = points(395); values.splice(355, 1); await seed(values);
   const history = (await mapHistory()).get(coin.slug)!;
   expect(history[30].point).toBeNull(); expect(history[1].point).not.toBeNull();
-  expect((await mapHistory({ coins: [{ ...coin, revenue30d: 31 }] })).get(coin.slug)![1].point).toBeNull();
+  expect((await mapHistory({ coins: [{ ...coin, revenue30d: 31 }] })).get(coin.slug)![1]).toMatchObject({ point: null, revenue: null });
   expect((await mapHistory({ coins: [{ ...coin, geckoId: "replacement", revenue30d: 30 }] })).get(coin.slug)![1].point).toBeNull();
   expect((await mapHistory({ coins: [{ ...coin, capitalExclusionReason: "liability", revenue30d: 30 }] })).get(coin.slug)![1].point).toBeNull();
 });
@@ -59,7 +59,29 @@ it("allows verified zero days in the window but rejects changed financial scope 
   const result = (await mapHistory()).get(coin.slug)!;
   expect(result[365].point?.revenue).toBe(29);
   expect(result[180].point).toBeNull(); expect(result[90].point).toBeNull();
+  expect(result[180].revenue).toBeNull();
+  expect(result[90].revenue).toEqual({ date: shiftValuationDay(asOf, -90), value: 30 });
   expect(result[30].point).not.toBeNull();
+});
+
+it("returns independent verified Revenue comparisons when the historical FDV is absent", async () => {
+  const values = points(395), target = shiftValuationDay(asOf, -30);
+  values.find(point => point.day === target)!.fdv = { value: null, state: "missing", source: "", at: null };
+  for (const point of values.filter(point => point.day > target)) point.revenue!.value = 2;
+  await seed(values);
+  const before = (await db.execute("SELECT rows_written FROM daily_raw_runs")).rows;
+  const fdv = (await mapHistory({ coins: [{ ...coin, revenue30d: 60 }] })).get(coin.slug)![30];
+  const mcap = (await mapHistory({ coins: [{ ...coin, revenue30d: 60 }], capital: "mcap" })).get(coin.slug)![30];
+  expect(fdv).toMatchObject({ point: null, revenue: { date: target, value: 30 }, revenueReason: "" });
+  expect(mcap.point).not.toBeNull(); expect(mcap.revenue).toEqual(fdv.revenue);
+  expect((await db.execute("SELECT rows_written FROM daily_raw_runs")).rows).toEqual(before);
+});
+
+it("compares a complete zero-Revenue window without manufacturing a past P/R", async () => {
+  const values = points(395), end = shiftValuationDay(asOf, -30), start = shiftValuationDay(end, -29);
+  for (const point of values.filter(point => point.day >= start && point.day <= end)) point.revenue!.value = 0;
+  await seed(values);
+  expect((await mapHistory()).get(coin.slug)![30]).toMatchObject({ point: null, revenue: { date: end, value: 0 }, revenueReason: "" });
 });
 
 it("seeks exact identities and the 366-day range, returning a read-only 365-day distribution", async () => {

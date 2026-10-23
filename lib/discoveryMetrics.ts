@@ -17,7 +17,7 @@ export function completeRevenueWindow(points: ReadonlyMap<string, DailyRawStored
     if (definition && definition !== currentDefinition) return null;
     definition = currentDefinition; total += cell.value;
   }
-  return Number.isFinite(total) && total > 0 ? { total, definition } : null;
+  return Number.isFinite(total) && total >= 0 ? { total, definition } : null;
 }
 
 export function mapHistoricalPositions(options: { points: DailyRawStoredPoint[]; sources: DailyRawSource[]; asOf: string; capital: CapitalBasis; currentRevenue: number }) {
@@ -26,14 +26,17 @@ export function mapHistoricalPositions(options: { points: DailyRawStoredPoint[];
   const current = completeRevenueWindow(points, asOf, sources);
   return Object.fromEntries(MAP_PERIODS.map(days => {
     const date = shiftValuationDay(asOf, -days), raw = points.get(date), window = completeRevenueWindow(points, date, sources);
-    const missing = (reason: string): [MapPeriod, MapHistory] => [days, { point: null, reason }];
+    const missing = (reason: string): [MapPeriod, MapHistory] => [days, { point: null, reason, revenue: null, revenueReason: reason }];
     if (!current) return missing("현재 30일 원자료가 불완전해 과거와 연결하지 않습니다.");
     if (Math.abs(current.total - currentRevenue) > Math.max(1, currentRevenue) * 1e-8) return missing("공개본과 일별 원자료의 집계가 달라 연결을 보류합니다.");
     if (!raw || !window) return missing("당시의 연속 30일 수익 자료가 부족합니다.");
     if (window.definition !== current.definition) return missing("두 시점의 수익 집계 기준이 다릅니다.");
+    const revenue = { date, value: window.total };
+    const noPosition = (reason: string): [MapPeriod, MapHistory] => [days, { point: null, reason, revenue, revenueReason: "" }];
+    if (window.total === 0) return noPosition("당시 30일 Revenue가 0이라 과거 P/R을 계산하지 않습니다.");
     const value = calculateDailyValuation({ point: raw, sources, capital, eligible: true, completedThrough: asOf })[capital];
-    if (value.reason || value.value === null || value.value <= 0) return missing(`당시 ${capital === "fdv" ? "FDV를" : "유통 시총을"} 확인하지 못했습니다.`);
+    if (value.reason || value.value === null || value.value <= 0) return noPosition(`당시 ${capital === "fdv" ? "FDV를" : "유통 시총을"} 확인하지 못했습니다.`);
     const pr = value.value / (window.total * 365 / 30);
-    return Number.isFinite(pr) && pr > 0 ? [days, { point: { date, pr, revenue: window.total }, reason: "" }] : missing("유효한 과거 배수를 계산하지 못했습니다.");
+    return Number.isFinite(pr) && pr > 0 ? [days, { point: { date, pr, revenue: window.total }, reason: "", revenue, revenueReason: "" }] : noPosition("유효한 과거 배수를 계산하지 못했습니다.");
   })) as Record<MapPeriod, MapHistory>;
 }
