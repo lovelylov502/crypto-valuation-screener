@@ -24,8 +24,8 @@ export async function collectFdvRecovery(manifest: FdvRecoveryManifest, cache: s
   const groups = new Map<string, CollectedDailyRawAsset[]>(); let originalQuotes = 0, heldQuotes = 0;
   for (let i = 0; i < manifest.sources.length; i++) {
     const source = manifest.sources[i], bytes = await cachedArchive(source.url, source.sha256, cache);
-    const captured = JSON.parse(gunzipSync(bytes, { maxOutputLength: 150_000_000 }).toString("utf8")) as { coins: CoinRaw[]; pipeline?: { rawBundleSha256: string } };
-    if (!Array.isArray(captured.coins) || captured.pipeline?.rawBundleSha256 !== source.bundleSha256) throw Error("daily_fdv_recovery_original_pin");
+    const captured = JSON.parse(gunzipSync(bytes, { maxOutputLength: 150_000_000 }).toString("utf8")) as { updatedAt: string; coins: CoinRaw[]; pipeline?: { rawBundleSha256: string } };
+    if (!Array.isArray(captured.coins) || !Number.isFinite(Date.parse(captured.updatedAt)) || captured.pipeline?.rawBundleSha256 !== source.bundleSha256) throw Error("daily_fdv_recovery_original_pin");
     const bundleBytes = await cachedArchive(source.url.replace(/data\.json\.gz$/, "source-bundle.json.gz"), source.bundleSha256, cache);
     const bundle = JSON.parse(gunzipSync(bundleBytes, { maxOutputLength: 500_000_000 }).toString("utf8")) as SourceBundle;
     validateSourceBundle(bundle);
@@ -33,7 +33,7 @@ export async function collectFdvRecovery(manifest: FdvRecoveryManifest, cache: s
     if (index.issues.length) throw Error("daily_fdv_recovery_original_receipt");
     for (const coin of captured.coins) {
       const currentCoin = current.get(coin.slug); if (!currentCoin) continue;
-      const item = originalCapturedFdv(coin, currentCoin, { ...ref, url: source.url, sha256: source.sha256 }, index);
+      const item = originalCapturedFdv(coin, currentCoin, { ...ref, url: source.url, sha256: source.sha256, dataAt: captured.updatedAt }, index);
       item.points = item.points.filter(point => point.day < beforeDay);
       heldQuotes += item.issues?.length ?? 0; originalQuotes += item.points.length;
       if (item.points.length) groups.set(coin.slug, [...groups.get(coin.slug) ?? [], item]);

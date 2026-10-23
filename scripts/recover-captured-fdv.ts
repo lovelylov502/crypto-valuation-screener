@@ -21,7 +21,7 @@ async function main(argv: string[]) {
   if (!arg("--cache") || !arg("--manifest")) throw Error("daily_fdv_recovery_inputs_required");
   await mkdir(resolve(arg("--cache")!), { recursive: true }); const cache = await realpath(resolve(arg("--cache")!));
   if (spawnSync("git", ["-C", cache, "rev-parse", "--show-toplevel"], { windowsHide: true }).status === 0) throw Error("daily_fdv_recovery_cache_inside_git");
-  const apply = argv.includes("--apply"), now = new Date(), allowance = integer("--max-estimated-writes", 50_000, 8, 50_000), deadline = Date.now() + integer("--time-budget-seconds", 1500, 1, 1800) * 1000;
+  const apply = argv.includes("--apply"), now = new Date(), allowance = integer("--max-estimated-writes", 50_000, 8, 50_000), deadline = Date.now() + integer("--time-budget-seconds", 1500, 1, 3600) * 1000;
   const runId = arg("--run-id") ?? `fdv-repair-${now.toISOString().replace(/[:.]/g, "-")}`;
   const manifest = JSON.parse(await readFile(resolve(arg("--manifest")!), "utf8")) as FdvRecoveryManifest;
   const input = await collectFdvRecovery(manifest, cache, now, progress => console.log(JSON.stringify({ event: "fdv-original-verified", ...progress })));

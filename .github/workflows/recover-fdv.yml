@@ -10,7 +10,7 @@ jobs:
   repair:
     if: github.repository == 'lovelylov502/crypto-valuation-screener' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 60
     concurrency:
       group: daily-valuation-history
       cancel-in-progress: false
@@ -18,8 +18,8 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
       TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
-      EVIDENCE_TAG: fdv-recovery-20261023
-      MANIFEST_SHA256: 49221ff50dce1cb77cb94be8f1509446469afe3984ad3aeae7f15b5d2390d9a4
+      EVIDENCE_TAG: fdv-recovery-20261023-r2
+      MANIFEST_SHA256: a63ae2e03b4f34f87721dc89f2f9feb3967f9264d0938c1f5a8bd2dc4c71d005
       COINMETRICS_SHA256: b448127bf8173a3ee61238ea6aa904c28b44ccd9f6903925f83dc7316c50d0fb
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +39,7 @@ jobs:
           tar -xzf "$cache/coinmetrics-originals.tgz" -C "$cache/coinmetrics"
       - name: Replay originals and repair only empty completed-day FDV
         run: |
-          npx tsx scripts/recover-captured-fdv.ts --cache "$RUNNER_TEMP/fdv-repair" --manifest "$RUNNER_TEMP/fdv-repair/fdv-recovery-manifest.json" --coinmetrics-manifest "$RUNNER_TEMP/fdv-repair/coinmetrics/manifest.json" --run-id "fdv-repair-${{ github.run_id }}" --max-estimated-writes 50000 --time-budget-seconds 1500 --apply
+          npx tsx scripts/recover-captured-fdv.ts --cache "$RUNNER_TEMP/fdv-repair" --manifest "$RUNNER_TEMP/fdv-repair/fdv-recovery-manifest.json" --coinmetrics-manifest "$RUNNER_TEMP/fdv-repair/coinmetrics/manifest.json" --run-id "fdv-repair-${{ github.run_id }}" --max-estimated-writes 50000 --time-budget-seconds 3000 --apply
       - uses: actions/upload-artifact@v7
         if: always()
         with:

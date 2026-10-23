@@ -210,7 +210,8 @@ export function originalCapturedFdv(coin: CoinRaw, current: CoinRaw, reference: 
   const lookup = provider === "CoinGecko" ? coin.marketSources?.gecko : coin.marketSources?.cmc;
   if (!id || lookup?.status !== "received" || lookup.id !== id || provider === "CoinMarketCap" && (coin.cmcId !== current.cmcId || !["source-id", "contract", "retained"].includes(current.cmcIdentity?.basis ?? ""))) return empty;
   const quotes = (index.quotes.get(objectHash([provider, id, lookup.observedAt])) ?? []).filter(quote => quote.fdv === coin.fdv && quote.quoteAt
-    && Number.isFinite(Date.parse(quote.quoteAt)) && Date.parse(quote.quoteAt) <= Date.parse(quote.observedAt) && Date.parse(quote.observedAt) - Date.parse(quote.quoteAt) <= 12 * 3600_000);
+    && Number.isFinite(Date.parse(reference.dataAt)) && Number.isFinite(Date.parse(quote.quoteAt)) && Date.parse(quote.quoteAt) <= Date.parse(quote.observedAt)
+    && Date.parse(reference.dataAt) - Date.parse(quote.quoteAt) <= 12 * 3600_000);
   if (!quotes.length || new Set(quotes.map(quote => objectHash([quote.quoteAt, quote.price, quote.maxSupply, quote.infiniteSupply]))).size !== 1) return empty;
   const quote = [...quotes].sort((a, b) => a.receiptSha256.localeCompare(b.receiptSha256))[0], at = quote.quoteAt!, day = utcDay(Date.parse(at));
   const check = checkCapturedFdvUpperBound({ provider, id, observedAt: lookup.observedAt, quoteAt: at, fdv: coin.fdv }, index);

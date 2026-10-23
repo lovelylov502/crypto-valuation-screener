@@ -36,6 +36,14 @@ it("does not reconstruct missing supply, accept stale/future quotes or bypass an
     expect(originalCapturedFdv(coin, coin, reference, source).points).toEqual([]);
   }
 });
+it("measures freshness from collection start and retains the actual later receipt time", () => {
+  const delayed = "2026-10-12T12:00:00Z", start = "2026-10-12T11:58:00Z";
+  const c = { ...coin, marketSources: { ...coin.marketSources!, cmc: { ...coin.marketSources!.cmc!, observedAt: delayed } } };
+  const result = originalCapturedFdv(c, c, { ...reference, dataAt: start }, index({}, {}, { observedAt: delayed, requestedAt: start }));
+  expect(result.points[0]).toMatchObject({ day: "2026-10-11", fdv: { value: 200, at: quoteAt } });
+  expect(result.sources[0].observedAt).toBe(delayed);
+  expect(originalCapturedFdv(c, c, { ...reference, dataAt: delayed }, index({}, {}, { observedAt: delayed, requestedAt: start })).points).toEqual([]);
+});
 it("retains the explicit Snowbank supply review hold even with a verified timestamp", () => {
   const snowbank = { ...coin, slug: "snowbank", geckoId: "snowbank", marketSources: { ...coin.marketSources!, fdv: "CoinGecko", gecko: { id: "snowbank", status: "received", observedAt } } } as CoinRaw;
   const body = JSON.stringify([{ id: "snowbank", current_price: 2, fully_diluted_valuation: 200, max_supply: null, last_updated: quoteAt }]);
