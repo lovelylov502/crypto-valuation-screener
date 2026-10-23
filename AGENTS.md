@@ -22,3 +22,4 @@ Production deployment safety:
 - The expected Vercel binding is project `prj_zOmxeQWmBjp5MAUmmYFALM8AC6Cc`, team `team_2dxBFycQaaHuXjESEf0kCkFG`, project name `crypto-valuation-screener`.
 - Pre-deployment proof is a passing `npm run deploy:preflight`: exact resolved root, fetch/push repository URLs, local Vercel linkage, branch `main`, upstream `origin/main`, clean worktree, and `HEAD == origin/main` after a fresh fetch.
 - Run production only with `npm run deploy:production`. It enforces the proof, authenticated remote Vercel identity, local gates, pinned CLI deploy, and canonical live readback defined in [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md).
+- GitHub `Latest` belongs exclusively to the data journal. Create app releases with `npm run release:app -- --notes-file <file> [assets...]`; this forces `--latest=false` and verifies public data loading after release creation. Never mark an app/evidence release Latest.

@@ -18,6 +18,7 @@
     "audit:coverage": "tsx scripts/audit-coverage.ts",
     "verify:production": "node scripts/verify-production.mjs && npm run audit:coverage",
     "deploy:production": "node scripts/deploy-production.mjs",
+    "release:app": "tsx scripts/release-app.ts",
     "history:sync": "tsx scripts/sync-history.ts",
     "history:archive": "tsx scripts/archive-history.ts",
     "history:publish": "tsx scripts/publish-history.ts",
