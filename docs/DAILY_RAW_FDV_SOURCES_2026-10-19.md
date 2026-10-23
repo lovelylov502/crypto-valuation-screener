@@ -1,5 +1,7 @@
 # Free historical FDV source verification — 2026-10-19
 
+The original results below describe the October 19 check. The [October 23 full-universe audit](./FDV_COVERAGE_AUDIT_2026-10-23.md) supersedes its strict supply-equality limitation: a relative `1e-10` consistency tolerance admits 1INCH's 0.003-token difference while still using the actual dated supply. Material supply gaps remain withheld. That audit also documents original-timestamp recovery and the current quote quality gate.
+
 The attainable free source is the official [Coin Metrics Community API](https://docs.coinmetrics.io/api/v4/). Its dated ledger supply enables a limited, explicitly verified total-supply valuation. It does not provide a universal history of CoinGecko/CMC maximum-supply or burn-adjusted FDV.
 
 ## Acquired evidence and accepted coverage

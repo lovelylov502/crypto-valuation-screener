@@ -125,7 +125,9 @@ export function parseCoinMetricsHistory(body: unknown, binding: CoinMetricsBindi
       if (price !== null) point.price = { value: price, state: "complete", source: keys.price, at };
       if (mcap !== null) point.mcap = { value: mcap, state: "complete", source: keys.mcap, at };
     }
-    if (keys.fdv && price !== null && price > 0 && supply !== null && supply > 0 && supply === binding.expectedSupply) {
+    // Use the actual dated supply, allowing only the same 1e-10 consistency
+    // tolerance as the provider capitalization check (e.g. 0.003 of 1.5B 1INCH).
+    if (keys.fdv && price !== null && price > 0 && supply !== null && supply > 0 && binding.expectedSupply !== null && sameAmount(supply, binding.expectedSupply)) {
       const fdv = price * supply;
       if (!Number.isFinite(fdv)) throw Error("Invalid Coin Metrics issued-supply valuation");
       point.fdv = cap !== null && !sameAmount(cap, fdv) ? { value: null, state: "conflict", source: keys.fdv, at }

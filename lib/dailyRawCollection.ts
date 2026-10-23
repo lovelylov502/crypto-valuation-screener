@@ -198,13 +198,37 @@ export function extractDailyRawFundamentals(bundle: SourceBundle, archiveUrl: st
     sources: new Map([...sources].map(([slug, rows]) => [slug, [...rows.values()]])) };
 }
 
-/** Actual archived quotes only. snapshotMarket supplies the existing identity,
- * provider timestamp and capital checks; no supply reconstruction is used. */
+/** Rebuild only the selected FDV from its pinned original provider record.
+ * The snapshot's marketDataUpdatedAt belongs to its price provider and cannot
+ * timestamp a fallback FDV. Historical holds retain their original claims. */
+export function originalCapturedFdv(coin: CoinRaw, current: CoinRaw, reference: PublishedSnapshot, index: ReturnType<typeof indexCapturedFdvQuotes>): CollectedDailyRawAsset {
+  const asset = { slug: current.slug, identity: historyIdentity(current) }, empty: CollectedDailyRawAsset = { asset, sources: [], points: [] };
+  const provider = coin.marketSources?.fdv;
+  if (coin.slug !== current.slug || coin.identityStatus !== "verified" || current.identityStatus !== "verified" || coin.capitalExclusionReason || current.capitalExclusionReason
+    || historyIdentity(coin) !== asset.identity || !finite(coin.fdv) || coin.fdv <= 0 || provider !== "CoinGecko" && provider !== "CoinMarketCap") return empty;
+  const id = provider === "CoinGecko" ? coin.geckoId : coin.cmcId ? String(coin.cmcId) : null;
+  const lookup = provider === "CoinGecko" ? coin.marketSources?.gecko : coin.marketSources?.cmc;
+  if (!id || lookup?.status !== "received" || lookup.id !== id || provider === "CoinMarketCap" && (coin.cmcId !== current.cmcId || !["source-id", "contract", "retained"].includes(current.cmcIdentity?.basis ?? ""))) return empty;
+  const quotes = (index.quotes.get(objectHash([provider, id, lookup.observedAt])) ?? []).filter(quote => quote.fdv === coin.fdv && quote.quoteAt
+    && Number.isFinite(Date.parse(quote.quoteAt)) && Date.parse(quote.quoteAt) <= Date.parse(quote.observedAt) && Date.parse(quote.observedAt) - Date.parse(quote.quoteAt) <= 12 * 3600_000);
+  if (!quotes.length || new Set(quotes.map(quote => objectHash([quote.quoteAt, quote.price, quote.maxSupply, quote.infiniteSupply]))).size !== 1) return empty;
+  const quote = [...quotes].sort((a, b) => a.receiptSha256.localeCompare(b.receiptSha256))[0], at = quote.quoteAt!, day = utcDay(Date.parse(at));
+  const check = checkCapturedFdvUpperBound({ provider, id, observedAt: lookup.observedAt, quoteAt: at, fdv: coin.fdv }, index);
+  const held = hasDailyRawFdvReview(asset, { metric: "fdv", provider, basis: "captured_quote;actual_provider_timestamp" });
+  if (held || check.state === "exceeds_bound" || check.state === "receipt_unavailable") return { ...empty, issues: [{ scope: current.slug, metric: "fdv", day, reason: held ? DAILY_RAW_FDV_REVIEW.reason : check.reason }] };
+  const source = dailyRawSource(current.slug, { metric: "fdv", provider, url: reference.url, observedAt: lookup.observedAt, sha256: reference.sha256, archiveUrl: reference.url,
+    scope: orderedJson(asset), definition: "provider_reported_fdv_usd;verified_token_identity", basis: "captured_quote;actual_provider_timestamp" });
+  return { asset, sources: [source], points: [{ day, fdv: { value: coin.fdv, state: "complete", source: source.key, at } }] };
+}
+
+/** Actual archived quotes only; FDV has its own verified provider timestamp. */
 export function snapshotDailyRaw(coin: CoinRaw, current: CoinRaw, reference: PublishedSnapshot, fdvIndex?: ReturnType<typeof indexCapturedFdvQuotes>): CollectedDailyRawAsset {
   const asset = { slug: current.slug, identity: historyIdentity(current) }, point = snapshotMarket(coin, current, "", reference.dataAt);
-  if (!point) return { asset, sources: [], points: [] };
+  const originalFdv = fdvIndex ? originalCapturedFdv(coin, current, reference, fdvIndex) : null;
+  if (!point) return originalFdv ?? { asset, sources: [], points: [] };
   const sources: DailyRawSource[] = [], row: DailyRawPoint = { day: point.day }, issues: DailyRawCollectionIssue[] = [];
   for (const metric of marketMetrics) {
+    if (metric === "fdv" && originalFdv?.points.length) continue;
     const value = point[metric];
     if (value === null) continue;
     const provider = coin.marketSources?.[metric] ?? "unknown";
@@ -228,7 +252,8 @@ export function snapshotDailyRaw(coin: CoinRaw, current: CoinRaw, reference: Pub
     }
     sources.push(source); row[metric] = { value: rejected ? null : value, state: rejected ? "missing" : "complete", source: source.key, at: rejected ? null : metric === "fdv" ? point.fdvAt : point.marketAt };
   }
-  return { asset, sources, points: [row], ...(issues.length ? { issues } : {}) };
+  const result = { asset, sources, points: [row], ...(issues.length ? { issues } : {}) };
+  return originalFdv ? combineDailyRawAssets(asset, [result, originalFdv]) : result;
 }
 
 export interface LegacyFdvManifest {

@@ -1,4 +1,6 @@
 import type { CoinRaw, QuoteLookup } from "./types";
+import { DAILY_RAW_FDV_BOUND_POLICY } from "./dailyRawFdvValidation";
+import { DAILY_RAW_FDV_REVIEW } from "./dailyRawFdvReview";
 
 type Row = Record<string, unknown>;
 const num = (v: unknown): number | null => typeof v === "number" && Number.isFinite(v) ? v : null;
@@ -27,7 +29,7 @@ export function resolveCmcAsset(rows: Row[], ids: number[], addresses: string[],
 }
 
 /** Retain the original bytes in receipts; reject unusable fields before selecting any quote. */
-export function checkedMarketRow(row: Row, vendor: "cmc" | "gecko", asOf: string): Row {
+export function checkedMarketRow(row: Row, vendor: "cmc" | "gecko", asOf: string, fdvQuality = false): Row {
   const result = { ...row }, exclusions = [...((row.quoteExclusions as QuoteLookup["exclusions"]) ?? [])];
   const quotes = vendor === "cmc" && Array.isArray(row.quote) ? row.quote.map(v => ({ ...v })) : null;
   const quote = vendor === "cmc" ? quotes?.find(v => v.symbol === "USD") : result;
@@ -54,6 +56,11 @@ export function checkedMarketRow(row: Row, vendor: "cmc" | "gecko", asOf: string
     Math.max(price * supply / cap, cap / (price * supply)) > 1.25) exclude("mcap", "가격·유통량과 시총 불일치");
   // Allow small rounding/quote-time differences, never a materially smaller diluted value.
   if (cap !== null && cap > 0 && fdv !== null && fdv < cap * .95) exclude("fdv", "FDV가 유통 시총보다 작음");
+  if (fdvQuality) {
+    const maximum = num(result.max_supply), bound = price !== null && price > 0 && maximum !== null && maximum > 0 ? price * maximum : null;
+    if (fdv !== null && bound !== null && Number.isFinite(bound) && row.infinite_supply !== true && fdv > bound + Math.max(DAILY_RAW_FDV_BOUND_POLICY.absoluteToleranceUsd, bound * DAILY_RAW_FDV_BOUND_POLICY.relativeTolerance)) exclude("fdv", "원본 가격·최대 공급량과 FDV 불일치");
+    if (vendor === "gecko" && `gecko:${row.id}` === DAILY_RAW_FDV_REVIEW.identity) exclude("fdv", "FDV 공급량 기준 검토 중");
+  }
   if (quotes) result.quote = quotes;
   if (exclusions.length) result.quoteExclusions = exclusions;
   return result;

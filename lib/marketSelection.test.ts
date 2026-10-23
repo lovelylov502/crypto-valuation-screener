@@ -8,6 +8,17 @@ import { captureSourceBundle, replaySourceBundle } from "./sourceBundle";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
+it("revision10 rejects inconsistent reported FDV and keeps original revision9 replay semantics", () => {
+  const row = { id: "sample", current_price: 2, market_cap: 100, fully_diluted_valuation: 1e25, max_supply: 100 };
+  expect(checkedMarketRow(row, "gecko", "2026-10-23T00:00:00Z").fully_diluted_valuation).toBe(1e25);
+  const checked = checkedMarketRow(row, "gecko", "2026-10-23T00:00:00Z", true);
+  expect(checked).toMatchObject({ current_price: 2, market_cap: 100, fully_diluted_valuation: null });
+  expect(checked.quoteExclusions).toContainEqual({ field: "fdv", reason: "원본 가격·최대 공급량과 FDV 불일치" });
+  expect(checkedMarketRow({ ...row, max_supply: null }, "gecko", "2026-10-23T00:00:00Z", true).fully_diluted_valuation).toBe(1e25);
+  expect(checkedMarketRow({ ...row, id: "snowbank", max_supply: null }, "gecko", "2026-10-23T00:00:00Z", true).fully_diluted_valuation).toBeNull();
+  expect(row.fully_diluted_valuation).toBe(1e25);
+});
+
 const at = "2026-10-11T04:42:52.555Z";
 const address = "0xdA5e1988097297dCdc1f90D4dFE7909e847CBeF6";
 const official = { id: 33251, name: "World Liberty Financial", symbol: "WLFI", slug: "world-liberty-financial-wlfi",
@@ -27,6 +38,16 @@ function inputs(): CoinInputs {
     cmcDiscoveryComplete: true, gecko: [structuredClone(gecko)], geckoLookups: [[gecko.id, { id: gecko.id, status: "received", observedAt: at, available: ["price", "mcap", "fdv"] }]],
     revenueHistories: {}, holderHistories: {}, recoveredRevenue: [], observations: [], priorCmcTargets: [] } as CoinInputs;
 }
+
+it("selects a verified fallback FDV after revision10 rejects an impossible preferred quote", () => {
+  const i = inputs(); i.marketRevision = 3; i.fdvQuality = true;
+  i.gecko[0].fully_diluted_valuation = 1e25;
+  const [current] = normalizeCoinInputs(i);
+  expect(current.fdv).toBe(official.quote[0].fully_diluted_market_cap);
+  expect(current.marketSources?.fdv).toBe("CoinMarketCap");
+  delete i.fdvQuality;
+  expect(normalizeCoinInputs(i)[0].fdv).toBe(1e25);
+});
 function parentInputs(): CoinInputs {
   const i = inputs(); i.marketRevision = 3;
   const parent = { id: "parent#sun", name: "SUN", symbol: "SUN", gecko_id: "sun-token", cmcId: "10529", address: "tron:TSSMHYeV2uE9qYH95DqyoCuNCzEL1NvU3S" };

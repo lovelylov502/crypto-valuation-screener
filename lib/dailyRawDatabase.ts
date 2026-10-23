@@ -258,7 +258,8 @@ export async function upsertDailyRaw(db: Client, options: DailyRawUpsertOptions)
       const days = new Map(previous.rows.map(row => [String(row.day), row]));
       for (const expected of options.expectedCells) {
         const row = days.get(expected.day), actual = cell(row, expected.metric);
-        if (!row || actual.value !== expected.value || actual.state !== expected.state || actual.at !== expected.at || String(row[`${expected.metric}_key`] ?? "") !== expected.sourceKey) throw Error("Daily raw expected cell changed");
+        const absent = !row && expected.value === null && expected.state === 0 && expected.at === null && expected.sourceKey === "";
+        if (!absent && (!row || actual.value !== expected.value || actual.state !== expected.state || actual.at !== expected.at || String(row[`${expected.metric}_key`] ?? "") !== expected.sourceKey)) throw Error("Daily raw expected cell changed");
       }
     }
     if (preflight.replay) { await tx.commit(); return { assetId: preflight.assetId!, rowsWritten: 0, daysWritten: 0, estimatedWrites: 0 }; }

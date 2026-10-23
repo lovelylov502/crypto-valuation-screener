@@ -44,6 +44,15 @@ it("retains unapproved issued-supply acquisitions without exposing them as ordin
   expect(parsed).toMatchObject({ supplyDays: 1, points: [], sources: [] });
 });
 
+it("uses actual dated supply through negligible full-issuance deviations while rejecting material gaps", () => {
+  const supply = 1_499_999_999.997, inch = { ...binding(), cmAsset: "1inch", expectedSupply: 1_500_000_000 };
+  const source = { ...receipt, url: url.replace("assets=aave", "assets=1inch") };
+  const point = { ...entry(), asset: "1inch", SplyCur: String(supply), CapMrktCurUSD: String(supply * 2) };
+  expect(parseCoinMetricsHistory({ data: [point] }, inch, source).points[0].fdv?.value).toBe(supply * 2);
+  expect(parseCoinMetricsHistory({ data: [{ ...point, SplyCur: "1499999999" }] }, inch, source).points).toEqual([]);
+  expect(parseCoinMetricsHistory({ data: [entry({ asset: "ldo", SplyCur: "996308500" })] }, { ...binding(), cmAsset: "ldo", expectedSupply: 1e9 }, { ...receipt, url: url.replace("assets=aave", "assets=ldo") }).points).toEqual([]);
+});
+
 it("uses the dated supply and same-day close, disclosing the next-midnight measurement", () => {
   const parsed = parseCoinMetricsHistory({ data: [entry()] }, binding(), receipt);
   expect(parsed.points).toEqual([{ day: "2020-10-10", fdv: { value: 32_000_000, state: "complete", source: parsed.sources[0].key, at: "2020-10-11T00:00:00.000Z" } }]);

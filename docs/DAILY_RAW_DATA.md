@@ -18,6 +18,8 @@ Local contracts and read-only real-data benchmarks are separate from canonical d
 
 ## Stored contract
 
+Reviewed FDV correctness repairs use `scripts/recover-captured-fdv.ts` and the manual-only `recover-fdv.yml` workflow. The pinned snapshot/provider originals and optional Coin Metrics cache are replayed before any write. Only empty completed-day FDV cells qualify, protected by transaction-local expected-empty-cell guards; existing values, held/conflicting cells, prices and financials are preserved. This maintenance operation has a hard 50,000-credit run ceiling within the shared 8M/4GB limits and can consume maintenance headroom. Bulk MAX acquisition retains its 500,000-credit reserve. The [October 23 audit](./FDV_COVERAGE_AUDIT_2026-10-23.md) records the concrete evidence and remaining source limits.
+
 | Field | Meaning |
 | --- | --- |
 | `price` | USD token price, with its measurement timestamp |

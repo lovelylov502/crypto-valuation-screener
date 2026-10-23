@@ -1,0 +1,86 @@
+name: Recover verified FDV originals
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    if: github.repository == 'lovelylov502/crypto-valuation-screener' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    concurrency:
+      group: daily-valuation-history
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      EVIDENCE_TAG: fdv-recovery-20261023
+      MANIFEST_SHA256: 49221ff50dce1cb77cb94be8f1509446469afe3984ad3aeae7f15b5d2390d9a4
+      COINMETRICS_SHA256: b448127bf8173a3ee61238ea6aa904c28b44ccd9f6903925f83dc7316c50d0fb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --no-audit --no-fund
+      - name: Download the reviewed evidence and verify its exact hashes
+        run: |
+          cache="$RUNNER_TEMP/fdv-repair"
+          mkdir -p "$cache/coinmetrics"
+          gh release download "$EVIDENCE_TAG" --repo "$GITHUB_REPOSITORY" --pattern fdv-recovery-manifest.json --pattern coinmetrics-originals.tgz --dir "$cache"
+          echo "$MANIFEST_SHA256  $cache/fdv-recovery-manifest.json" | sha256sum --check
+          echo "$COINMETRICS_SHA256  $cache/coinmetrics-originals.tgz" | sha256sum --check
+          tar -xzf "$cache/coinmetrics-originals.tgz" -C "$cache/coinmetrics"
+      - name: Replay originals and repair only empty completed-day FDV
+        run: |
+          npx tsx scripts/recover-captured-fdv.ts --cache "$RUNNER_TEMP/fdv-repair" --manifest "$RUNNER_TEMP/fdv-repair/fdv-recovery-manifest.json" --coinmetrics-manifest "$RUNNER_TEMP/fdv-repair/coinmetrics/manifest.json" --run-id "fdv-repair-${{ github.run_id }}" --max-estimated-writes 50000 --time-budget-seconds 1500 --apply
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: fdv-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/fdv-repair/*report.json
+          retention-days: 30
+          if-no-files-found: warn
+
+  prepare:
+    needs: repair
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: daily-history-model-preparation
+      cancel-in-progress: false
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --no-audit --no-fund
+      - name: Refresh current financials and both read models
+        run: |
+          cache="$RUNNER_TEMP/fdv-repair-read-models"
+          npx tsx scripts/refresh-daily-financials.ts --cache "$cache" --run-id "fdv-models-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 600 --recent-days 3 --apply
+          npx tsx scripts/prepare-daily-history.ts --cache "$cache" --reference "$cache/reference.json" --run-id "fdv-models-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 900 --workers 4 --apply
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const report=JSON.parse(readFileSync(process.env.RUNNER_TEMP+'/fdv-repair-read-models/daily-history-model-report.json','utf8'));
+          if(report.status!=='complete'||report.pending!==0)throw Error('FDV history preparation is incomplete; inspect the report before retrying');
+          NODE
+          npx tsx scripts/prepare-table-read-model.ts --run-id "fdv-table-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --minimum-reserve 0 --apply
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: fdv-read-models-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/fdv-repair-read-models/*report.json
+          retention-days: 30
+          if-no-files-found: warn

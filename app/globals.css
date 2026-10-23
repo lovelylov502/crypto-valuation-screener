@@ -1928,7 +1928,7 @@ body {
 .detail-chart-legend dt { display:flex; gap:8px; align-items:center; }
 .detail-chart-legend dt > i { width:19px; border-top-width:3px; border-radius:1px; }
 .detail-chart-legend dd { font-weight:650; margin:0; font-variant-numeric:tabular-nums; }
-.detail-chart-caption { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-shrink:0; margin:4px 0 5px; color:var(--color-muted); font-size:10px; }
+.detail-chart-caption { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:4px 10px; flex-shrink:0; margin:4px 0 5px; color:var(--color-muted); font-size:10px; }
 .detail-valuation-controls { display:flex; align-items:center; gap:10px; margin-left:auto; }
 .detail-capital-switch { display:flex; border:1px solid var(--color-border); border-radius:9px; padding:1px; }
 .detail-capital-switch button { background:transparent; color:var(--color-muted); border:0; border-radius:7px; font-size:11px; padding:5px 11px; }

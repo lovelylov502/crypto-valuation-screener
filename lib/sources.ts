@@ -115,7 +115,7 @@ function validateQuoteRow(row:Json,vendor:"gecko"|"cmc",url:string,observations:
     result.quoteSchemaUrl=url;
     if(report) observations.push({url,observedAt:sourceObservedAt(url),status:"withheld",reason:"schema_mismatch",quoteIds:[String(row.id)]});
   }
-  return sourceAcquisitionRevision() >= 5 ? checkedMarketRow(result, vendor, new Date(sourceNow()).toISOString()) : result;
+  return sourceAcquisitionRevision() >= 5 ? checkedMarketRow(result, vendor, new Date(sourceNow()).toISOString(), sourceAcquisitionRevision() >= 10) : result;
 }
 
 // A provider can report zero when supply is unverified. Prefer a positive quote
@@ -403,6 +403,7 @@ export function aggregateRevenueSource(list: Json[], groupKey: (slug: string) =>
  * original HTTP response bytes are retained by the enclosing source session. */
 export interface CoinInputs {
   marketRevision?: 2 | 3;
+  fdvQuality?: true;
   sourceIdentitiesOnly?: true;
   chainIdentities?: Json[];
   providerHolderWindows?: true;
@@ -502,6 +503,7 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
 
   const inputs:CoinInputs = {asOf,...(sourceAcquisitionRevision()>=6?{marketRevision:3 as const}:sourceAcquisitionRevision()>=5?{marketRevision:2 as const}:{}),protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,parents:config.parentProtocols,stablecoins:stablecoins.peggedAssets,
     ...(sourceAcquisitionRevision()>=9?{sourceIdentitiesOnly:true as const}:{}),
+    ...(sourceAcquisitionRevision()>=10?{fdvQuality:true as const}:{}),
     ...(sourceAcquisitionRevision()>=7?{chainIdentities,providerHolderWindows:true as const}:{}),
     ...(sourceAcquisitionRevision()>=8?{recoveredHolders:[...recoveredHolders].sort(([a],[b])=>a.localeCompare(b))}:{}),
     cmc:[...cmc.byId.values()].sort((a,b)=>Number(a.id)-Number(b.id)),cmcLookups:[...cmcLookups].sort(([a],[b])=>a-b),cmcDiscoveryComplete:cmc.discoveryComplete !== false,
@@ -528,10 +530,10 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
   const recoveredRevenue = new Map(inputs.recoveredRevenue);
   const recoveredHolders = new Map(inputs.recoveredHolders ?? []);
   const cmc: CmcIndex = {byId:new Map(),bySlug:new Map(),byNameSymbol:new Map(),bySymbol:new Map(),discoveryComplete:inputs.cmcDiscoveryComplete};
-  indexCmcRows(cmc, revisedMarket ? inputs.cmc.map(r => checkedMarketRow(r, "cmc", inputs.asOf)) : inputs.cmc);
+  indexCmcRows(cmc, revisedMarket ? inputs.cmc.map(r => checkedMarketRow(r, "cmc", inputs.asOf, inputs.fdvQuality)) : inputs.cmc);
   const cmcRows = [...cmc.byId.values()];
   const cmcLookups = new Map(inputs.cmcLookups);
-  const gecko = {byId:new Map(inputs.gecko.map(row=>[String(row.id), revisedMarket ? checkedMarketRow(row, "gecko", inputs.asOf) : row])),lookups:new Map(inputs.geckoLookups)};
+  const gecko = {byId:new Map(inputs.gecko.map(row=>[String(row.id), revisedMarket ? checkedMarketRow(row, "gecko", inputs.asOf, inputs.fdvQuality) : row])),lookups:new Map(inputs.geckoLookups)};
   if (revisedMarket) {
     for (const [id, row] of cmc.byId) if (cmcLookups.get(id)?.status === "received") cmcLookups.set(id, quoteLookup(String(id), row, "cmc", false, cmcLookups.get(id)!.observedAt));
     for (const [id, row] of gecko.byId) if (gecko.lookups.get(id)?.status === "received") gecko.lookups.set(id, quoteLookup(id, row, "gecko", false, gecko.lookups.get(id)!.observedAt));

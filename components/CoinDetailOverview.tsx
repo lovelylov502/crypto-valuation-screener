@@ -97,6 +97,8 @@ export function CoinDetailOverview({ coin: c, capital: initialCapital, onClose, 
   const requestedBounds = detailHistoryBounds(range, now);
   const rangeStart = range === "MAX" && points.length ? points[0].day : requestedBounds.from;
   const rangeEnd = range === "MAX" && points.length ? points.at(-1)!.day : requestedBounds.to;
+  const fdvPoints = points.filter(point => point.fdv !== null);
+  const fdvCoverage = fdvPoints.length ? `FDV ${fdvPoints.length.toLocaleString("ko-KR")}일 · ${fdvPoints[0].day.replaceAll("-", ".")}부터` : "이 기간 FDV 이력 없음";
 
   return <section className="detail-overview" aria-label={`${c.name} 상세 내용`}>
     <header className="detail-overview-header">
@@ -132,7 +134,7 @@ export function CoinDetailOverview({ coin: c, capital: initialCapital, onClose, 
           <span className="detail-chart-date"><CalendarDays size={13}/>{range === "MAX" && !points.length ? "MAX · 저장된 전체 이력" : `${rangeStart.replaceAll("-", ".")} — ${rangeEnd.replaceAll("-", ".")}`}</span></div>
         <section className="detail-chart-card detail-market-chart" aria-label="가격·시가총액·FDV 이력">
           <header className="detail-chart-card-header"><h3>가격 · 시가총액 · FDV</h3>{legend(marketSeries)}</header>
-          <div className="detail-chart-caption"><span>{displayDay ? `이력 ${displayDay} UTC` : "날짜별 관측값"}</span><span>FDV는 확인된 날짜만 표시</span></div>
+          <div className="detail-chart-caption"><span>{displayDay ? `이력 ${displayDay} UTC` : "날짜별 관측값"}</span><span>{state.status === "ready" ? fdvCoverage : "FDV는 확인된 날짜만 표시"}</span></div>
           {chartState() ?? <DetailHistoryChart label="가격·시가총액·FDV 이력" points={points} historyPoints={data!.points} sources={data!.sources} capital={capital} series={marketSeries} domain={domain} activeDay={activeDay} onActiveDay={day => setChartDay("market", day)} showTooltip={activeChart === "market"}/>}
         </section>
         <section className="detail-chart-card detail-valuation-chart" aria-label="P/R·P/HR 이력">
