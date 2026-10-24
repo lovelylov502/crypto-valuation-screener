@@ -6,6 +6,9 @@ import { loadCurrentFdvPrimaryHolds, loadVerifiedFdvHoldsManifest } from "../lib
 import { applyFdvCorrections, fdvCorrectionClaims, fdvCorrectionError, readFdvCorrectionCandidates } from "../lib/dailyRawFdvCorrection";
 import { contentHash } from "../lib/sourceBundle";
 import { loadVerifiedDailyRawFdvReviewClaims } from "../lib/dailyRawFdvReview";
+import { createClient } from "@libsql/client";
+import { pathToFileURL } from "node:url";
+import { initializeDailyRaw } from "../lib/dailyRawDatabase";
 
 async function main() {
   const argv = process.argv.slice(2), arg = (name: string, fallback = "") => { const index = argv.indexOf(name); return index < 0 ? fallback : argv[index + 1] ?? fallback; };
@@ -19,7 +22,8 @@ async function main() {
   const reference = JSON.parse(await readFile(resolve(cache, arg("--reference", "reference.json")), "utf8"));
   const current = await loadCurrentFdvPrimaryHolds(legacyBytes, cache, reference), reviewClaims = await loadVerifiedDailyRawFdvReviewClaims(cache), claims = [...fdvCorrectionClaims(bounds, holds, current), ...reviewClaims];
   console.log(JSON.stringify({ event: "fdv-correction-original-proofs-verified", bounds: bounds.rejections.length, holds: holds.holds.length, currentHolds: current.length, reviewClaims: reviewClaims.length, inputManifestSha256: contentHash(legacyBytes) }));
-  const db = connectHistory();
+  const database = arg("--database"), db = database ? createClient({ url: pathToFileURL(resolve(database)).href }) : connectHistory();
+  if (database && apply) await initializeDailyRaw(db, { unmeteredLocal: true });
   try {
     const candidates = await readFdvCorrectionCandidates(db, claims), reasons: Record<string, number> = {};
     for (const item of candidates) reasons[item.claim.reason] = (reasons[item.claim.reason] ?? 0) + 1;

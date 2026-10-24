@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getScreener } from "@/lib/serverScreener";
 import { connectDailyValuationReader, DailyValuationIdentityChanged, DailyValuationRevisionChanged, readDailyValuationHistory } from "@/lib/dailyValuationRead";
 import { readCompactDailyHistory, readDailyHistoryVersion } from "@/lib/dailyValuationPrepared";
+import { HOSTED_DATABASE_ENABLED } from "@/lib/dataDeliveryPolicy";
+import { artifactHistory, currentArtifactSet } from "@/lib/readArtifacts";
+import { decodeCompactHistory, expandCompactHistory } from "@/lib/dailyValuationCompact";
+import { dailyValuationAsOf } from "@/lib/dailyValuation";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -18,6 +22,19 @@ export async function GET(request: Request) {
     || expectedRevision !== undefined && !/^[a-zA-Z0-9._:-]{1,256}$/.test(expectedRevision))
     return response({ error: "유효하지 않은 일별 이력 조회 조건입니다." }, 400);
   try {
+    if (!HOSTED_DATABASE_ENABLED) {
+      const set = await currentArtifactSet(), entry = set.catalog.entries.find(entry => entry.row.slug === slug);
+      if (!entry) return response({ error: "공개본에서 종목을 찾을 수 없습니다." }, 404);
+      if (entry.row.identity !== expectedIdentity || entry.binding.identityStatus !== "verified" || entry.binding.capitalExclusionReason) return response({ error: "현재 토큰과 이력의 연결을 확인해 주세요." }, 409);
+      const stored = await artifactHistory(set, slug);
+      if (!stored) return response({ error: "현재 토큰에 연결된 일별 원자료가 없습니다." }, 404);
+      const envelope = { ...stored, freshness: dailyValuationAsOf(set.catalog.metadata).freshness };
+      if (expectedRevision && expectedRevision !== envelope.rawRevision) throw new DailyValuationRevisionChanged();
+      if (format === "compact") return response(envelope, 200, "prepared");
+      if (format === "version") { const { encoding, payload, sha256, ...version } = envelope; void encoding; void payload; void sha256; return response(version, 200, "prepared"); }
+      const history = expandCompactHistory(await decodeCompactHistory(envelope), capital as "mcap" | "fdv", from, to), remaining = history.points.filter(point => point.day > after), points = remaining.slice(0, limit);
+      return response({ ...history, points, nextCursor: remaining.length > limit ? points.at(-1)!.day : null }, 200, "prepared");
+    }
     const context = format ? await (await import("@/lib/tableRead")).getTableCoinContext(slug) : null;
     const snapshot = format ? context?.snapshot : await getScreener(), coin = format ? context?.coin : snapshot && "coins" in snapshot ? snapshot.coins.find(coin => coin.slug === slug) : undefined;
     if (!coin) return response({ error: "공개본에서 종목을 찾을 수 없습니다." }, 404);

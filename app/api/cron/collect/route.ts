@@ -1,6 +1,7 @@
 import { JOURNAL_REPOSITORY } from "../../../../lib/publication";
 import { schedulerReceipt, stageSchedulerReceipt, secretMatches, signSchedulerReceipt } from "../../../../lib/schedulerDispatch";
 import { fourDailyActive, verifyWriterActivation,writerPaused } from "../../../../lib/pipelineRelease";
+import { activeCollectionHours } from "../../../../lib/dataDeliveryPolicy";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
     }
   }
   catch { return reply({ error: "Invalid scheduler invocation" }, 400); }
+  if (!activeCollectionHours(Date.parse(receipt.scheduledFor)).includes(new Date(receipt.scheduledFor).getUTCHours())) return reply({ skipped: true, reason: "inactive-cadence-slot" }, 200);
   const serialized = JSON.stringify(receipt);
   try {
     const response = await fetch(`https://api.github.com/repos/${JOURNAL_REPOSITORY}/actions/workflows/daily-snapshot.yml/dispatches`, {

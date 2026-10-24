@@ -1,3 +1,5 @@
+// Exercise the retained legacy reader against local fixtures only.
+vi.mock("./dataDeliveryPolicy", async original => ({ ...await original<typeof import("./dataDeliveryPolicy")>(), HOSTED_DATABASE_ENABLED: true }));
 import { beforeEach, expect, it, vi } from "vitest";
 import { gzipSync } from "node:zlib";
 import { buildTableCatalog, TABLE_CATALOG_NAMESPACE, TABLE_DETAIL_NAMESPACE, tableHash } from "./tableCatalog";

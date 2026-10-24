@@ -1,3 +1,5 @@
+// Retained legacy reader compatibility, with mocked/local data only.
+vi.mock("./dataDeliveryPolicy", async original => ({ ...await original<typeof import("./dataDeliveryPolicy")>(), HOSTED_DATABASE_ENABLED: true }));
 import { beforeEach, expect, it, vi } from "vitest";
 import { tableFixture, tableReference } from "./tableTestFixtures";
 import { queryScreener } from "./screenerQuery";

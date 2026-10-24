@@ -2,38 +2,36 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { buildTableCatalog } from "./tableCatalog";
 import { tableFixture, tableReference } from "./tableTestFixtures";
 import { defaultPreferences } from "./workspacePreferences";
-
-const mocks = vi.hoisted(() => ({ current: vi.fn(), history: vi.fn() }));
+const mocks = vi.hoisted(() => ({ current: vi.fn(), set: vi.fn(), file: vi.fn(), database: vi.fn() }));
 vi.mock("./tableRead", () => ({ currentCatalog: mocks.current }));
-vi.mock("./dailyValuationRead", () => ({ readMapHistoryBatch: mocks.history }));
+vi.mock("./readArtifacts", () => ({ currentArtifactSet: mocks.set, readArtifact: mocks.file }));
+vi.mock("./dailyValuationRead", () => ({ readMapHistoryBatch: mocks.database }));
 afterEach(() => vi.restoreAllMocks());
 beforeEach(() => {
-  vi.resetModules(); mocks.current.mockReset(); mocks.history.mockReset();
-  const data = tableFixture(20), reference = tableReference(data);
-  mocks.current.mockResolvedValue({ ...buildTableCatalog(data, reference), publication: { published: reference } });
+  vi.resetModules(); vi.clearAllMocks();
+  const data = tableFixture(420), ref = tableReference(data), set = { ...buildTableCatalog(data, ref), publication: { published: ref }, manifest: {} };
+  mocks.current.mockResolvedValue(set); mocks.set.mockResolvedValue(set); mocks.file.mockResolvedValue({});
   vi.spyOn(console, "error").mockImplementation(() => {});
-  mocks.history.mockResolvedValue(new Map());
 });
-it("recovers once from a disconnected history read without dropping the current map rows", async () => {
-  mocks.history.mockRejectedValueOnce(Object.assign(Error("private connection information"), { cause: { code: "UND_ERR_SOCKET" } }));
+it("uses prepared map files across pages and capital bases without SQL", async () => {
   const { readDiscovery } = await import("./discoveryRead");
-  const result = await readDiscovery(defaultPreferences(), [], 1, "map");
-  expect(result.historyStatus).toBe("ready"); expect(result.rows.length).toBeGreaterThan(0);
-  expect(mocks.history).toHaveBeenCalledTimes(2); expect(console.error).not.toHaveBeenCalled();
+  for (const capital of ["fdv", "mcap"] as const) for (const page of [1, 2, 3, 1]) {
+    const result = await readDiscovery({ ...defaultPreferences(), capital }, [], page, "map");
+    expect(result.historyStatus).toBe("ready"); expect(result.rows.length).toBeGreaterThan(0);
+  }
+  expect(mocks.database).not.toHaveBeenCalled(); expect(mocks.file.mock.calls.every(call => call[1] === "map.json.gz")).toBe(true);
 });
-it("limits disconnected reads to two attempts and leaves missing comparisons explicit", async () => {
-  mocks.history.mockRejectedValue(Object.assign(Error("private connection information"), { code: "ECONNRESET" }));
-  const { readDiscovery } = await import("./discoveryRead");
-  const result = await readDiscovery(defaultPreferences(), [], 1, "map");
-  expect(mocks.history).toHaveBeenCalledTimes(2); expect(result.historyStatus).toBe("unavailable");
-  expect(result.rows.length).toBeGreaterThan(0);
+it("keeps dots and explicit missing comparisons on file failure without a SQL fallback", async () => {
+  mocks.file.mockRejectedValue(Error("private connection information"));
+  const result = await (await import("./discoveryRead")).readDiscovery(defaultPreferences(), [], 1, "map");
+  expect(result.historyStatus).toBe("unavailable"); expect(result.rows.length).toBeGreaterThan(0);
   expect(result.rows.every(row => row.past[30]?.point === null && row.past[30]?.revenue === null)).toBe(true);
-  expect(console.error).toHaveBeenCalledWith("discovery_history_unavailable", { codes: ["ECONNRESET"], reason: "history_read_failed" });
+  expect(mocks.database).not.toHaveBeenCalled(); expect(mocks.file).toHaveBeenCalledOnce(); expect(JSON.stringify(result)).not.toContain("private");
 });
-it("does not retry integrity failures or expose private error details", async () => {
-  mocks.history.mockRejectedValue(Error("daily_valuation_invalid_source_reference private details"));
+it("rejects another publication's history and skips history for watchlists", async () => {
+  mocks.set.mockResolvedValue({ catalog: { publicationId: "data-other" } });
   const { readDiscovery } = await import("./discoveryRead");
-  const result = await readDiscovery(defaultPreferences(), [], 1, "map");
-  expect(mocks.history).toHaveBeenCalledOnce(); expect(result.historyStatus).toBe("unavailable");
-  expect(JSON.stringify(result)).not.toContain("private details");
+  expect((await readDiscovery(defaultPreferences(), [], 1, "map")).historyStatus).toBe("unavailable");
+  expect((await readDiscovery(defaultPreferences(), [], 1, "watchlist")).historyStatus).toBe("not-requested");
+  expect(mocks.file).not.toHaveBeenCalled(); expect(mocks.database).not.toHaveBeenCalled();
 });

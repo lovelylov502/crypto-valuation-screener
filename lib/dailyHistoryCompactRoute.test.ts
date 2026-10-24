@@ -1,3 +1,5 @@
+// Exercise the retained legacy reader against local fixtures only.
+vi.mock("./dataDeliveryPolicy", async original => ({ ...await original<typeof import("./dataDeliveryPolicy")>(), HOSTED_DATABASE_ENABLED: true }));
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createClient, type Client, type InStatement } from "@libsql/client";
 const mocks = vi.hoisted(() => ({ context: vi.fn(), snapshot: vi.fn(), connect: vi.fn() }));

@@ -210,6 +210,7 @@ async function finish() {
     files["report.json"]=json(report);await writeFile(join(output,"report.json"),files["report.json"]);
   }
   await publishJournal(journal, files);
+  if (process.env.GITHUB_OUTPUT) await writeFile(process.env.GITHUB_OUTPUT, `published=${accepted}\npublication_id=${accepted ? published!.id : ""}\n`, { flag: "a" });
   if(accepted&&journal.schema===2) {
     const confirmedAt=new Date().toISOString(),confirmed=confirmPublicationAvailability(journal,confirmedAt,`${runId}-confirmed`);
     await publishJournal(confirmed,{"confirmation.json":json({schema:1,publicationId:published!.id,sha256:published!.sha256,availabilityConfirmedAt:confirmedAt,verdicts:publicationVerdicts({...acceptedData!,publication:confirmed},Date.now(),errors)})});

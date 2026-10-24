@@ -1,6 +1,7 @@
 import { completedUtcDate, dateIsComplete, freshnessIdentity, UTC_DAY_MS, type DatedFreshness, type FreshnessSummary } from "./datedFreshness";
 import type { CollectionAttempt, PublicationJournal, PublishedSnapshot } from "./publicationTypes";
 import type { ScreenerResponse } from "./types";
+import { activeCollectionHours, activeCollectionSlot } from "./dataDeliveryPolicy";
 
 export type CollectionStage = "primary" | "catchup1" | "catchup2";
 export interface CollectionTrigger {
@@ -122,7 +123,7 @@ export function recoveryWork(r: RecoveryState, now: number) {
   return r.transient || r.latestTargetDate !== completedUtcDate(now) || r.obligations.some(o => o.disposition === "pending" && now - Date.parse(o.firstMissingAt) < UTC_DAY_MS);
 }
 export function nextEligibleCheck(r:RecoveryState,now:number):string|null {
-  const slot=fourDailySlot(now),s=r.slots.find(s=>Date.parse(s.slotAt)===slot);
+  const slot=activeCollectionSlot(now),s=r.slots.find(s=>Date.parse(s.slotAt)===slot);
   for(const stage of ["primary","catchup1","catchup2"] as const) {
     const w=stageWindow(slot,stage),at=Math.max(now,w.start,r.retryAt?Date.parse(r.retryAt):0);
     if(at>=w.end||(s?.[stage].claims??0)>=(stage==="primary"?3:1))continue;
@@ -170,8 +171,8 @@ export function reconcileRecovery(previous: PublicationJournal, now: number): Re
   for (const o of r.obligations) if (o.disposition === "pending" && now-Date.parse(o.firstMissingAt) >= UTC_DAY_MS) o.disposition="overdue";
   // Include intervening due slots even if every scheduler failed to wake.
   const last = r.slots.at(-1)?.slotAt;
-  if (last) for (let s=Date.parse(last)+6*3_600_000;s<=fourDailySlot(now);s+=6*3_600_000) r.slots.push(freshSlot(new Date(s).toISOString()));
-  if (!r.slots.length) r.slots.push(freshSlot(new Date(fourDailySlot(now)).toISOString()));
+  if (last) for (let s=Date.parse(last)+6*3_600_000;s<=activeCollectionSlot(now);s+=6*3_600_000) if (activeCollectionHours(s).includes(new Date(s).getUTCHours())) r.slots.push(freshSlot(new Date(s).toISOString()));
+  if (!r.slots.length) r.slots.push(freshSlot(new Date(activeCollectionSlot(now)).toISOString()));
   for (const s of r.slots) {
     const slot=Date.parse(s.slotAt);
     reconcileMigrationSlot(s,r.migration);
@@ -211,12 +212,13 @@ export function publicRecovery(previous:PublicationJournal,now:number,paused=fal
 export function recoveryDecision(previous: PublicationJournal | null, now: number, trigger: CollectionTrigger, manualRepair=false) {
   if (!previous || !Number.isFinite(now)) throw new Error("Authoritative collection journal required");
   const recovery=reconcileRecovery(previous,now);
-  const slotAt=trigger.occurrenceKnown ? trigger.scheduledFor! : new Date(fourDailySlot(now)).toISOString();
+  const slotAt=trigger.occurrenceKnown ? trigger.scheduledFor! : new Date(activeCollectionSlot(now)).toISOString();
   const stage=trigger.occurrenceKnown ? trigger.stage! : currentStage(Date.parse(slotAt),now);
   const receiptKey=`${trigger.source}:${trigger.requestId}`;
   const result=(collect:boolean,reason:string)=>({collect,reason,slotAt,stage,receiptKey,manualRepair,trigger,recovery,naturalCycle:!manualRepair&&stage==="primary"&&(trigger.occurrenceKnown||!!recovery.slots.find(s=>s.slotAt===slotAt)?.signedPrimaryAnchor),previousStartedAt:previous.attempt.startedAt});
   const window=stageWindow(Date.parse(slotAt),stage);
   if (!finiteTime(slotAt) || !trigger.requestId || trigger.occurrenceKnown && !trigger.stage) throw new Error("Invalid collection occurrence");
+  if (!activeCollectionHours(Date.parse(slotAt)).includes(new Date(slotAt).getUTCHours())) return result(false,"inactive-cadence-slot");
   if (now<window.start || now>=window.end) return result(false,"expired-stage");
   if (recovery.receipts.includes(receiptKey)) return result(false,"duplicate-receipt");
   if (previous.attempt.outcome === "running" && now-Date.parse(previous.attempt.startedAt)<15*60_000) return result(false,"running");

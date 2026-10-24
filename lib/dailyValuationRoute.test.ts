@@ -1,3 +1,5 @@
+// Retained legacy reader compatibility, with mocked/local data only.
+vi.mock("./dataDeliveryPolicy", async original => ({ ...await original<typeof import("./dataDeliveryPolicy")>(), HOSTED_DATABASE_ENABLED: true }));
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ snapshot: vi.fn(), comparisons: vi.fn() }));
 vi.mock("./serverScreener", () => ({ getScreener: mocks.snapshot }));

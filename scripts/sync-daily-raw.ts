@@ -206,7 +206,9 @@ async function main() {
         if (++verifiedAssets % 100 === 0) console.log(JSON.stringify({ event: "daily-raw-archive-verification", assets: verifiedAssets, totalAssets: staged.length, archives: verified.size }));
       }
       const stagingId = contentHash(await readFile(database));
-      remote = connectHistory(); await initializeDailyRaw(remote);
+      const target = arg(argv, "--target-database");
+      if (target && resolve(target) === database) throw Error("daily_raw_copy_requires_separate_database");
+      remote = target ? createClient({ url: `file:${resolve(target).replaceAll("\\", "/")}` }) : connectHistory(); await initializeDailyRaw(remote, { unmeteredLocal: !!target });
       const result = await copyDailyRaw(db, remote, { runId, maxEstimatedWrites: allowance, stagingId, maxAssets, hasTime, batchSize, onBatch: async progress => {
         if (progress.complete) report.assets++;
         report.daysWritten += progress.daysWritten; report.estimatedWrites += progress.estimatedWrites;

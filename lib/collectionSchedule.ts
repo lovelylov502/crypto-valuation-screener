@@ -1,8 +1,9 @@
 // Keep both schedulers and the browser deadline in sync (checked by tests).
 import { fourDailyActive } from "./pipelineRelease";
 import type { CollectionRelease } from "./pipelineRelease";
+import { ACTIVE_COLLECTION_HOURS, activeCollectionHours } from "./dataDeliveryPolicy";
 export const FOUR_DAILY_UTC_HOURS = [2, 8, 14, 20] as const;
-export const COLLECTION_UTC_HOURS: readonly number[] = fourDailyActive() ? FOUR_DAILY_UTC_HOURS : [2, 14];
+export const COLLECTION_UTC_HOURS: readonly number[] = fourDailyActive() ? ACTIVE_COLLECTION_HOURS : [2, 14];
 export const COLLECTION_MINUTE = 0;
 export const SCHEDULE_GRACE_MS = 90 * 60_000;
 export const STATUS_POLL_MS = 10 * 60_000;
@@ -19,7 +20,7 @@ export function currentCollectionSlot(now: number) {
 }
 
 export function collectionSchedule(now: number, mode?:CollectionRelease["schedule"]) {
-  const hours=mode ? mode==="legacy" ? [2,14] : FOUR_DAILY_UTC_HOURS : COLLECTION_UTC_HOURS;
+  const hours=mode ? mode==="legacy" ? [2,14] : activeCollectionHours(now) : COLLECTION_UTC_HOURS;
   const requiredAt = slots(now - SCHEDULE_GRACE_MS,hours).filter(at => at <= now - SCHEDULE_GRACE_MS).at(-1)!;
   return { requiredAt, deadlineAt: requiredAt + SCHEDULE_GRACE_MS, nextAt: slots(now,hours).find(at => at > now)!, paused:mode==="paused" };
 }

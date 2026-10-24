@@ -21,7 +21,7 @@ async function main(argv: string[]) {
   if (!arg("--cache") || !arg("--manifest")) throw Error("daily_fdv_recovery_inputs_required");
   await mkdir(resolve(arg("--cache")!), { recursive: true }); const cache = await realpath(resolve(arg("--cache")!));
   if (spawnSync("git", ["-C", cache, "rev-parse", "--show-toplevel"], { windowsHide: true }).status === 0) throw Error("daily_fdv_recovery_cache_inside_git");
-  const apply = argv.includes("--apply"), now = new Date(), allowance = integer("--max-estimated-writes", 50_000, 8, 50_000), deadline = Date.now() + integer("--time-budget-seconds", 1500, 1, 3600) * 1000;
+  const apply = argv.includes("--apply"), now = new Date(), allowance = integer("--max-estimated-writes", 50_000, 8, arg("--database") ? 1_000_000 : 50_000), deadline = Date.now() + integer("--time-budget-seconds", 1500, 1, 3600) * 1000;
   const runId = arg("--run-id") ?? `fdv-repair-${now.toISOString().replace(/[:.]/g, "-")}`;
   const manifest = JSON.parse(await readFile(resolve(arg("--manifest")!), "utf8")) as FdvRecoveryManifest;
   const input = await collectFdvRecovery(manifest, cache, now, progress => console.log(JSON.stringify({ event: "fdv-original-verified", ...progress })));
@@ -39,6 +39,7 @@ async function main(argv: string[]) {
   }
   await writeFile(join(cache, "reference.json"), JSON.stringify(input.reference, null, 2));
   const local = arg("--database"), db = local ? createClient({ url: pathToFileURL(resolve(local)).href }) : connectHistory();
+  if (local && apply) await initializeDailyRaw(db, { unmeteredLocal: true });
   const report = { schema: 1, mode: apply ? "apply" : "dry-run", status: "running", runId, publicationId: input.reference.id, manifestSha256: input.manifestSha256, coinMetricsManifestSha256,
     startedAt: now.toISOString(), completedAt: "", minimumReserve: 0, maxEstimatedWrites: allowance, providerRequests: 0, originalQuotes: input.originalQuotes, heldQuotes: input.heldQuotes,
     selectedAssets: 0, selectedDates: 0, alreadyPresent: 0, heldCells: 0, processed: 0, pendingAssets: 0, daysWritten: 0, runEstimatedWrites: 0, estimatedWriteUpperBound: 0, error: null as string | null };

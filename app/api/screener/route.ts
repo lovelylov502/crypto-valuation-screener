@@ -5,6 +5,7 @@ import { parseWorkspace } from "@/lib/workspacePreferences";
 import { jsonResponse } from "@/lib/jsonTransport.mjs";
 import { readDailyComparisonBatch } from "@/lib/dailyValuationRead";
 import { readTablePage } from "@/lib/tableRead";
+import { HOSTED_DATABASE_ENABLED } from "@/lib/dataDeliveryPolicy";
 
 // Only the joined snapshot is cached. A second ISR cache could extend stale data by 30 minutes.
 export const dynamic = "force-dynamic";
@@ -23,6 +24,7 @@ export async function GET(request: Request) {
     }
     const data = await getScreener();
     const result = queryScreener(data, prefs, params.getAll("favorites").flatMap(v => v.split(",")), Number(params.get("page") ?? 1), Number(params.get("size") ?? 100));
+    if (!HOSTED_DATABASE_ENABLED) return jsonResponse(result, request.signal);
     try {
       const valuationComparison = await readDailyComparisonBatch({ coins: result.coins, capital: prefs.capital, snapshot: data });
       return jsonResponse({ ...result, valuationComparison }, request.signal);

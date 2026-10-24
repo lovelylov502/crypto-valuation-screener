@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { COLLECTION_MINUTE, COLLECTION_UTC_HOURS, currentCollectionSlot, SCHEDULE_GRACE_MS } from "./collectionSchedule";
 import { stageWindow, type CollectionStage } from "./freshnessRecovery";
+import { ACTIVE_COLLECTION_HOURS } from "./dataDeliveryPolicy";
 
 export const VERCEL_COLLECTION_CRONS = COLLECTION_UTC_HOURS.map(hour => `${COLLECTION_MINUTE} ${hour} * * *`);
 export interface SchedulerReceipt {
@@ -16,6 +17,7 @@ export const FOUR_DAILY_CRONS = (["primary","catchup1","catchup2"] as const).fla
   const hour=(slotHour+({primary:0,catchup1:2,catchup2:4}[stage]))%24;
   return { stage, slotHour, schedule:`0 ${hour} * * *`, path:`/api/cron/collect?stage=${stage}` };
 }));
+export const ACTIVE_COLLECTION_CRONS = FOUR_DAILY_CRONS.filter(cron => (ACTIVE_COLLECTION_HOURS as readonly number[]).includes(cron.slotHour));
 export function stageSchedulerReceipt(schedule: string, stage: string, now: number, requestId: string): SchedulerReceipt {
   const config=FOUR_DAILY_CRONS.find(c=>c.schedule===schedule&&c.stage===stage);
   if (!config || !/^[a-zA-Z0-9:._-]{8,200}$/.test(requestId)) throw new Error("Invalid scheduler stage");

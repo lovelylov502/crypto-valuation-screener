@@ -1,7 +1,4 @@
-import { readFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { basename, join, resolve, sep } from "node:path";
-import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 import { createClient } from "@libsql/client";
 import { expect, it } from "vitest";
@@ -10,55 +7,16 @@ import { initializeDailyReadModels } from "./dailyReadModelDatabase";
 import { prepareDailyValuationHistory, readCompactDailyHistory, readPreparedDailyComparisonBatch } from "./dailyValuationPrepared";
 import { decodeCompactHistory, expandCompactHistory } from "./dailyValuationCompact";
 
-for (const workflowName of ["daily-snapshot", "daily-history"]) it(`${workflowName} patches recent archived flows before rebuilding models, with one combined quota and source reference`, () => {
-  const workflow = parse(readFileSync(new URL(`../.github/workflows/${workflowName}.yml`, import.meta.url), "utf8")), job = workflow.jobs["prepare-history"], steps = job.steps as { id?: string; if?: string; run?: string; "continue-on-error"?: boolean }[];
-  const financialIndex = steps.findIndex(step => step.run?.includes("scripts/refresh-daily-financials.ts")), fdvIndex = steps.findIndex(step => step.run?.includes("scripts/capture-current-fdv.ts")), modelIndex = steps.findIndex(step => step.run?.includes("scripts/prepare-daily-history.ts"));
-  expect(financialIndex).toBeGreaterThanOrEqual(0); expect(modelIndex).toBeGreaterThan(financialIndex); expect(steps[financialIndex].id).toBe("financial"); expect(steps[modelIndex].if).toBe("steps.financial.outcome == 'success'");
-  expect(steps[financialIndex]["continue-on-error"]).not.toBe(true); expect(steps[modelIndex]["continue-on-error"]).not.toBe(true);
-  expect(fdvIndex).toBeGreaterThanOrEqual(0); expect(fdvIndex).toBeLessThan(financialIndex); expect(steps[fdvIndex].if).toBeUndefined();
-  const financial = steps[financialIndex].run!, fdv = steps[fdvIndex].run!, model = steps[modelIndex].run!, argument = (command: string, flag: string) => command.match(new RegExp(`${flag} ("[^"\\n]+"|[^ \\n]+)`))?.[1];
-  for (const flag of ["--cache", "--run-id", "--max-estimated-writes"]) { expect(argument(model, flag)).toBe(argument(financial, flag)); expect(argument(fdv, flag)).toBe(argument(financial, flag)); }
-  expect(argument(fdv, "--reference")).toBeUndefined(); expect(fdv).toContain("--apply"); expect(steps[fdvIndex]["continue-on-error"]).not.toBe(true);
-  expect(argument(financial, "--cache")).toContain("$RUNNER_TEMP/"); expect(argument(financial, "--run-id")).toContain("${{ github.run_id }}-${{ github.run_attempt }}"); expect(argument(financial, "--max-estimated-writes")).toBe("50000");
-  expect(argument(financial, "--reference")).toBe(argument(model, "--reference")); expect(argument(financial, "--recent-days")).toBe("3");
-  expect(argument(model, "--reference")).toBe(argument(financial, "--cache")!.replace(/"$/, '/reference.json"'));
-  expect(Number(argument(financial, "--time-budget-seconds")) + Number(argument(fdv, "--time-budget-seconds")) + Number(argument(model, "--time-budget-seconds"))).toBeLessThanOrEqual(1800); expect(argument(financial, "--time-budget-seconds")).toBe("600"); expect(argument(model, "--time-budget-seconds")).toBe("900"); expect(job["timeout-minutes"]).toBeLessThanOrEqual(35);
-  expect(financial).toContain("--apply"); expect(model).toContain("--apply"); expect(job.concurrency).toEqual({ group: "daily-history-model-preparation", "cancel-in-progress": false });
-  expect(job["continue-on-error"]).not.toBe(true);
-  expect(JSON.stringify(job)).not.toMatch(/RAW_DEADLINE|RAW_RUN_ID|acquire-daily|sync-daily-raw|--max-requests/);
-  expect(job.steps.find((step: { uses?: string }) => step.uses === "actions/upload-artifact@v7").with.path).toContain("*report.json");
-  const bash = process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "/bin/bash";
-  if (existsSync(bash)) for (const command of [financial, fdv, model]) expect(() => execFileSync(bash, ["--noprofile", "--norc", "-n"], { input: command, encoding: "utf8", windowsHide: true })).not.toThrow();
-});
-
-it("manual maintenance captures FDV before a potentially delayed financial patch, sharing its pinned reference and allowance", () => {
-  const workflow = parse(readFileSync(new URL("../.github/workflows/refresh-read-models.yml", import.meta.url), "utf8")), steps = workflow.jobs.refresh.steps as { run?: string; "continue-on-error"?: boolean }[];
-  const fdvIndex = steps.findIndex(step => step.run?.includes("scripts/capture-current-fdv.ts")), financialIndex = steps.findIndex(step => step.run?.includes("scripts/refresh-daily-financials.ts"));
-  expect(fdvIndex).toBeGreaterThanOrEqual(0); expect(fdvIndex).toBeLessThan(financialIndex);
-  const fdv = steps[fdvIndex].run!, financial = steps[financialIndex].run!, argument = (command: string, flag: string) => command.match(new RegExp(`${flag} ("[^"\\n]+"|[^ \\n]+)`))?.[1];
-  for (const flag of ["--cache", "--run-id", "--max-estimated-writes"]) expect(argument(financial, flag)).toBe(argument(fdv, flag));
-  expect(argument(fdv, "--max-estimated-writes")).toBe("50000"); expect(argument(fdv, "--reference")).toBeUndefined();
-  expect(argument(financial, "--reference")).toBe(argument(fdv, "--cache")!.replace(/"$/, '/reference.json"'));
-  expect(steps[fdvIndex]["continue-on-error"]).not.toBe(true); expect(steps[financialIndex]["continue-on-error"]).not.toBe(true);
-});
-
-for (const workflowName of ["daily-snapshot", "daily-history"]) it(`${workflowName} fails visibly on the actual model pause report even when the CLI returned successfully`, () => {
-  const workflow = parse(readFileSync(new URL(`../.github/workflows/${workflowName}.yml`, import.meta.url), "utf8")), command = workflow.jobs["prepare-history"].steps.find((step: { run?: string }) => step.run?.includes("scripts/prepare-daily-history.ts")).run;
-  const gate = command.match(/node --input-type=module <<'NODE'\n([\s\S]+?)\nNODE/)?.[1]; expect(gate).toBeTruthy();
-  const directory = mkdtempSync(join(tmpdir(), "financial-lifecycle-")), cache = join(directory, workflowName === "daily-snapshot" ? "daily-history-model" : "daily-history-model-cache");
-  try {
-    mkdirSync(cache);
-    for (const status of ["complete", "paused", "budget-paused", "failed"]) {
-      writeFileSync(join(cache, "daily-history-model-report.json"), JSON.stringify({ status, pending: status === "complete" ? 0 : 12, runEstimatedWrites: 49990 }));
-      const run = () => execFileSync(process.execPath, ["--input-type=module", "--eval", gate!], { env: { ...process.env, RUNNER_TEMP: directory }, encoding: "utf8", windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
-      if (status === "complete") expect(run()).toContain('"status":"complete"');
-      else { try { run(); throw Error("Expected a non-complete report to fail"); } catch (error) { expect(error).toMatchObject({ status: 2 }); } }
-    }
-    writeFileSync(join(cache, "daily-history-model-report.json"), JSON.stringify({ status: "complete", pending: 12 }));
-    expect(() => execFileSync(process.execPath, ["--input-type=module", "--eval", gate!], { env: { ...process.env, RUNNER_TEMP: directory }, encoding: "utf8", windowsHide: true, stdio: ["pipe", "pipe", "pipe"] })).toThrow();
-  } finally {
-    const absolute = resolve(directory); if (!absolute.startsWith(resolve(tmpdir()) + sep) || !basename(absolute).startsWith("financial-lifecycle-")) throw Error("Unexpected lifecycle test directory");
-    rmSync(absolute, { recursive: true, force: true });
+it("runs maintenance against pinned local sources before publishing and propagates failures", () => {
+  const source = readFileSync(new URL("../scripts/publish-read-artifacts.ts", import.meta.url), "utf8");
+  expect(source.indexOf('run("scripts/capture-current-fdv.ts"')).toBeLessThan(source.indexOf('run("scripts/refresh-daily-financials.ts"'));
+  expect(source.indexOf('run("scripts/refresh-daily-financials.ts"')).toBeLessThan(source.indexOf('result = await buildReadArtifacts'));
+  expect(source).toContain('"--reference", reference, "--database", database');
+  expect(source).toContain('if (result.status !== 0) throw');
+  for (const name of ["daily-snapshot", "daily-history", "refresh-read-models"]) {
+    const text = readFileSync(new URL('../.github/workflows/' + name + '.yml', import.meta.url), "utf8");
+    expect(text).toContain("scripts/publish-read-artifacts.ts"); expect(text).not.toContain("secrets.TURSO");
+    expect(text).not.toContain("continue-on-error: true");
   }
 });
 

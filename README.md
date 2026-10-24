@@ -1,5 +1,7 @@
 # TOVENIT · 토베닛
 
+Production reads use hash-verified prepared files and a local history archive. Hosted Turso SQL is paused to protect the exhausted free quota. Regular collection starts at 11:00 and 23:00 KST; see [prepared file reads](./docs/PREPARED_FILE_READS.md) for recovery, caching and version guarantees.
+
 **토큰의 가치를 읽는 기준.** 브랜드 표기·색상·이미지 사용 기준은 [브랜드 가이드](./docs/BRAND.md)를 참고한다.
 
 DefiLlama 원천 금액과 토큰 시총으로 참고 배수를 계산하고, 수익 분류·검토 상태·수령 조건을 함께 보여주는 스크리너.

@@ -1,6 +1,7 @@
 import { createClient, type Client, type InStatement } from "@libsql/client";
 import { calculateDailyValuations, historyHash, HISTORY_VERSION, shiftDay, type FundamentalDay, type MarketDay, type ValuationDay, type HistorySource } from "./dailyHistory";
 import { eligibleCapital } from "./capitalEligibility";
+import { HOSTED_DATABASE_ENABLED } from "./dataDeliveryPolicy";
 
 const statistics=new WeakMap<Client,{readRequests:number;rowsReturned:number;writeBatches:number;statementsWritten:number}>();
 export function historyDatabaseStats(db:Client) {
@@ -13,6 +14,7 @@ export function historyDatabaseStats(db:Client) {
 export const HISTORY_WRITE_LIMIT = 8_000_000;
 export const HISTORY_STORAGE_LIMIT = 4_000_000_000;
 export function connectHistory() {
+  if (!HOSTED_DATABASE_ENABLED) throw Error("hosted_database_paused_free_quota");
   const url = process.env.TURSO_DATABASE_URL, authToken = process.env.TURSO_AUTH_TOKEN;
   if (!url || !authToken) throw Error("History database is not configured");
   if (!/^libsql:\/\/[a-z0-9.-]+\.turso\.io$/.test(url)) throw Error("Invalid history database URL");

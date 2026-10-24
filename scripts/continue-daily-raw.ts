@@ -11,6 +11,7 @@ import { getDailyRawSources, readDailyRaw, upsertDailyRaw, type DailyRawAsset, t
 import { acquireDailyRawCsv, archiveDailyRawOriginal, COINGECKO_CSV_CLOSE_SEMANTICS, parseDailyRawCsv, verifyDailyRawArchives, type DailyRawArchiveVerification, type DailyRawCsvFile } from "../lib/dailyRawCollection";
 import { assertDailyRawQueue, planDailyRawQueue, reconcileDailyRawQueue, recordDailyRawAcquired, recordDailyRawArchived, recordDailyRawAttempt, recordDailyRawDeferred, recordDailyRawImported, type DailyRawQueueCoin, type DailyRawQueueReceipt, type DailyRawQueueState } from "../lib/dailyRawQueue";
 import { contentHash, objectHash, type SourceReceipt } from "../lib/sourceBundle";
+import { pathToFileURL } from "node:url";
 
 export interface DailyRawSelection { schema: 1; assets: { slug: string; identity: string; from?: string; to?: string; csv?: { from?: string; to: string } }[] }
 export const DAILY_RAW_FINANCIAL_MAX_PROOF = "financial-max-copy-v1";
@@ -252,12 +253,13 @@ async function main() {
   const argv = process.argv.slice(2), arg = (name: string) => { const i = argv.indexOf(name); if (i < 0) return undefined; if (!argv[i + 1] || argv[i + 1].startsWith("--")) throw Error(`Missing ${name}`); return argv[i + 1]; };
   if (argv.includes("--help")) { console.log("Prepare: continue-daily-raw.ts --prepare --cache <outside-Git>\nAcquire: continue-daily-raw.ts --cache <dir> [--universe universe.json] [--known-assets known-assets.json] [--max-requests 200] [--time-budget-seconds 2400] [--request-interval-ms 2000] [--maintenance-reserve 500000]\nAfter original archive publication: add --mark-archives --archive-manifest <verified manifest>.\nAfter sealed stage commit: add --ack-import --database <sealed.sqlite> --import-run-id <stable id>.\nAll modes preserve --state <portable queue.json>, default cache/daily-raw-queue.json. Acquisition emits queue-csv-manifest.json, queue-selection.json and queue-report.json. Acquisition/archival never marks an asset imported."); return; }
   const cache = await outsideGit(resolve(arg("--cache") ?? join(homedir(), ".codex", "cache", "crypto-valuation-screener", "daily-raw"))), statePath = resolve(arg("--state") ?? join(cache, "daily-raw-queue.json"));
+  const targetDatabase = arg("--target-database"), connectTarget = () => targetDatabase ? createClient({ url: pathToFileURL(resolve(targetDatabase)).href }) : connectHistory();
   if (argv.includes("--prepare")) {
-    const { snapshot, ref } = await loadHistoryInputs(cache), db = connectHistory();
+    const { snapshot, ref } = await loadHistoryInputs(cache), db = connectTarget();
     try {
       const assets = await establishedDailyRawFinancialAssets(db), [budget] = await historyReadBatch(db, [{ sql: "SELECT reserved FROM history_budget WHERE month=?", args: [new Date().toISOString().slice(0, 7)] }]);
       await atomic(join(cache, "reference.json"), ref); await atomic(join(cache, "universe.json"), { coins: snapshot.coins });
-      await atomic(join(cache, "known-assets.json"), { schema: 1, proofVersion: DAILY_RAW_FINANCIAL_MAX_PROOF, observedAt: new Date().toISOString(), remainingEstimatedWrites: Math.max(0, HISTORY_WRITE_LIMIT - Number(budget.rows[0]?.reserved ?? 0)), assets });
+      await atomic(join(cache, "known-assets.json"), { schema: 1, proofVersion: DAILY_RAW_FINANCIAL_MAX_PROOF, observedAt: new Date().toISOString(), remainingEstimatedWrites: targetDatabase ? HISTORY_WRITE_LIMIT : Math.max(0, HISTORY_WRITE_LIMIT - Number(budget.rows[0]?.reserved ?? 0)), assets });
     } finally { db.close(); }
     const state = await json<DailyRawQueueState>(statePath), fees = await prepareDailyRawFeesOverview(cache, { state });
     if (state) { state.updatedAt = new Date().toISOString(); await atomic(statePath, state); }
@@ -270,7 +272,7 @@ async function main() {
       if (argv.includes("--mark-archives")) { const manifest = arg("--archive-manifest"); if (!manifest) throw Error("Missing --archive-manifest"); completed = await markDailyRawQueueArchives(state, cache, resolve(manifest)); }
       if (argv.includes("--ack-import")) {
         const database = arg("--database"), runId = arg("--import-run-id"); if (!database || !runId) throw Error("Missing sealed --database or --import-run-id");
-        const path = resolve(cache, database), stagingId = contentHash(await readFile(path)), staged = createClient({ url: `file:${path.replaceAll("\\", "/")}` }), committed = connectHistory();
+        const path = resolve(cache, database), stagingId = contentHash(await readFile(path)), staged = createClient({ url: `file:${path.replaceAll("\\", "/")}` }), committed = connectTarget();
         try { completed = await acknowledgeDailyRawQueue(state, staged, committed, { runId, stagingId, cache }); } finally { staged.close(); committed.close(); }
         if (contentHash(await readFile(path)) !== stagingId) throw Error("daily_raw_queue_staging_changed");
       }

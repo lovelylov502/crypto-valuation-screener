@@ -29,6 +29,7 @@ export async function refreshDailyFinancialsMain(argv: string[]) {
   await atomic(join(cache, "reference.json"), ref);
   const collected = collectRecentDailyFinancials({ snapshot, bundle, reference: ref, recentDays, slugs: values(argv, "--slug"), now });
   const database = arg(argv, "--database"), db = database ? createClient({ url: pathToFileURL(resolve(database)).href }) : connectHistory();
+  if (database && apply) await initializeDailyRaw(db, { unmeteredLocal: true });
   // Current-data maintenance uses the reserve that bulk historical acquisition leaves untouched.
   const report = { schema: 1, mode: apply ? "apply" : "dry-run", status: "running", runId, publicationId: ref.id, rawBundleSha256: ref.rawBundleSha256, targetDay: collected.targetDay, from: collected.from, to: collected.to, startedAt: now.toISOString(), completedAt: "", elapsedMs: 0, maxEstimatedWrites: allowance, minimumReserve: 0, providerRequests: 0,
     sourceTargetCoverage: collected.targetCoverage, storedTargetCoverage: null as Awaited<ReturnType<typeof recentDailyFinancialCoverage>> | null, sources: collected.sources, selected: collected.assets.length, unchangedAssets: 0, unchangedCells: 0, changedAssets: 0, processed: 0, pendingAssets: 0, rowsWritten: 0, daysWritten: 0, estimatedWrites: 0, runEstimatedWrites: 0, estimatedWriteUpperBound: 0, lastAttemptedAsset: null as string | null, error: null as string | null,

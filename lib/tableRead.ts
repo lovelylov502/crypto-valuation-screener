@@ -9,6 +9,9 @@ import type { PublishedSnapshot, PublicationJournal } from "./publicationTypes";
 import type { DailyValuationCoin } from "./dailyValuationRead";
 import type { WorkspacePreferences } from "./workspacePreferences";
 import { readPreparedDailyComparisonBatch } from "./dailyValuationPrepared";
+import { HOSTED_DATABASE_ENABLED } from "./dataDeliveryPolicy";
+import { currentArtifactSet, readArtifact, type ComparisonArtifact } from "./readArtifacts";
+import { dailyValuationAsOf } from "./dailyValuation";
 
 const catalogs = new Map<string, TableCatalog>(), fallbackCatalogs = new Map<string, TableCatalog>(), shards = new Map<string, TableShard>(), preparedShards = new Set<string>();
 const remember = <T>(cache: Map<string, T>, key: string, value: T, limit: number) => { cache.set(key, value); while (cache.size > limit) cache.delete(cache.keys().next().value!); return value; };
@@ -27,6 +30,10 @@ async function preparedCatalog(ref: PublishedSnapshot) {
   } finally { db.close(); }
 }
 export async function currentCatalog() {
+  if (!HOSTED_DATABASE_ENABLED) {
+    const { catalog, publication } = await currentArtifactSet();
+    return { catalog: checkCatalog(catalog, publication.published!), publication, readModel: "prepared" as const };
+  }
   const publication = await getPublication(), ref = publication.published;
   if (ref) try { const catalog = await preparedCatalog(ref); if (catalog) return { catalog, publication, readModel: "prepared" as const }; } catch { console.error("table_catalog_unavailable"); }
   const data = await getScreener(), actualPublication = data.publication, actual = actualPublication?.published;
@@ -39,6 +46,10 @@ export async function currentCatalog() {
 }
 /** Cheap exact identity resolution for raw-history/version readers. */
 export async function getTableCoinContext(slug: string): Promise<{ coin: DailyValuationCoin; snapshot: { updatedAt: string; publication: PublicationJournal } } | null> {
+  if (!HOSTED_DATABASE_ENABLED) {
+    const { catalog, publication } = await currentCatalog(), entry = catalog.entries.find(entry => entry.row.slug === slug);
+    return entry ? { coin: entry.binding, snapshot: { updatedAt: catalog.metadata.updatedAt, publication } } : null;
+  }
   const publication = await getPublication(), ref = publication.published;
   if (ref) try {
     const catalog = await preparedCatalog(ref);
@@ -51,19 +62,34 @@ export async function getTableCoinContext(slug: string): Promise<{ coin: DailyVa
 export async function readTablePage(prefs: WorkspacePreferences, favorites: string[], page: number, size: number) {
   const { catalog, publication, readModel } = await currentCatalog(), result = queryTableCatalog(catalog, prefs, favorites, page, size, publicPublication(publication));
   if (catalog.metadata.freshness) result.publicFreshness = publicFreshness(catalog.metadata.freshness, Date.now());
-  try { result.valuationComparison = await readPreparedDailyComparisonBatch({ coins: result.rows.map(row => catalog.entries.find(entry => entry.row.slug === row.slug)!.binding), capital: prefs.capital, snapshot: { updatedAt: result.updatedAt, publication } }); }
+  try {
+    if (!HOSTED_DATABASE_ENABLED) {
+      const set = await currentArtifactSet();
+      if (set.catalog.publicationId !== catalog.publicationId) throw new TablePublicationChanged();
+      const all = await readArtifact<ComparisonArtifact>(set.manifest, "comparisons.json.gz"), period = dailyValuationAsOf(catalog.metadata);
+      result.valuationComparison = { schema: 1, capital: prefs.capital, revenueDays: 1, asOf: period.asOf, baseline: period.baseline,
+        rows: Object.fromEntries(result.rows.filter(row => all[row.slug]).map(row => [row.slug, period.freshness.status === "stale" ? { pr: { status: "unavailable", validDays: 0, reason: "stale_data" }, phr: { status: "unavailable", validDays: 0, reason: "stale_data" } } : all[row.slug][prefs.capital]])) };
+    } else result.valuationComparison = await readPreparedDailyComparisonBatch({ coins: result.rows.map(row => catalog.entries.find(entry => entry.row.slug === row.slug)!.binding), capital: prefs.capital, snapshot: { updatedAt: result.updatedAt, publication } });
+  }
   catch { console.error("prepared_daily_comparison_unavailable"); }
   return { ...result, readModel };
 }
 export class TablePublicationChanged extends Error {}
 export async function readTableDetail(slug: string, publicationId: string, identity: string): Promise<TableDetail | null> {
-  if ((await getPublication()).published?.id !== publicationId) throw new TablePublicationChanged();
+  if (HOSTED_DATABASE_ENABLED && (await getPublication()).published?.id !== publicationId) throw new TablePublicationChanged();
   const { catalog, publication } = await currentCatalog();
   if (publication.published?.id !== publicationId || catalog.publicationId !== publicationId) throw new TablePublicationChanged();
   const entry = catalog.entries.find(entry => entry.row.slug === slug); if (!entry) return null;
   if (entry.row.identity !== identity) throw new TablePublicationChanged();
   let shard = shards.get(entry.detail.shard);
-  if (!shard) {
+  if (!shard && !HOSTED_DATABASE_ENABLED) {
+    const set = await currentArtifactSet();
+    if (set.catalog.publicationId !== publicationId) throw new TablePublicationChanged();
+    shard = await readArtifact<TableShard>(set.manifest, `detail-${entry.detail.shard}.json.gz`);
+    if (tableHash(shard) !== entry.detail.shard) throw Error("table_detail_shard_hash_mismatch");
+    remember(shards, entry.detail.shard, shard, 4); preparedShards.add(entry.detail.shard);
+  }
+  if (!shard && HOSTED_DATABASE_ENABLED) {
     const db = connectHistory();
     try { const [row] = await readDailyReadModels(db, { namespace: TABLE_DETAIL_NAMESPACE, keys: [entry.detail.shard] }); if (row) { shard = decodeDailyReadModel<TableShard>(row); preparedShards.add(entry.detail.shard); } } finally { db.close(); }
     if (shard && tableHash(shard) !== entry.detail.shard) throw Error("table_detail_shard_hash_mismatch");

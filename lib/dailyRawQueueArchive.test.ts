@@ -129,7 +129,7 @@ it("serializes the daily raw workflow and retains queue archival after failed or
   const source = readFileSync(new URL("../.github/workflows/daily-history.yml", import.meta.url), "utf8"), workflow = parse(source);
   expect(workflow.on.schedule).toEqual([{ cron: "30 4 * * *" }]);
   expect(workflow.on.workflow_run).toBeUndefined();
-  expect(workflow.concurrency).toEqual({ group: "daily-valuation-history", "cancel-in-progress": false });
+  expect(workflow.concurrency).toEqual({ group: "screener-read-model-writer", "cancel-in-progress": false, queue: "max" });
   expect(source).not.toMatch(/history:sync|history:publish|sync-history\.ts/);
   const steps = workflow.jobs.sync.steps as { name?: string; run?: string; if?: string }[];
   expect(steps.find(step => step.name?.startsWith("Publish the durable queue"))?.if).toBe("always() && steps.restore.outcome == 'success'");
@@ -139,21 +139,13 @@ it("serializes the daily raw workflow and retains queue archival after failed or
   if (existsSync(bash)) for (const step of steps.filter(step => step.run)) expect(() => execFileSync(bash, ["--noprofile", "--norc", "-n"], { input: step.run!, encoding: "utf8", windowsHide: true })).not.toThrow();
 });
 
-it("prepares history after the complete raw job even when the import used its entire deadline", () => {
-  const workflow = parse(readFileSync(new URL("../.github/workflows/daily-history.yml", import.meta.url), "utf8")), model = workflow.jobs["prepare-history"];
-  expect(model.needs).toBe("sync"); expect(model.if).toBe("needs.sync.result == 'success'"); expect(model["timeout-minutes"]).toBe(35);
-  expect(model.permissions).toEqual({ contents: "read" });
-  expect(model.concurrency).toEqual({ group: "daily-history-model-preparation", "cancel-in-progress": false });
-  expect(model.concurrency.group).not.toBe(workflow.concurrency.group);
-  const command = model.steps.find((step: { run?: string }) => step.run?.includes("prepare-daily-history.ts"))?.run;
-  expect(command).toContain("--max-estimated-writes 50000"); expect(command).toContain("--time-budget-seconds 900"); expect(command).toContain("--apply");
-  expect(command).toContain("daily-history-model-${{ github.run_id }}-${{ github.run_attempt }}");
-  expect(command).toContain('--reference "$RUNNER_TEMP/daily-history-model-cache/reference.json"');
-  expect(JSON.stringify(model)).not.toMatch(/RAW_DEADLINE|remaining|RAW_RUN_ID|continue-daily-raw|sync-daily-raw|GH_TOKEN|GITHUB_TOKEN/);
-  const rawSteps = workflow.jobs.sync.steps as { run?: string }[];
-  expect(rawSteps.some(step => step.run?.includes("sync-daily-raw.ts") && step.run.includes('--time-budget-seconds "$remaining"'))).toBe(true);
-  const bash = process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "/bin/bash";
-  if (existsSync(bash)) for (const step of model.steps.filter((step: { run?: string }) => step.run)) expect(() => execFileSync(bash, ["--noprofile", "--norc", "-n"], { input: step.run, encoding: "utf8", windowsHide: true })).not.toThrow();
+it("publishes the local archive before acknowledging imported queue progress", () => {
+  const workflow = parse(readFileSync(new URL("../.github/workflows/daily-history.yml", import.meta.url), "utf8"));
+  expect(workflow.concurrency.group).toBe("screener-read-model-writer");
+  const step = workflow.jobs.sync.steps.find((step: { name?: string }) => step.name?.startsWith("Advance queue progress"));
+  expect(step.run.indexOf("publish-read-artifacts.ts")).toBeLessThan(step.run.indexOf("--ack-import"));
+  expect(step.run).toContain('--target-database "$RAW_CACHE/history.sqlite"');
+  expect(step.run).not.toContain("connectHistory"); expect(step.run).not.toContain("RAW_DEADLINE");
 });
 
 it("normalizes both allowed checkout remote spellings only after verifying repository and main ref", () => {

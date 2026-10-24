@@ -4,42 +4,39 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: daily-history-model-preparation
+  group: screener-read-model-writer
   cancel-in-progress: false
+  queue: max
 
 jobs:
   refresh:
     if: github.repository == 'lovelylov502/crypto-valuation-screener' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
-      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Normalize the verified canonical repository remote
+        run: |
+          canonical="https://github.com/lovelylov502/crypto-valuation-screener.git"
+          for remote in "$(git remote get-url origin)" "$(git remote get-url --push origin)"; do
+            if [ "$remote" != "$canonical" ] && [ "$remote" != "${canonical%.git}" ]; then exit 1; fi
+          done
+          git remote set-url origin "$canonical"
+          git remote set-url --push origin "$canonical"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
       - run: npm ci --no-audit --no-fund
-      - name: Capture every verified current FDV independently of CSV readiness
-        run: npx tsx scripts/capture-current-fdv.ts --cache "$RUNNER_TEMP/verified-read-maintenance" --run-id "read-maintenance-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 300 --apply
-      - name: Refresh recent financial dates from the same verified originals
-        run: npx tsx scripts/refresh-daily-financials.ts --cache "$RUNNER_TEMP/verified-read-maintenance" --reference "$RUNNER_TEMP/verified-read-maintenance/reference.json" --run-id "read-maintenance-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 600 --recent-days 3 --apply
-      - name: Prepare current full-history reads from the same publication
-        run: |
-          npx tsx scripts/prepare-daily-history.ts --cache "$RUNNER_TEMP/verified-read-maintenance" --reference "$RUNNER_TEMP/verified-read-maintenance/reference.json" --run-id "read-maintenance-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 900 --workers 4 --apply
-          node --input-type=module <<'NODE'
-          import {readFileSync} from 'node:fs';
-          const report=JSON.parse(readFileSync(process.env.RUNNER_TEMP+'/verified-read-maintenance/daily-history-model-report.json','utf8'));
-          if(report.status!=='complete'||report.pending!==0)throw Error('Verified history maintenance remains incomplete');
-          NODE
-      - name: Prepare bounded current table reads
-        run: npx tsx scripts/prepare-table-read-model.ts --run-id "table-maintenance-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --minimum-reserve 0 --apply
+      - name: Prepare completed files from local history without hosted SQL
+        run: npx tsx scripts/publish-read-artifacts.ts --cache "$RUNNER_TEMP/verified-read-maintenance" --publish
       - uses: actions/upload-artifact@v7
         if: always()
         with:

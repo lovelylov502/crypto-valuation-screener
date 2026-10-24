@@ -3,11 +3,11 @@ name: Verified screener publication
 on:
   schedule:
     # Native occurrences are recovery wakes; only authenticated receipts prove regular slots.
-    - cron: "0 2,8,14,20 * * *"
-    - cron: "30 2,8,14,20 * * *"
-    - cron: "0 3,9,15,21 * * *"
-    - cron: "0 4,10,16,22 * * *"
-    - cron: "0 0,6,12,18 * * *"
+    - cron: "0 2,14 * * *"
+    - cron: "30 2,14 * * *"
+    - cron: "0 3,15 * * *"
+    - cron: "0 4,16 * * *"
+    - cron: "0 6,18 * * *"
   workflow_dispatch:
     inputs:
       scheduler_receipt:
@@ -61,6 +61,9 @@ jobs:
   capture:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      published: ${{ steps.finish.outputs.published }}
+      publication_id: ${{ steps.finish.outputs.publication_id }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SCREENER_BOOTSTRAP_URL: ${{ inputs.bootstrap_url }}
@@ -120,6 +123,7 @@ jobs:
         timeout-minutes: 12
         run: npm run snapshot:capture
       - name: Archive result and atomically publish only a passing candidate
+        id: finish
         if: always() && steps.start.outputs.claimed == 'true'
         run: npx tsx scripts/publication-job.ts finish
       - uses: actions/upload-artifact@v7
@@ -130,64 +134,40 @@ jobs:
           retention-days: 60
           if-no-files-found: warn
 
-  prepare-table:
+  prepare-reads:
     needs: capture
-    if: needs.capture.result == 'success'
+    if: needs.capture.result == 'success' && needs.capture.outputs.published == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    continue-on-error: true
-    env:
-      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - run: npm ci --no-audit --no-fund
-      - name: Prepare bounded table reads from the verified publication
-        run: npx tsx scripts/prepare-table-read-model.ts --apply --max-estimated-writes 50000 --minimum-reserve 0
-
-  prepare-history:
-    needs: capture
-    if: needs.capture.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     concurrency:
-      group: daily-history-model-preparation
+      group: screener-read-model-writer
       cancel-in-progress: false
+      queue: max
     env:
-      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Normalize the verified canonical repository remote
+        run: |
+          canonical="https://github.com/lovelylov502/crypto-valuation-screener.git"
+          for remote in "$(git remote get-url origin)" "$(git remote get-url --push origin)"; do
+            if [ "$remote" != "$canonical" ] && [ "$remote" != "${canonical%.git}" ]; then exit 1; fi
+          done
+          git remote set-url origin "$canonical"
+          git remote set-url --push origin "$canonical"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
       - run: npm ci --no-audit --no-fund
-      - name: Capture current FDV for every verified token independently of CSV readiness
-        run: npx tsx scripts/capture-current-fdv.ts --cache "$RUNNER_TEMP/daily-history-model" --run-id "history-model-${{ github.run_id }}-${{ github.run_attempt }}" --time-budget-seconds 300 --max-estimated-writes 50000 --apply
-      - name: Patch recent financial dates from the same verified source archive
-        id: financial
-        run: npx tsx scripts/refresh-daily-financials.ts --cache "$RUNNER_TEMP/daily-history-model" --reference "$RUNNER_TEMP/daily-history-model/reference.json" --run-id "history-model-${{ github.run_id }}-${{ github.run_attempt }}" --time-budget-seconds 600 --max-estimated-writes 50000 --recent-days 3 --apply
-      - name: Refresh complete-history models for the latest verified completion date
-        if: steps.financial.outcome == 'success'
-        run: |
-          npx tsx scripts/prepare-daily-history.ts --cache "$RUNNER_TEMP/daily-history-model" --reference "$RUNNER_TEMP/daily-history-model/reference.json" --run-id "history-model-${{ github.run_id }}-${{ github.run_attempt }}" --time-budget-seconds 900 --max-estimated-writes 50000 --workers 4 --apply
-          node --input-type=module <<'NODE'
-          import {readFileSync} from 'node:fs';
-          const report=JSON.parse(readFileSync(process.env.RUNNER_TEMP+'/daily-history-model/daily-history-model-report.json','utf8'));
-          console.log(JSON.stringify({status:report.status,pending:report.pending,runEstimatedWrites:report.runEstimatedWrites}));
-          if(report.status!=='complete'||report.pending!==0){console.error('::error::History preparation is incomplete; inspect the retained report before retrying.');process.exitCode=2;}
-          NODE
+      - name: Prepare one complete version locally, skipping an already published input
+        run: npx tsx scripts/publish-read-artifacts.ts --cache "$RUNNER_TEMP/prepared-reads" --publish
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: snapshot-history-model-report-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/daily-history-model/*report.json
+          name: prepared-read-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/prepared-reads/*report.json
           retention-days: 30
           if-no-files-found: warn

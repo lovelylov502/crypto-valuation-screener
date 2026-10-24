@@ -7,16 +7,14 @@ import { initializeDailyReadModels } from "./dailyReadModelDatabase";
 import { prepareDailyValuationHistory, readCompactDailyHistory, readPreparedDailyComparisonBatch } from "./dailyValuationPrepared";
 import { decodeCompactHistory, expandCompactHistory } from "./dailyValuationCompact";
 
-it("refreshes history after verified snapshot publication in its own bounded job, independently of raw import time", () => {
-  const workflow = parse(readFileSync(new URL("../.github/workflows/daily-snapshot.yml", import.meta.url), "utf8")), job = workflow.jobs["prepare-history"], command = job.steps.find((step: { run?: string }) => step.run?.includes("scripts/prepare-daily-history.ts")).run;
-  expect(workflow.concurrency.group).toBe("screener-publication");
-  expect(job.needs).toBe("capture"); expect(job.if).toBe("needs.capture.result == 'success'"); expect(job["timeout-minutes"]).toBeLessThanOrEqual(35); expect(job["continue-on-error"]).not.toBe(true);
-  expect(job.concurrency).toEqual({ group: "daily-history-model-preparation", "cancel-in-progress": false });
-  expect(command).toContain('--cache "$RUNNER_TEMP/daily-history-model"'); expect(command).toContain('--run-id "history-model-${{ github.run_id }}-${{ github.run_attempt }}"');
-  expect(command).toContain("--time-budget-seconds 900"); expect(command).toContain("--max-estimated-writes 50000"); expect(command).toContain("--apply");
-  expect(command).toContain('--reference "$RUNNER_TEMP/daily-history-model/reference.json"');
-  for (const staleOrSharedInput of ["RAW_DEADLINE", "RAW_RUN_ID", "--snapshot", "sync-daily-raw", "acquire-"]) expect(JSON.stringify(job)).not.toContain(staleOrSharedInput);
-  expect(job.env).toEqual({ TURSO_DATABASE_URL: "${{ secrets.TURSO_DATABASE_URL }}", TURSO_AUTH_TOKEN: "${{ secrets.TURSO_AUTH_TOKEN }}" });
+it("prepares only newly published snapshots and serializes all file writers", () => {
+  const workflow = parse(readFileSync(new URL("../.github/workflows/daily-snapshot.yml", import.meta.url), "utf8")), job = workflow.jobs["prepare-reads"];
+  expect(job.needs).toBe("capture"); expect(job.if).toBe("needs.capture.result == 'success' && needs.capture.outputs.published == 'true'");
+  expect(workflow.jobs.capture.outputs.published).toContain("steps.finish.outputs.published");
+  expect(job.concurrency.group).toBe("screener-read-model-writer"); expect(job.concurrency["cancel-in-progress"]).toBe(false);
+  expect(job.env).not.toHaveProperty("TURSO_AUTH_TOKEN");
+  expect(JSON.stringify(job.steps)).toContain("publish-read-artifacts.ts");
+  expect(JSON.stringify(job.steps)).not.toContain("prepare-daily-history.ts");
 });
 
 it("rebuilds for a new verified asOf even without raw writes, preserving the missing new day and reusing a same-day publication", async () => {

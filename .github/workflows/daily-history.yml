@@ -10,7 +10,7 @@ on:
         type: string
         default: "200"
       max_estimated_writes:
-        description: Maximum run credits within the shared monthly cap (8–2000000)
+        description: Maximum local import work credits (8–2000000); hosted SQL stays disabled
         type: string
         default: "200000"
       time_budget_seconds:
@@ -22,21 +22,21 @@ permissions:
   contents: write
 
 concurrency:
-  group: daily-valuation-history
+  group: screener-read-model-writer
   cancel-in-progress: false
+  queue: max
 
 jobs:
   sync:
     if: github.repository == 'lovelylov502/crypto-valuation-screener' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 90
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RAW_TAG: daily-raw-${{ github.run_id }}-${{ github.run_attempt }}
       QUEUE_TAG: daily-raw-queue-${{ github.run_id }}-${{ github.run_attempt }}
       RAW_RUN_ID: daily-raw-${{ github.run_id }}-${{ github.run_attempt }}
-      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - uses: actions/checkout@v4
         with:
@@ -78,9 +78,11 @@ jobs:
       - name: Restore the verified durable queue (a missing seed blocks collection)
         id: restore
         run: npx tsx scripts/daily-raw-queue-state.ts --restore --cache "$RAW_CACHE"
-      - name: Prepare the latest verified sources and read current budget
+      - name: Restore the verified local history archive
+        run: npx tsx scripts/publish-read-artifacts.ts --cache "$RAW_CACHE" --restore-only
+      - name: Prepare the latest verified sources and local work allowance
         id: prepare
-        run: npx tsx scripts/continue-daily-raw.ts --prepare --cache "$RAW_CACHE"
+        run: npx tsx scripts/continue-daily-raw.ts --prepare --cache "$RAW_CACHE" --target-database "$RAW_CACHE/history.sqlite"
       - name: Continue pending receipts and acquire the next fair request batch
         id: acquire
         run: |
@@ -108,7 +110,7 @@ jobs:
           remaining=$(( RAW_DEADLINE - $(date +%s) ))
           if [ "$remaining" -lt 1 ]; then exit 0; fi
           npx tsx scripts/sync-daily-raw.ts --local --cache "$RAW_CACHE" --database sealed.sqlite --run-id "$RAW_RUN_ID-stage" --reference "$RAW_CACHE/reference.json" --supplemental-receipts "$RAW_CACHE/supplemental" --csv-manifest "$RAW_CACHE/queue-csv-manifest.json" --selection-manifest "$RAW_CACHE/queue-selection.json" --archive-manifest "$RAW_CACHE/archive-manifest-next.json" --time-budget-seconds "$remaining"
-      - name: Import merged raw rows within the shared free quota
+      - name: Import merged raw rows into the local archive
         id: import
         if: steps.stage.outcome == 'success'
         run: |
@@ -116,20 +118,14 @@ jobs:
           if [ "$remaining" -lt 1 ] || [ ! -f "$RAW_CACHE/sealed.sqlite" ]; then exit 0; fi
           limit=$(node --input-type=module -e 'import {readFileSync} from "node:fs";const report=JSON.parse(readFileSync(process.env.RAW_CACHE+"/queue-report.json"));const cap=Math.min(Number(process.env.WRITE_LIMIT),report.recommendedMaxEstimatedWrites);if(!Number.isSafeInteger(cap)||cap<0)throw Error("Invalid recommendation");console.log(cap);')
           if [ "$limit" -lt 8 ]; then exit 0; fi
-          npx tsx scripts/sync-daily-raw.ts --cache "$RAW_CACHE" --database sealed.sqlite --run-id "$RAW_RUN_ID" --max-estimated-writes "$limit" --time-budget-seconds "$remaining" --batch-size 1000
+          npx tsx scripts/sync-daily-raw.ts --cache "$RAW_CACHE" --database sealed.sqlite --target-database "$RAW_CACHE/history.sqlite" --run-id "$RAW_RUN_ID" --max-estimated-writes "$limit" --time-budget-seconds "$remaining" --batch-size 1000
       - name: Advance queue progress only from actual database checkpoints
         id: acknowledge
         if: always() && steps.restore.outcome == 'success' && steps.import.outcome != 'skipped'
         run: |
           if [ ! -f "$RAW_CACHE/sealed.sqlite" ]; then exit 0; fi
-          if node --import tsx --input-type=module <<'NODE'
-          import {connectHistory} from './lib/historyDatabase.ts';
-          import {getDailyRawCheckpoint} from './lib/dailyRawDatabase.ts';
-          const db=connectHistory();try{process.exitCode=await getDailyRawCheckpoint(db,process.env.RAW_RUN_ID,'copy:staging')?0:2;}finally{db.close();}
-          NODE
-          then
-            npx tsx scripts/continue-daily-raw.ts --ack-import --cache "$RAW_CACHE" --database sealed.sqlite --import-run-id "$RAW_RUN_ID"
-          fi
+          npx tsx scripts/publish-read-artifacts.ts --cache "$RAW_CACHE" --database "$RAW_CACHE/history.sqlite" --input-token "$RAW_TAG" --publish
+          npx tsx scripts/continue-daily-raw.ts --ack-import --cache "$RAW_CACHE" --database sealed.sqlite --target-database "$RAW_CACHE/history.sqlite" --import-run-id "$RAW_RUN_ID"
       - name: Publish the durable queue even when provider or database work pauses
         if: always() && steps.restore.outcome == 'success'
         env:
@@ -146,50 +142,5 @@ jobs:
         with:
           name: daily-raw-reports-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/daily-raw-cache/*report.json
-          retention-days: 30
-          if-no-files-found: ignore
-
-  prepare-history:
-    needs: sync
-    if: needs.sync.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    permissions:
-      contents: read
-    concurrency:
-      group: daily-history-model-preparation
-      cancel-in-progress: false
-    env:
-      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - run: npm ci --no-audit --no-fund
-      - name: Capture every verified current FDV independently of CSV readiness
-        run: npx tsx scripts/capture-current-fdv.ts --cache "$RUNNER_TEMP/daily-history-model-cache" --run-id "daily-history-model-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 300 --apply
-      - name: Patch recent financial dates from the same verified source archive
-        id: financial
-        run: npx tsx scripts/refresh-daily-financials.ts --cache "$RUNNER_TEMP/daily-history-model-cache" --reference "$RUNNER_TEMP/daily-history-model-cache/reference.json" --run-id "daily-history-model-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 600 --recent-days 3 --apply
-      - name: Prepare current history after the durable raw queue is published
-        if: steps.financial.outcome == 'success'
-        run: |
-          npx tsx scripts/prepare-daily-history.ts --cache "$RUNNER_TEMP/daily-history-model-cache" --reference "$RUNNER_TEMP/daily-history-model-cache/reference.json" --run-id "daily-history-model-${{ github.run_id }}-${{ github.run_attempt }}" --max-estimated-writes 50000 --time-budget-seconds 900 --workers 4 --apply
-          node --input-type=module <<'NODE'
-          import {readFileSync} from 'node:fs';
-          const report=JSON.parse(readFileSync(process.env.RUNNER_TEMP+'/daily-history-model-cache/daily-history-model-report.json','utf8'));
-          console.log(JSON.stringify({status:report.status,pending:report.pending,runEstimatedWrites:report.runEstimatedWrites}));
-          if(report.status!=='complete'||report.pending!==0){console.error('::error::History preparation is incomplete; inspect the retained report before retrying.');process.exitCode=2;}
-          NODE
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: daily-history-model-reports-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/daily-history-model-cache/*report.json
           retention-days: 30
           if-no-files-found: ignore

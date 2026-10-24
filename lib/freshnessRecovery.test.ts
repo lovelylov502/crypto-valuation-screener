@@ -202,9 +202,9 @@ it("Phase B refuses stale/preview/incompatible identities and prepares actual bo
 
 it("compaction bounds public slot metadata and preserves retired failures and unresolved ages in an immutable history asset",()=>{
   const j=claim(prior(),"2026-10-07T02:01Z");j.createdAt=iso("2026-11-07T02:01Z");j.recovery=reconcileRecovery(j,Date.parse(j.createdAt));
-  const c=compactRecoveryJournal(j);expect(c.journal.recovery!.slots).toHaveLength(17);expect(c.journal.recovery!.history!.deadlineMisses).toBeGreaterThan(90);expect(c.history?.byteLength).toBeGreaterThan(0);
+  const c=compactRecoveryJournal(j);expect(c.journal.recovery!.slots).toHaveLength(17);expect(c.journal.recovery!.history!.deadlineMisses).toBe(80);expect(c.history?.byteLength).toBeGreaterThan(0);
   expect(()=>parseJournal(c.journal)).not.toThrow();
-  expect(JSON.parse(new TextDecoder().decode(c.history)).slots.length).toBeGreaterThan(90);expect(Buffer.byteLength(JSON.stringify(c.journal))).toBeLessThan(25_000);
+  expect(JSON.parse(new TextDecoder().decode(c.history)).slots.length).toBe(80);expect(Buffer.byteLength(JSON.stringify(c.journal))).toBeLessThan(25_000);
   expect(recoveryVerdicts(c.journal,Date.parse(j.createdAt)).collectionDeadlinePassed).toBe(false);
 });
 

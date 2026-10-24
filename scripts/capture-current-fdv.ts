@@ -7,10 +7,12 @@ import { connectHistory, HistoryBudgetExceeded } from "../lib/historyDatabase";
 import { captureMissingDailyFdv, getDailyRawRun, initializeDailyRaw, openDailyRawRun } from "../lib/dailyRawDatabase";
 import { objectHash } from "../lib/sourceBundle";
 import type { PublishedSnapshot } from "../lib/publicationTypes";
+import { createClient } from "@libsql/client";
+import { pathToFileURL } from "node:url";
 
 async function main(argv: string[]) {
   if (argv.includes("--help")) { console.log("capture-current-fdv.ts --cache <outside-Git-dir> [--reference latest|<pinned-reference.json>] [--run-id stable-id] [--max-estimated-writes 50000] [--time-budget-seconds 300] [--apply]\nSELECT-only by default. Verifies archived originals and captures the first valid FDV per actual UTC quote day, independently of CSV/MAX selection. Includes today's market observations; completed-day readers keep excluding today. Missing-only batches retain financials, existing values and holds, within the shared quota/storage limits."); return; }
-  const allowed = new Set(["--cache", "--reference", "--run-id", "--max-estimated-writes", "--time-budget-seconds", "--apply"]), seen = new Set<string>();
+  const allowed = new Set(["--cache", "--reference", "--database", "--run-id", "--max-estimated-writes", "--time-budget-seconds", "--apply"]), seen = new Set<string>();
   for (let i = 0; i < argv.length; i++) { const flag = argv[i]; if (!allowed.has(flag) || seen.has(flag)) throw Error("daily_fdv_capture_argument"); seen.add(flag); if (flag !== "--apply" && (!argv[++i] || argv[i].startsWith("--"))) throw Error("daily_fdv_capture_argument"); }
   const arg = (name: string) => { const i = argv.indexOf(name); return i < 0 ? undefined : argv[i + 1]; };
   const integer = (name: string, fallback: number, min: number, max: number) => { const text = arg(name), value = text === undefined ? fallback : Number(text); if (text !== undefined && !/^\d+$/.test(text) || !Number.isSafeInteger(value) || value < min || value > max) throw Error("daily_fdv_capture_argument"); return value; };
@@ -23,7 +25,9 @@ async function main(argv: string[]) {
   if (referenceArg && referenceArg !== "latest") { const value = JSON.parse(await readFile(resolve(referenceArg), "utf8")); reference = value.published ?? value; }
   const { snapshot, bundle, ref } = await loadHistoryInputs(cache, reference), input = collectCurrentFdv(snapshot, bundle, ref, now);
   await writeFile(join(cache, "reference.json"), JSON.stringify(ref, null, 2));
-  const db = connectHistory(), report = { schema: 1, mode: apply ? "apply" : "dry-run", status: "running", runId, publicationId: ref.id, sourceBundleSha256: ref.rawBundleSha256, providerRequests: 0, minimumReserve: 0,
+  const database = arg("--database"), db = database ? createClient({ url: pathToFileURL(resolve(database)).href }) : connectHistory();
+  if (database) await initializeDailyRaw(db, { unmeteredLocal: true });
+  const report = { schema: 1, mode: apply ? "apply" : "dry-run", status: "running", runId, publicationId: ref.id, sourceBundleSha256: ref.rawBundleSha256, providerRequests: 0, minimumReserve: 0,
     startedAt: now.toISOString(), completedAt: "", verifiedQuotes: input.assets.reduce((n, item) => n + item.points.length, 0), heldQuotes: input.heldQuotes, selectedCells: 0, pendingCells: 0, processedCells: 0, alreadyPresent: 0, heldCells: 0, rowsWritten: 0, daysWritten: 0, estimatedWrites: 0, runEstimatedWrites: 0, lastAttemptedBatch: null as string | null, error: null as string | null };
   const save = async () => { const path = join(cache, "current-fdv-report.json"); await writeFile(path + ".tmp", JSON.stringify(report, null, 2)); await rename(path + ".tmp", path); };
   let tracked = false, initial = 0;
