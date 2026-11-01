@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createGunzip } from "node:zlib";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -19,8 +19,9 @@ import source from "../lib/read-artifact-source.json";
 const repo = "lovelylov502/crypto-valuation-screener", api = `repos/${repo}`;
 const arg = (name: string) => { const i = process.argv.indexOf(name); return i < 0 ? undefined : process.argv[i + 1]; };
 const digest = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
-function gh(args: string[], optional = false) {
+export function gh(args: string[], optional = false) {
   const r = spawnSync("gh", args, { encoding: "utf8", windowsHide: true, maxBuffer: 8 * 1024 * 1024 });
+  if (r.error || r.signal || r.status === null) throw Error(`read_artifact_github_failed:${args[0]}:${(r.error as NodeJS.ErrnoException | undefined)?.code ?? r.signal ?? "no_exit_status"}`);
   if (r.status && !optional) throw Error(`read_artifact_github_failed:${args[0]}:${r.status}`);
   return r.status ? null : r.stdout.trim();
 }
@@ -44,7 +45,7 @@ async function restore(manifest: ArtifactManifest, database: string) {
   if (hash.digest("hex") !== ref.sha256) throw Error("read_artifact_database_hash_mismatch");
   await pipeline(createReadStream(file), createGunzip(), createWriteStream(database));
 }
-async function publish(output: string, manifest: ArtifactManifest, tag: string, before: Awaited<ReturnType<typeof previous>>) {
+export async function publish(output: string, manifest: ArtifactManifest, tag: string, before: Awaited<ReturnType<typeof previous>>) {
   const remote = spawnSync("git", ["remote", "get-url", "origin"], { encoding: "utf8", windowsHide: true }).stdout?.trim();
   if (remote !== `https://github.com/${repo}.git`) throw Error("read_artifact_repository_mismatch");
   const commit = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", windowsHide: true }).stdout.trim();
@@ -53,9 +54,9 @@ async function publish(output: string, manifest: ArtifactManifest, tag: string, 
   if (!existing || JSON.parse(existing).isDraft) {
     const files = [...Object.keys(manifest.files), "manifest.json"];
     for (let i = 0; i < files.length; i += 15) gh(["release", "upload", tag, "--repo", repo, "--clobber", ...files.slice(i, i + 15).map(name => join(output, name))]);
-    const release = JSON.parse(gh(["api", `${api}/releases?per_page=100`])!).find((item: { tag_name: string }) => item.tag_name === tag);
-    if (!release) throw Error("read_artifact_draft_missing");
-    const assets = JSON.parse(gh(["api", `${api}/releases/${release.id}/assets?per_page=100`, "--paginate", "--slurp"])!).flat();
+    const release = JSON.parse(gh(["release", "view", tag, "--repo", repo, "--json", "databaseId,isDraft,tagName"])!);
+    if (!Number.isSafeInteger(release.databaseId) || release.databaseId <= 0 || release.tagName !== tag || !release.isDraft) throw Error("read_artifact_draft_missing");
+    const assets = JSON.parse(gh(["api", `${api}/releases/${release.databaseId}/assets?per_page=100`, "--paginate", "--slurp"])!).flat();
     for (const name of files) { const asset = assets.find((item: { name: string }) => item.name === name), hash = digest(await readFile(join(output, name))); if (asset?.digest !== `sha256:${hash}` || asset.state !== "uploaded") throw Error("read_artifact_upload_unverified"); }
     gh(["release", "edit", tag, "--repo", repo, "--draft=false", "--latest=false"]);
   }
@@ -114,4 +115,4 @@ async function main() {
   const report = { status: "complete", publicationId: ref.id, inputKey, histories: result.processed, points: result.points, remoteDatabase: { reads: 0, writes: 0 }, cadenceHours: 12, published: process.argv.includes("--publish") };
   await writeFile(join(cache, "read-artifact-report.json"), JSON.stringify(report, null, 2)); console.log(JSON.stringify(report));
 }
-main().catch(error => { console.error(error instanceof Error ? error.message : "read_artifact_preparation_failed"); process.exitCode = 1; });
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => { console.error(error instanceof Error ? error.message : "read_artifact_preparation_failed"); process.exitCode = 1; });
