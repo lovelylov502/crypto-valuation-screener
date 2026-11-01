@@ -64,6 +64,7 @@ export async function planFdvRecovery(db: Client, input: CollectedDailyRawAsset[
     const rows = new Map(result.rows.map(row => [objectHash([row.slug, row.identity, row.day]), row]));
     for (const item of batch) {
       const points = item.points.filter(point => {
+        if (point.fdv?.state !== "complete") { held++; return false; }
         const row = rows.get(objectHash([item.asset.slug, item.asset.identity, point.day]));
         if (!row || row.fdv_state === 0 && row.fdv_source === null && row.fdv_at === null) return true;
         if (row.fdv_state === 5) held++; else alreadyPresent++; return false;

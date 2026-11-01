@@ -3,7 +3,7 @@ import { createClient, type Client } from "@libsql/client";
 import { collectFdvRecovery, planFdvRecovery } from "./dailyRawFdvRecovery";
 import { initializeDailyRaw, openDailyRawRun, readDailyRaw, upsertDailyRaw } from "./dailyRawDatabase";
 import type { DailyRawSource } from "./dailyRawData";
-import type { CollectedDailyRawAsset } from "./dailyRawCollection";
+import { combineDailyRawAssets, type CollectedDailyRawAsset } from "./dailyRawCollection";
 
 let db: Client;
 const now = new Date("2026-10-23T00:00:00Z"), asset = { slug: "sample", identity: "gecko:sample" };
@@ -34,6 +34,19 @@ it("rejects a concurrent completion rather than replacing its FDV", async () => 
   await upsertDailyRaw(db, { runId: "repair", ...item, points: [{ day: "2026-10-21", fdv: { value: 300, state: "complete", source: "fdv", at: "2026-10-21T13:00:00Z" } }], now });
   await expect(upsertDailyRaw(db, { runId: "repair", ...plan.assets[0], expectedCells: [expected("2026-10-21")], now })).rejects.toThrow("expected cell changed");
   expect((await readDailyRaw(db, { asset, from: "2026-10-21", to: "2026-10-21" }))?.points[0].fdv.value).toBe(300);
+});
+it("withholds conflicting originals while recovering other empty dates", async () => {
+  const original = candidate(["2026-10-20", "2026-10-21"]), other = { ...fdv, key: "other-fdv", sha256: "b".repeat(64) };
+  const combined = combineDailyRawAssets(asset, [original, { asset, sources: [other], points: [
+    { day: "2026-10-20", fdv: { ...original.points[0].fdv!, value: 201, source: other.key } },
+  ] }]);
+  expect(combined.points[0].fdv?.state).toBe("conflict");
+  const plan = await planFdvRecovery(db, [combined]);
+  expect(plan.held).toBe(1);
+  expect(plan.assets[0].points.map(point => point.day)).toEqual(["2026-10-21"]);
+  await upsertDailyRaw(db, { runId: "repair", ...plan.assets[0], expectedCells: [expected("2026-10-21")], now });
+  expect((await readDailyRaw(db, { asset }))?.points).toMatchObject([{ day: "2026-10-21", fdv: { value: 200 } }]);
+  expect((await planFdvRecovery(db, [combined]))).toMatchObject({ assets: [], alreadyPresent: 1, held: 1 });
 });
 it("never uses the old identity's existing FDV for a migrated token", async () => {
   const item = candidate(["2026-10-21"]);
