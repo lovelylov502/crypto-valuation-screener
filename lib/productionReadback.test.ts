@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
-import { inspectApi, inspectFwa, inspectPipelineProof, publicationProofKey } from "../scripts/verify-production.mjs";
+import { inspectApi, inspectDeployment, inspectFwa, inspectPipelineProof, publicationProofKey } from "../scripts/verify-production.mjs";
+import packageJson from "../package.json";
 import { sample } from "./testFixtures";
 import { annotateDataQuality, dataQualitySummary } from "./dataQuality";
 import { assembleScreener } from "./screener";
@@ -9,6 +10,18 @@ import type { SourceObservation } from "./types";
 import {annotateFreshness,freshnessSummary} from "./datedFreshness";
 import {jsonResponse,readJsonText} from "./jsonTransport.mjs";
 import {ECONOMIC_POLICIES} from "./economicPolicyIdentity";
+
+it("rejects a previous deployment with the same app version and accepts the exact production commit", () => {
+  const expectedCommit = "c".repeat(40), data = { appVersion: packageJson.version, deployment: { environment: "production", codeCommit: expectedCommit } };
+  const readback = (value: unknown) => ({ status: 200, body: JSON.stringify(value) });
+  expect(inspectDeployment(readback(data), expectedCommit)).toEqual([]);
+  expect(inspectDeployment(readback({ ...data, deployment: { ...data.deployment, codeCommit: "a".repeat(40) } }), expectedCommit))
+    .toEqual(["canonical deployment revision differs from Git HEAD"]);
+  for (const deployment of [undefined, { environment: "production" }, { ...data.deployment, environment: "preview" }]) {
+    expect(inspectDeployment(readback({ ...data, deployment }), expectedCommit)).toContain("canonical deployment revision differs from Git HEAD");
+  }
+  expect(inspectDeployment(readback(data), "")).toContain("canonical deployment revision differs from Git HEAD");
+});
 
 it("verifies source amounts while keeping incomplete current FWA windows unavailable", () => {
   const coin = { mcap: 100, revenue30d: 30, fundamentals: { revenue: { kind: "protocol_revenue" } },

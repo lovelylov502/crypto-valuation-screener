@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { DEPLOY_CONTRACT } from "./deploy-contract.mjs";
 import economicIdentityV1 from "../lib/economic-policy-v1.identity.json" with {type:"json"};
@@ -52,6 +53,15 @@ export function inspectHome(readback, expectedSnapshot) {
   if (legacyMarkers.length > 0) errors.push(`legacy UI markers remain: ${legacyMarkers.join(", ")}`);
   if (expectedSnapshot && !body.includes(expectedSnapshot)) errors.push("HTML and API snapshots differ");
   return { errors, missingMarkers, legacyMarkers };
+}
+
+export function inspectDeployment(readback, expectedCommit) {
+  const data = JSON.parse(readback.body), errors = [];
+  if (readback.status !== 200 || data?.appVersion !== packageJson.version) errors.push("published app version differs from package.json");
+  if (!/^[a-f0-9]{40}$/.test(expectedCommit) || data?.deployment?.environment !== "production" || data.deployment.codeCommit !== expectedCommit) {
+    errors.push("canonical deployment revision differs from Git HEAD");
+  }
+  return errors;
 }
 
 export function publicationProofKey(data) {
@@ -196,6 +206,8 @@ export function inspectFwa(coin) {
 }
 
 export async function verifyProduction() {
+  const expectedCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: new URL("..", import.meta.url), encoding: "utf8", windowsHide: true }).trim();
+  if (!/^[a-f0-9]{40}$/.test(expectedCommit)) throw new Error("Expected production Git HEAD is unavailable");
   let lastErrors = [];
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
@@ -212,7 +224,8 @@ export async function verifyProduction() {
       const namedInspection = inspectApi(named, false);
       const fwaInspection = inspectApi(fwa, false);
       lastErrors = [...homeInspection.errors, ...apiInspection.errors, ...namedInspection.errors, ...fwaInspection.errors];
-      if (status.status !== 200 || JSON.parse(status.body)?.appVersion !== packageJson.version || !home.body.includes(`v${packageJson.version}`)) lastErrors.push("published app version differs from package.json");
+      lastErrors.push(...inspectDeployment(status, expectedCommit));
+      if (!home.body.includes(`v${packageJson.version}`)) lastErrors.push("published app version differs from package.json");
       const publication = apiInspection.data?.publication;
       if (!publication?.published || publication.published.dataAt !== apiInspection.data?.updatedAt || publication.storeError) lastErrors.push("verified publication identity unavailable");
       for (const result of [namedInspection, fwaInspection]) if (publicationProofKey(result.data) !== publicationProofKey(apiInspection.data)) lastErrors.push("API queries use different publication proofs");
@@ -223,6 +236,7 @@ export async function verifyProduction() {
         console.log(JSON.stringify({
           path: "/",
           appVersion: packageJson.version,
+          codeCommit: expectedCommit,
           status: home.status,
           bytes: home.bytes,
           cache: home.cache,
