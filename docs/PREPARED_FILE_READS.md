@@ -16,6 +16,7 @@ The 13:30 KST history job restores the same local archive, imports a bounded sou
 
 ## Operations
 
+- For an immediate fresh capture, dispatch **Verified screener publication** with empty inputs. Manual repairs retain the six-hour action records understood by pinned readers and share a maximum of two claims per active twelve-hour collection interval. Manual-only records at inactive hours create no automatic obligations, deadline credit, or regular-slot history counts; automatic schedules and stage expiry remain unchanged.
 - Manual, idempotent recovery: run the **Refresh verified publication reads** workflow. Reports state `remoteDatabase: { reads: 0, writes: 0 }` because these jobs only open file clients; those numbers are not inferred from returned SQL rows.
 - A failed builder stops before pointer promotion. Inspect `*report.json`; fix the input or code, then resume. Do not turn on a raw-history fallback.
 - Release verification looks up only the exact draft tag and its asset pages. Listing the repository's latest 100 releases exceeded the 8 MiB CLI output budget on 2026-10-31; the resulting child-process error was previously mistaken for successful output. Process errors and signal termination now stop publication explicitly, including optional lookups. Re-run the refresh workflow after this repair; existing draft assets can be verified and resumed without advancing GitHub Latest.

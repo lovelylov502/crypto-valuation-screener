@@ -47,6 +47,7 @@ export function fourDailySlot(now: number) {
 export function currentStage(slot: number, now: number): CollectionStage { return now < slot + 2 * 3_600_000 ? "primary" : now < slot + 4 * 3_600_000 ? "catchup1" : "catchup2"; }
 const freshStage = (): StageLedger => ({ claims:0, completed:0, needed:false, missed:false, interrupted:false });
 const freshSlot = (slotAt: string): SlotLedger => ({ slotAt, primary:freshStage(), catchup1:freshStage(), catchup2:freshStage(), manualClaims:0, firstPublicationAt:null, deadlineMissed:false, naturalPrimary:false });
+const scheduledSlot = (slotAt:string) => activeCollectionHours(Date.parse(slotAt)).includes(new Date(slotAt).getUTCHours());
 export const initialRecovery = (): RecoveryState => ({ schema:1, slots:[], obligations:[], receipts:[], latestTargetDate:null, transient:false, retryAt:null });
 const finiteTime = (t: unknown) => typeof t === "string" && Number.isFinite(Date.parse(t));
 const journalUrl=(id:string)=>`https://github.com/lovelylov502/crypto-valuation-screener/releases/download/${id}/state.json`;
@@ -87,6 +88,7 @@ export function validateRecovery(j: PublicationJournal, now = Infinity) {
     new Set(r.receipts).size !== r.receipts.length || typeof r.transient !== "boolean" || (r.retryAt !== null && !finiteTime(r.retryAt)) ||
     (r.latestTargetDate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(r.latestTargetDate))) throw new Error("Invalid recovery journal");
   if (new Set(r.slots.map(s => s.slotAt)).size !== r.slots.length || new Set(r.obligations.map(o => o.key)).size !== r.obligations.length) throw new Error("Duplicate recovery state");
+  const manualClaims=new Map<number,number>();
   const migration=r.migration;
   if(migration&&(!finiteTime(migration.startedAt)||Date.parse(migration.startedAt)>now||!/^data-[a-zA-Z0-9-]+$/.test(migration.firstJournalId)||!/^data-[a-zA-Z0-9-]+$/.test(migration.legacyJournalId)||
     migration.correction&&(migration.correction.rule!=="pre-tracking-expiry"||migration.correction.journalUrl!==journalUrl(migration.correction.journalId)||!finiteTime(migration.correction.observedAt)||!r.slots.some(s=>s.slotAt===migration.correction!.originalSlot.slotAt)&&!r.history)))throw new Error("Invalid migration boundary");
@@ -94,6 +96,9 @@ export function validateRecovery(j: PublicationJournal, now = Infinity) {
   for (const s of r.slots) {
     if (!finiteTime(s.slotAt) || Date.parse(s.slotAt)>now || fourDailySlot(Date.parse(s.slotAt)) !== Date.parse(s.slotAt) || !Number.isInteger(s.manualClaims) || s.manualClaims < 0 || s.manualClaims > 2 ||
       typeof s.deadlineMissed !== "boolean" || typeof s.naturalPrimary !== "boolean" || s.deadlineUnverified!==undefined&&typeof s.deadlineUnverified!=="boolean" || (s.firstPublicationAt !== null && (!finiteTime(s.firstPublicationAt)||Date.parse(s.firstPublicationAt)<Date.parse(s.slotAt)||Date.parse(s.firstPublicationAt)>now))) throw new Error("Invalid recovery slot");
+    const budgetSlot=activeCollectionSlot(Date.parse(s.slotAt)),claims=(manualClaims.get(budgetSlot)??0)+s.manualClaims;
+    if(claims>2)throw new Error("Manual recovery interval allowance exceeded");
+    manualClaims.set(budgetSlot,claims);
     if(s.signedPrimaryAnchor&&(!s.signedPrimaryAnchor.receiptKey.startsWith("vercel-cron:")||!s.signedPrimaryAnchor.attemptId||!finiteTime(s.signedPrimaryAnchor.claimedAt)||Date.parse(s.signedPrimaryAnchor.claimedAt)<Date.parse(s.slotAt)||Date.parse(s.signedPrimaryAnchor.claimedAt)>=stageWindow(Date.parse(s.slotAt),"primary").end||s.primary.claims<1))throw new Error("Invalid signed primary anchor");
     if(s.cyclePublication&&(!s.signedPrimaryAnchor||!s.naturalPrimary||!s.cyclePublication.publicationId||!s.cyclePublication.codeCommit||!s.cyclePublication.attemptId||!finiteTime(s.cyclePublication.confirmedAt)||Date.parse(s.cyclePublication.confirmedAt)<Date.parse(s.signedPrimaryAnchor.claimedAt)||Date.parse(s.cyclePublication.confirmedAt)>Date.parse(s.slotAt)+90*60_000))throw new Error("Invalid automatic cycle proof");
     for (const stage of ["primary","catchup1","catchup2"] as const) {
@@ -174,6 +179,7 @@ export function reconcileRecovery(previous: PublicationJournal, now: number): Re
   if (last) for (let s=Date.parse(last)+6*3_600_000;s<=activeCollectionSlot(now);s+=6*3_600_000) if (activeCollectionHours(s).includes(new Date(s).getUTCHours())) r.slots.push(freshSlot(new Date(s).toISOString()));
   if (!r.slots.length) r.slots.push(freshSlot(new Date(activeCollectionSlot(now)).toISOString()));
   for (const s of r.slots) {
+    if(!scheduledSlot(s.slotAt))continue;
     const slot=Date.parse(s.slotAt);
     reconcileMigrationSlot(s,r.migration);
     for (const stage of ["primary","catchup1","catchup2"] as const) {
@@ -212,18 +218,21 @@ export function publicRecovery(previous:PublicationJournal,now:number,paused=fal
 export function recoveryDecision(previous: PublicationJournal | null, now: number, trigger: CollectionTrigger, manualRepair=false) {
   if (!previous || !Number.isFinite(now)) throw new Error("Authoritative collection journal required");
   const recovery=reconcileRecovery(previous,now);
-  const slotAt=trigger.occurrenceKnown ? trigger.scheduledFor! : new Date(activeCollectionSlot(now)).toISOString();
+  // Manual repairs retain the six-hour action format accepted by pinned readers,
+  // while their allowance remains shared across the active collection interval.
+  const slotAt=trigger.occurrenceKnown ? trigger.scheduledFor! : new Date(manualRepair?fourDailySlot(now):activeCollectionSlot(now)).toISOString();
   const stage=trigger.occurrenceKnown ? trigger.stage! : currentStage(Date.parse(slotAt),now);
   const receiptKey=`${trigger.source}:${trigger.requestId}`;
   const result=(collect:boolean,reason:string)=>({collect,reason,slotAt,stage,receiptKey,manualRepair,trigger,recovery,naturalCycle:!manualRepair&&stage==="primary"&&(trigger.occurrenceKnown||!!recovery.slots.find(s=>s.slotAt===slotAt)?.signedPrimaryAnchor),previousStartedAt:previous.attempt.startedAt});
   const window=stageWindow(Date.parse(slotAt),stage);
   if (!finiteTime(slotAt) || !trigger.requestId || trigger.occurrenceKnown && !trigger.stage) throw new Error("Invalid collection occurrence");
-  if (!activeCollectionHours(Date.parse(slotAt)).includes(new Date(slotAt).getUTCHours())) return result(false,"inactive-cadence-slot");
+  if (!manualRepair&&!scheduledSlot(slotAt)) return result(false,"inactive-cadence-slot");
   if (now<window.start || now>=window.end) return result(false,"expired-stage");
   if (recovery.receipts.includes(receiptKey)) return result(false,"duplicate-receipt");
   if (previous.attempt.outcome === "running" && now-Date.parse(previous.attempt.startedAt)<15*60_000) return result(false,"running");
+  if(manualRepair&&recovery.slots.filter(s=>activeCollectionSlot(Date.parse(s.slotAt))===activeCollectionSlot(now)).reduce((n,s)=>n+s.manualClaims,0)>=2)return result(false,"manual-budget-exhausted");
   let s=recovery.slots.find(s=>s.slotAt===slotAt); if (!s) { s=freshSlot(slotAt); recovery.slots.push(s); }
-  if (manualRepair) return result(s.manualClaims<2,s.manualClaims<2?"manual-repair":"manual-budget-exhausted");
+  if (manualRepair) return result(true,"manual-repair");
   if(stage==="primary"&&!trigger.occurrenceKnown&&!s.signedPrimaryAnchor&&now<Date.parse(slotAt)+60*60_000)return result(false,"awaiting-signed-primary");
   const l=s[stage],limit=stage==="primary"?3:1;
   if (l.claims>=limit) return result(false,"stage-budget-exhausted");
@@ -263,13 +272,13 @@ export function finishRecoveryJournal(current: PublicationJournal, attempt: Coll
   }
   if (accepted) {
     r=updateObligations(r,data!,attempt.id);
-    if(published?.availabilityConfirmedAt) {
+    if(published?.availabilityConfirmedAt&&scheduledSlot(s.slotAt)) {
       s.firstPublicationAt??=published.availabilityConfirmedAt;
       if (a.action.natural && s.signedPrimaryAnchor && !a.manualRepair && a.action.stage==="primary" && Date.parse(published.availabilityConfirmedAt)<=Date.parse(s.slotAt)+90*60_000) { s.naturalPrimary=true; s.cyclePublication??={publicationId:published.id,codeCommit:published.codeCommit,attemptId:a.id,confirmedAt:published.availabilityConfirmedAt}; }
     }
   }
   // s remains in r's cloned ledger after metadata-only obligation update.
-  if (!s.deadlineUnverified&&(!s.firstPublicationAt && Date.parse(attempt.completedAt)>=Date.parse(s.slotAt)+90*60_000 || s.firstPublicationAt && Date.parse(s.firstPublicationAt)>Date.parse(s.slotAt)+90*60_000)) s.deadlineMissed=true;
+  if (scheduledSlot(s.slotAt)&&!s.deadlineUnverified&&(!s.firstPublicationAt && Date.parse(attempt.completedAt)>=Date.parse(s.slotAt)+90*60_000 || s.firstPublicationAt && Date.parse(s.firstPublicationAt)>Date.parse(s.slotAt)+90*60_000)) s.deadlineMissed=true;
   r.transient=attempt.failureClass==="transient";
   r.retryAt=r.transient?new Date(Date.parse(attempt.completedAt)+5*60_000).toISOString():null;
   return {...current,id,createdAt:attempt.completedAt,previousId:current.id,previousStateUrl:`https://github.com/lovelylov502/crypto-valuation-screener/releases/download/${current.id}/state.json`,published:accepted?published:current.published,attempt:{...attempt,action:a.action,trigger:a.trigger},recovery:r,
@@ -279,17 +288,19 @@ export function finishRecoveryJournal(current: PublicationJournal, attempt: Coll
 export function confirmPublicationAvailability(current:PublicationJournal,confirmedAt:string,id:string):PublicationJournal {
   if(!current.published||current.attempt.outcome!=="published"||!current.attempt.action||!finiteTime(confirmedAt)||Date.parse(confirmedAt)<Date.parse(current.attempt.completedAt??""))throw new Error("Invalid publication availability confirmation");
   const r=structuredClone(current.recovery!),a=current.attempt,s=r.slots.find(s=>s.slotAt===a.action!.slotAt)!;
-  s.firstPublicationAt??=confirmedAt;
-  if(!s.deadlineUnverified&&Date.parse(s.firstPublicationAt)>Date.parse(s.slotAt)+90*60_000)s.deadlineMissed=true;
+  if(scheduledSlot(s.slotAt)) {
+    s.firstPublicationAt??=confirmedAt;
+    if(!s.deadlineUnverified&&Date.parse(s.firstPublicationAt)>Date.parse(s.slotAt)+90*60_000)s.deadlineMissed=true;
+  }
   if(a.action!.natural&&s.signedPrimaryAnchor&&!a.manualRepair&&a.action!.stage==="primary"&&Date.parse(confirmedAt)<=Date.parse(s.slotAt)+90*60_000){s.naturalPrimary=true;s.cyclePublication??={publicationId:current.published.id,codeCommit:current.published.codeCommit,attemptId:a.id,confirmedAt};}
   return {...current,id,createdAt:confirmedAt,previousId:current.id,previousStateUrl:`https://github.com/lovelylov502/crypto-valuation-screener/releases/download/${current.id}/state.json`,published:{...current.published,availabilityConfirmedAt:confirmedAt},recovery:r};
 }
 export function recoveryVerdicts(j: PublicationJournal | undefined, now: number) {
   if (!j?.recovery) return {collectionDeadlinePassed:false,collectionDeadlineUnverified:false,catchupExecutionPassed:false};
   const r=reconcileRecovery(j,now);
-  const due=r.slots.filter(s=>now>=Date.parse(s.slotAt)+90*60_000).at(-1);
+  const regular=r.slots.filter(s=>scheduledSlot(s.slotAt)),due=regular.filter(s=>now>=Date.parse(s.slotAt)+90*60_000).at(-1);
   // Current health is independent of historical diagnostics and cycle provenance.
-  const dueStages=(["catchup1","catchup2"] as const).map(stage=>r.slots.filter(s=>now>=stageWindow(Date.parse(s.slotAt),stage).end).at(-1)?.[stage]);
+  const dueStages=(["catchup1","catchup2"] as const).map(stage=>regular.filter(s=>now>=stageWindow(Date.parse(s.slotAt),stage).end).at(-1)?.[stage]);
   return { collectionDeadlinePassed:!!due&&!!due.firstPublicationAt&&!due.deadlineMissed&&!due.deadlineUnverified&&Date.parse(due.firstPublicationAt)<=Date.parse(due.slotAt)+90*60_000,
     collectionDeadlineUnverified:!!due?.deadlineUnverified,
     catchupExecutionPassed:dueStages.every(l=>!l?.unverified&&(!l?.needed||!l.missed&&!l.interrupted&&l.claims===l.completed)) };
@@ -304,7 +315,7 @@ export function compactRecoveryJournal(j:PublicationJournal): {journal:Publicati
   if(!retired.length&&!expired.length)return {journal:{...j,recovery:{...r,receipts}}};
   const history={...(r.history??{slots:0,naturalSlots:0,deadlineMisses:0,missedCatchups:0,interruptedCatchups:0,resolvedDates:0,supersededDates:0,archiveUrl:""}),
     archiveUrl:`https://github.com/lovelylov502/crypto-valuation-screener/releases/download/${j.id}/recovery-history.json`};
-  history.slots+=retired.length;history.naturalSlots+=retired.filter(s=>s.naturalPrimary).length;
+  history.slots+=retired.filter(s=>scheduledSlot(s.slotAt)).length;history.naturalSlots+=retired.filter(s=>s.naturalPrimary).length;
   history.deadlineMisses+=retired.filter(s=>s.deadlineMissed).length;
   history.missedCatchups+=retired.reduce((n,s)=>n+Number(s.catchup1.missed)+Number(s.catchup2.missed),0);
   history.interruptedCatchups+=retired.reduce((n,s)=>n+Number(s.catchup1.interrupted)+Number(s.catchup2.interrupted),0);

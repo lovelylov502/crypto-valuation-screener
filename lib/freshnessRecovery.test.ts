@@ -57,6 +57,44 @@ function finish(j:PublicationJournal,data:ScreenerResponse,completedAt:string) {
   return confirmPublicationAvailability(finishRecoveryJournal(j,{...j.attempt,completedAt:iso(completedAt),outcome:"published",comparisonCompleted:true},published(data,j.attempt.id+"-complete"),j.attempt.id+"-complete",data),iso(completedAt),j.attempt.id+"-confirmed");
 }
 
+const manualTrigger=(at:string):CollectionTrigger=>({...trigger(at),source:"manual",occurrenceKnown:false,scheduledFor:null,stage:null,authentication:"github-manual"});
+const blockManual=(j:PublicationJournal)=>finishRecoveryJournal(j,{...j.attempt,outcome:"blocked",completedAt:new Date(Date.parse(j.attempt.startedAt)+60_000).toISOString(),errors:["timeout"]},null,j.attempt.id+"-blocked");
+it.each(["2026-11-03T08:10Z","2026-11-03T12:10Z","2026-11-03T20:10Z","2026-11-04T00:10Z"])("allows immediate manual repair at %s while retaining the historical action window",at=>{
+  const t=manualTrigger(at),now=Date.parse(at),d=recoveryDecision(prior(),now,t,true);
+  expect(d).toMatchObject({collect:true,reason:"manual-repair",naturalCycle:false,slotAt:new Date(fourDailySlot(now)).toISOString()});
+  const started=claim(prior(),at,t,true);
+  expect(()=>parseJournal(JSON.parse(JSON.stringify(started)))).not.toThrow();
+  expect(now).toBeGreaterThanOrEqual(stageWindow(Date.parse(d.slotAt),d.stage).start);
+  expect(now).toBeLessThan(stageWindow(Date.parse(d.slotAt),d.stage).end);
+  expect(recoveryDecision(prior(),now,{...t,source:"github-recovery-wake"},false)).toMatchObject({collect:false,reason:"expired-stage"});
+  expect(recoveryDecision(started,now+1_000,t,true).reason).toBe("duplicate-receipt");
+  expect(recoveryDecision(started,now+1_000,{...t,requestId:"another"},true).reason).toBe("running");
+});
+it("shares two manual claims across both six-hour records of one active twelve-hour interval",()=>{
+  let j=blockManual(claim(prior(),"2026-11-03T06:10Z",manualTrigger("2026-11-03T06:10Z"),true));
+  j=blockManual(claim(j,"2026-11-03T12:10Z",manualTrigger("2026-11-03T12:10Z"),true));
+  expect(recoveryDecision(j,Date.parse("2026-11-03T12:20Z"),manualTrigger("2026-11-03T12:20Z"),true).reason).toBe("manual-budget-exhausted");
+  const forged=structuredClone(j);forged.recovery!.slots.find(s=>s.slotAt===iso("2026-11-03T02:00Z"))!.manualClaims=2;
+  expect(()=>parseJournal(forged)).toThrow("Manual recovery interval allowance exceeded");
+  expect(recoveryDecision(j,Date.parse("2026-11-03T14:00Z"),manualTrigger("2026-11-03T14:00Z"),true).collect).toBe(true);
+  const expired=recoveryDecision(prior(),Date.parse("2026-11-03T13:59:59Z"),manualTrigger("2026-11-03T13:59:59Z"),true);
+  const a={...j.attempt,startedAt:iso("2026-11-03T14:00Z"),action:{slotAt:expired.slotAt,stage:expired.stage,receiptKey:expired.receiptKey,natural:false}};
+  expect(()=>startRecoveryJournal(prior(),a,"data-expired",expired)).toThrow("stage expired");
+});
+it("manual-only records preserve failed regular deadlines and add no automatic obligations or history counts",async()=>{
+  const at="2026-11-03T12:10Z";upstream(at,true);
+  const start=claim(prior(),at,manualTrigger(at),true),capture=await captureDataPipeline(null,iso(at),async()=>{},[],2);
+  const done=finish(start,capture.data,"2026-11-03T12:14Z");
+  const r=reconcileRecovery(done,Date.parse("2026-11-03T13:59Z")),manual=r.slots.find(s=>s.slotAt===iso("2026-11-03T08:00Z"))!;
+  expect(manual).toMatchObject({manualClaims:1,firstPublicationAt:null,deadlineMissed:false,naturalPrimary:false});
+  for(const stage of ["primary","catchup1","catchup2"] as const)expect(manual[stage]).toEqual({claims:0,completed:0,needed:false,missed:false,interrupted:false});
+  expect(recoveryVerdicts(done,Date.parse("2026-11-03T13:59Z"))).toMatchObject({collectionDeadlinePassed:false,catchupExecutionPassed:false});
+  const later=claim(done,"2026-11-13T02:10Z",manualTrigger("2026-11-13T02:10Z"),true),compacted=compactRecoveryJournal(later);
+  const retired=JSON.parse(Buffer.from(compacted.history!).toString()).slots;
+  expect(retired.some((s:any)=>s.slotAt===manual.slotAt)).toBe(true);
+  expect(compacted.journal.recovery!.history!.slots).toBe(retired.length-1);
+});
+
 it("HTTP 200 late daily history publishes safely, schedules automatic catch-up, and restores 30/30 with the reviewed multiple",async()=>{
   const at="2026-10-07T02:01Z";upstream(at,false);
   const primary=claim(prior(),at);
