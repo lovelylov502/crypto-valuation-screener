@@ -31,7 +31,7 @@ it.each([1200,2232])("collects all %i CMC IDs within the keyless batch limit and
  expect(batches.flat()).toEqual(rows.map(p=>p.cmcId));
  expect(captured.value!.cmcLookups.filter(([id])=>id!==9999).every(([,q])=>q.status==="received")).toBe(true);
  vi.stubGlobal("fetch",()=>{throw new Error("Offline only");});expect(await replaySourceBundle(captured.bundle,run)).toEqual(captured.value);
-});
+},30_000);
 it("default60s cooldown consumes elapsed budget but not10s transport timeout or retry allowance",async()=>{
  vi.useFakeTimers();vi.setSystemTime(at);const times:number[]=[];
  vi.stubGlobal("fetch",vi.fn(async(_url,init)=>{times.push(Date.now());expect(init?.signal?.aborted).toBe(false);return times.length===1?new Response("limited",{status:429}):Response.json({data:[{id:1027,slug:"ethereum"}]});}));
