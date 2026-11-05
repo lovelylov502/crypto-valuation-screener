@@ -226,6 +226,28 @@ it("rejects internally inconsistent circulating market cap and retains usable pr
   const row = checkedMarketRow({ ...gecko, market_cap: 100 }, "gecko", at);
   expect(row.market_cap).toBeNull(); expect(row.current_price).toBe(gecko.current_price);
 });
+it("withholds a conflicting fallback cap after joining independently checked providers", () => {
+  const i = inputs(); i.consistentMarketValues = true;
+  i.gecko[0].market_cap = 100;
+  i.protocols[0].mcap = 100;
+  i.cmc = []; i.cmcLookups = [];
+  const [c] = normalizeCoinInputs(i);
+  expect(c).toMatchObject({ mcap: null, price: gecko.current_price, fdv: gecko.fully_diluted_valuation,
+    circulatingSupply: gecko.circulating_supply, marketSources: { mcap: null } });
+  expect(marketValueErrors([c])).toEqual([]);
+  delete i.consistentMarketValues;
+  expect(marketValueErrors(normalizeCoinInputs(i))).toContain(`${gecko.id}: price/supply/cap conflict`);
+});
+it("accounts for a joined cap exclusion when price falls back to a different provider", () => {
+  const i = inputs(); i.consistentMarketValues = true;
+  i.gecko[0].market_cap = null; i.gecko[0].current_price = 2;
+  (i.cmc[0].quote as any[])[0].price = null;
+  const [c] = normalizeCoinInputs(i);
+  expect(c).toMatchObject({ mcap: null, price: 2 });
+  expect(marketDataReason(c,"mcap")).toContain("가격·유통량과 시총 불일치");
+  expect(collectionErrors([c])).toEqual([]);
+  expect(marketValueErrors([c])).toEqual([]);
+});
 it("finds the native asset by a unique complete name even when the source omitted its symbol", () => {
   const row = { id: 1027, name: "Ethereum", symbol: "ETH", platform: null };
   expect(resolveCmcAsset([row], [], [], "Ethereum", null, true)).toBe(row);

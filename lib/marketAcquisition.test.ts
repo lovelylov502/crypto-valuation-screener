@@ -6,6 +6,32 @@ import {readHistorySummary} from "./historyRequest";
 
 afterEach(()=>{vi.unstubAllGlobals();vi.useRealTimers();});
 const at="2026-10-07T20:51:50.000Z",listing="https://pro-api.coinmarketcap.com/public-api/v3/cryptocurrency/listings/latest?start=1&limit=5000&convert=USD";
+it.each([1200,2232])("collects all %i CMC IDs within the keyless batch limit and a two-request-per-minute pool",async count=>{
+ vi.useFakeTimers();vi.setSystemTime(at);
+ const rows=Array.from({length:count},(_,i)=>({slug:`token-${i+1}`,name:`Token ${i+1}`,symbol:`T${i+1}`,cmcId:i+1}));
+ const starts:number[]=[],batches:number[][]=[];
+ vi.stubGlobal("fetch",async(input:string|URL|Request)=>{
+  const u=new URL(String(input));
+  if(u.hostname.includes("coinmarketcap")) {
+   const now=Date.now(); starts.push(now);
+   if(starts.filter(t=>now-t<60_000).length>2)return new Response("limited",{status:429});
+   if(u.pathname.endsWith("listings/latest"))return Response.json({data:[{id:9999,name:"Unrelated",symbol:"OTHER"}]});
+   const ids=u.searchParams.get("id")!.split(",").map(Number); batches.push(ids);
+   if(ids.length>400)return new Response("id parameter restricted to 400",{status:400});
+   return Response.json({data:ids.map(id=>({id,name:`Token ${id}`,symbol:`T${id}`,quote:[{symbol:"USD",price:1,market_cap:100,fully_diluted_market_cap:200}]}))});
+  }
+  return Response.json(u.hostname.includes("stablecoins")?{peggedAssets:[{gecko_id:"tether",symbol:"USDT"}]}:u.pathname==="/protocols"?rows:u.pathname==="/config"?{parentProtocols:[{id:"parent#unrelated",name:"Unrelated"}]}:{protocols:rows,totalDataChartBreakdown:[]});
+ });
+ const run=()=>collectCoinInputs();
+ const pending=captureSourceBundle(at,null,run,undefined,2,11);await vi.runAllTimersAsync();const captured=await pending;
+ expect(captured.error).toBeUndefined();
+ expect(captured.bundle.requestStats).toMatchObject({rateLimited:0,deferred:0});
+ expect(starts.map(t=>t-Date.parse(at))).toEqual(Array.from({length:1+Math.ceil(count/400)},(_,i)=>i*30_000));
+ expect(batches.every(b=>b.length<=400)).toBe(true);
+ expect(batches.flat()).toEqual(rows.map(p=>p.cmcId));
+ expect(captured.value!.cmcLookups.filter(([id])=>id!==9999).every(([,q])=>q.status==="received")).toBe(true);
+ vi.stubGlobal("fetch",()=>{throw new Error("Offline only");});expect(await replaySourceBundle(captured.bundle,run)).toEqual(captured.value);
+});
 it("default60s cooldown consumes elapsed budget but not10s transport timeout or retry allowance",async()=>{
  vi.useFakeTimers();vi.setSystemTime(at);const times:number[]=[];
  vi.stubGlobal("fetch",vi.fn(async(_url,init)=>{times.push(Date.now());expect(init?.signal?.aborted).toBe(false);return times.length===1?new Response("limited",{status:429}):Response.json({data:[{id:1027,slug:"ethereum"}]});}));
@@ -42,7 +68,8 @@ it("rejects unknown acquisition semantics rather than replaying with current beh
  expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:8})).not.toThrow();
  expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:9})).not.toThrow();
  expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:10})).not.toThrow();
- expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:11} as any)).toThrow("Invalid source bundle");
+ expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:11})).not.toThrow();
+ expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:12} as any)).toThrow("Invalid source bundle");
  expect(()=>validateSourceBundle({...captured.bundle,pipelineSchema:undefined})).toThrow("Invalid source bundle");
 });
 it("history transport also begins its15s timeout after cooldown and preserves historical retry semantics",async()=>{
@@ -53,15 +80,15 @@ it("history transport also begins its15s timeout after cooldown and preserves hi
  expect(result.value).toEqual({totalDataChart:[[1,0]]});expect(times[1]-times[0]).toBe(60_000);expect(result.bundle.requestStats).toMatchObject({rateLimited:1,deferred:0});
  vi.stubGlobal("fetch",()=>{throw new Error("Offline only");});expect(await replaySourceBundle(result.bundle,run)).toEqual(result.value);
 });
-it("persistent CMC429 shares one180s budget across discovery and quotes, without spending retries on deferrals",async()=>{
+it.each([[2,180_000],[11,300_000]] as const)("revision%i persistent CMC429 shares one %ims budget across discovery and quotes",async(revision,budget)=>{
  vi.useFakeTimers();vi.setSystemTime(at);const cmcTimes:number[]=[],p={slug:"token",name:"Token",symbol:"T",cmcId:123};
  vi.stubGlobal("fetch",async(input:string|URL|Request)=>{
   const u=new URL(String(input));if(u.hostname.includes("coinmarketcap")){cmcTimes.push(Date.now());return new Response("limited",{status:429});}
   return Response.json(u.hostname.includes("stablecoins")?{peggedAssets:[{gecko_id:"tether",symbol:"USDT"}]}:u.pathname==="/protocols"?[p]:u.pathname==="/config"?{parentProtocols:[{id:"parent#unrelated",name:"Unrelated"}]}:{protocols:[p],totalDataChartBreakdown:[]});
  });
- const run=()=>collectCoinInputs();const pending=captureSourceBundle(at,null,run,undefined,2,2);await vi.runAllTimersAsync();const captured=await pending;
+ const run=()=>collectCoinInputs();const pending=captureSourceBundle(at,null,run,undefined,2,revision);await vi.runAllTimersAsync();const captured=await pending;
  expect(captured.error).toBeUndefined();expect(cmcTimes.slice(0,3).map(t=>t-Date.parse(at))).toEqual([0,60_000,120_000]);
- expect(Math.max(...cmcTimes)-Date.parse(at)).toBeLessThan(180_000);expect(captured.bundle.receipts.filter(r=>r.url.includes("coinmarketcap")&&r.status===null)).toHaveLength(1);
+ expect(Math.max(...cmcTimes)-Date.parse(at)).toBeLessThan(budget);expect(captured.bundle.receipts.filter(r=>r.url.includes("coinmarketcap")&&r.status===null)).toHaveLength(1);
  expect(captured.value!.cmcLookups[0][1].status).toBe("error");
  vi.stubGlobal("fetch",()=>{throw new Error("Offline only");});expect(await replaySourceBundle(captured.bundle,run)).toEqual(captured.value);
 });

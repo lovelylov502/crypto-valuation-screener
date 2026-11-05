@@ -21,8 +21,8 @@ export interface SourceBundle {
   economicReviewBaselineRef?:import("./economicReviewArchive").EconomicReviewRef;
   schema: 1;
   pipelineSchema?: 2;
-  /** Revision 10 applies FDV original-record quality gates; older replay stays exact. */
-  acquisitionRevision?: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+  /** Revision 11 bounds keyless CMC acquisition and checks joined market values; older replay stays exact. */
+  acquisitionRevision?: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
   economicPolicy?: EconomicPolicyIdentity;
   economicProvenance?: EconomicProvenance;
   economicReviewBaseline?: import("./economicReview").EconomicReviewState;
@@ -153,7 +153,7 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
             }
             if(paced&&(queuedSignal!.aborted||Date.now()>=deadline))throw new Error("provider cooldown deferred");
             requestedAt=new Date().toISOString();
-            if(paced)session.cmcLane!.nextAt=Date.now()+6000;
+            if(paced)session.cmcLane!.nextAt=Date.now()+((session.bundle.acquisitionRevision??1)>=11?30_000:6000);
           }
           const remaining=Math.min(session.deadlineAt??Infinity,transport?.deadline??Infinity)-Date.now();
           if(transport&&remaining<=0)throw new Error("provider cooldown deferred");
@@ -189,7 +189,7 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
 }
 
 export function validateSourceBundle(bundle: SourceBundle): void {
-  if (bundle?.schema !== 1 || (bundle.pipelineSchema !== undefined && bundle.pipelineSchema !== 2) || (bundle.acquisitionRevision!==undefined&&(bundle.pipelineSchema!==2||![2,3,4,5,6,7,8,9,10].includes(bundle.acquisitionRevision))) || !Number.isFinite(Date.parse(bundle.asOf)) || !Array.isArray(bundle.receipts) || !bundle.receipts.length) throw new Error("Invalid source bundle");
+  if (bundle?.schema !== 1 || (bundle.pipelineSchema !== undefined && bundle.pipelineSchema !== 2) || (bundle.acquisitionRevision!==undefined&&(bundle.pipelineSchema!==2||![2,3,4,5,6,7,8,9,10,11].includes(bundle.acquisitionRevision))) || !Number.isFinite(Date.parse(bundle.asOf)) || !Array.isArray(bundle.receipts) || !bundle.receipts.length) throw new Error("Invalid source bundle");
   if(bundle.economicPolicy) { validateEconomicPolicy(bundle.economicPolicy); if(bundle.pipelineSchema!==2)throw new Error("Economic policy requires pipeline schema 2"); }
   else if(bundle.economicProvenance)throw new Error("Economic provenance has no bound policy");
   if(bundle.economicReviewBaseline||bundle.economicReviewBaselineRef) {
@@ -206,7 +206,7 @@ export function validateSourceBundle(bundle: SourceBundle): void {
   }
 }
 
-export async function captureSourceBundle<T>(asOf: string, baseline: ScreenerResponse | null, task: () => Promise<T>, signal = AbortSignal.timeout(9 * 60_000), pipelineSchema: 1 | 2 = 1, acquisitionRevision?:2|3|4|5|6|7|8|9|10, economicPolicy?: EconomicPolicyIdentity,economicReviewBaseline?:import("./economicReview").EconomicReviewState,economicReviewBaselineRef?:import("./economicReviewArchive").EconomicReviewRef) {
+export async function captureSourceBundle<T>(asOf: string, baseline: ScreenerResponse | null, task: () => Promise<T>, signal = AbortSignal.timeout(9 * 60_000), pipelineSchema: 1 | 2 = 1, acquisitionRevision?:SourceBundle["acquisitionRevision"], economicPolicy?: EconomicPolicyIdentity,economicReviewBaseline?:import("./economicReview").EconomicReviewState,economicReviewBaselineRef?:import("./economicReviewArchive").EconomicReviewRef) {
   if(economicPolicy)validateEconomicPolicy(economicPolicy);
   const bundle: SourceBundle = { schema: 1, ...(pipelineSchema === 2 ? { pipelineSchema } : {}), ...(acquisitionRevision?{acquisitionRevision}:{}), ...(economicPolicy?{economicPolicy,...(economicReviewBaseline?{economicReviewBaseline}:{}),...(economicReviewBaselineRef?{economicReviewBaselineRef}:{})}:{}), asOf, baseline, receipts: [] };
   const started=Date.now();

@@ -66,7 +66,7 @@ export function checkedMarketRow(row: Row, vendor: "cmc" | "gecko", asOf: string
   return result;
 }
 
-export function excludeQuoteField(lookup: QuoteLookup | null, field: "fdv", reason: string): QuoteLookup | null {
+export function excludeQuoteField(lookup: QuoteLookup | null, field: "mcap" | "fdv", reason: string): QuoteLookup | null {
   return lookup ? { ...lookup, available: lookup.available.filter(f => f !== field), positive: lookup.positive?.filter(f => f !== field),
     exclusions: [...(lookup.exclusions ?? []), { field, reason }] } : null;
 }

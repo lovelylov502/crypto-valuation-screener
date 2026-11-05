@@ -177,11 +177,13 @@ export async function fetchGecko(ids: string[], observations: SourceObservation[
 
 // At most two in-flight quote requests, with no silent truncation after a failed batch.
 async function quoteBatches<T>(ids: T[], read: (batch: T[]) => Promise<void>, concurrency = 2) {
+  // The keyless endpoint rejects more than 400 IDs. Older archives used 250.
+  const batchSize = sourceAcquisitionRevision() >= 11 ? 400 : 250;
   let offset = 0;
-  await Promise.all(Array.from({ length: Math.min(concurrency, Math.ceil(ids.length / 250)) }, async () => {
+  await Promise.all(Array.from({ length: Math.min(concurrency, Math.ceil(ids.length / batchSize)) }, async () => {
     while (offset < ids.length) {
-      const batch = ids.slice(offset, offset + 250);
-      offset += 250;
+      const batch = ids.slice(offset, offset + batchSize);
+      offset += batchSize;
       await read(batch);
     }
   }));
@@ -403,6 +405,7 @@ export function aggregateRevenueSource(list: Json[], groupKey: (slug: string) =>
  * original HTTP response bytes are retained by the enclosing source session. */
 export interface CoinInputs {
   marketRevision?: 2 | 3;
+  consistentMarketValues?: true;
   fdvQuality?: true;
   sourceIdentitiesOnly?: true;
   chainIdentities?: Json[];
@@ -454,7 +457,7 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
     return windows;
   };
   const histories = Promise.all([fetchRevenueHistory(observations, preserved("revenueHistory")), fetchHolderHistory(observations,preserved("holderHistory"))]);
-  const cmcDeadline=sourceAcquisitionRevision()>=2?Date.now()+180_000:undefined;
+  const cmcDeadline=sourceAcquisitionRevision()>=2?Date.now()+(sourceAcquisitionRevision()>=11?300_000:180_000):undefined;
   const initial = await Promise.allSettled([
     getJson<Json[]>(`${LLAMA}/protocols`, observations),
     fetchOverviewList("/overview/fees", observations),
@@ -504,6 +507,7 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
   const inputs:CoinInputs = {asOf,...(sourceAcquisitionRevision()>=6?{marketRevision:3 as const}:sourceAcquisitionRevision()>=5?{marketRevision:2 as const}:{}),protocols,fees:feesL,revenue:revL,holders:hrL,dexs:dexsL,parents:config.parentProtocols,stablecoins:stablecoins.peggedAssets,
     ...(sourceAcquisitionRevision()>=9?{sourceIdentitiesOnly:true as const}:{}),
     ...(sourceAcquisitionRevision()>=10?{fdvQuality:true as const}:{}),
+    ...(sourceAcquisitionRevision()>=11?{consistentMarketValues:true as const}:{}),
     ...(sourceAcquisitionRevision()>=7?{chainIdentities,providerHolderWindows:true as const}:{}),
     ...(sourceAcquisitionRevision()>=8?{recoveredHolders:[...recoveredHolders].sort(([a],[b])=>a.localeCompare(b))}:{}),
     cmc:[...cmc.byId.values()].sort((a,b)=>Number(a.id)-Number(b.id)),cmcLookups:[...cmcLookups].sort(([a],[b])=>a-b),cmcDiscoveryComplete:cmc.discoveryComplete !== false,
@@ -714,18 +718,24 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
     const gMcap = g ? num(g.market_cap) : null;
     const cmcMcap = quote ? num(quote.market_cap) : null;
 
-    const cap = revisedMarket ? marketQuote([gMcap, "CoinGecko"], [cmcMcap, "CoinMarketCap"], [dlMcap, "DefiLlama"])
+    let cap = revisedMarket ? marketQuote([gMcap, "CoinGecko"], [cmcMcap, "CoinMarketCap"], [dlMcap, "DefiLlama"])
       : marketQuote([cmcMcap, "CoinMarketCap"], [gMcap, "CoinGecko"], [dlMcap, "DefiLlama"]);
     const geckoFirst = revisedMarket && (cap.source === "CoinGecko" || cap.source !== "CoinMarketCap" && (num(g?.current_price) ?? 0) > 0);
     const price = geckoFirst ? marketQuote([num(g?.current_price), "CoinGecko"], [num(quote?.price), "CoinMarketCap"])
       : marketQuote([num(quote?.price), "CoinMarketCap"], [num(g?.current_price), "CoinGecko"]);
+    const circulatingSupply = cap.source === "CoinGecko" ? num(g?.circulating_supply) : num(cmcRow?.circulating_supply) ?? num(g?.circulating_supply);
+    // A provider-level exclusion must not re-enter through an inconsistent fallback.
+    const capConflict = inputs.consistentMarketValues && cap.value !== null && cap.value > 0 && price.value !== null && price.value > 0 && circulatingSupply !== null && circulatingSupply > 0 &&
+      Math.max(price.value * circulatingSupply / cap.value, cap.value / (price.value * circulatingSupply)) > 1.25;
+    if (capConflict) cap = { value: null, source: null };
     let fdv = geckoFirst ? marketQuote([num(g?.fully_diluted_valuation), "CoinGecko"], [num(quote?.fully_diluted_market_cap), "CoinMarketCap"])
       : marketQuote([num(quote?.fully_diluted_market_cap), "CoinMarketCap"], [num(g?.fully_diluted_valuation), "CoinGecko"]);
     const cmcId = parentWithoutToken ? null : cmcRow ? num(cmcRow.id) : inputs.sourceIdentitiesOnly&&continuity ? continuity.cmcId : declaredParent ? parentCmcId! > 0 ? parentCmcId : null : memberCmcIds.size === 1 ? [...memberCmcIds][0] : continuity?.cmcId??null;
     const fdvConflict = revisedMarket && fdv.value !== null && (cap.value ?? 0) > 0 && fdv.value < cap.value! * .95;
     if (fdvConflict) fdv = { value: null, source: null };
     const currentLookup = (vendor: "cmc" | "gecko", id: string | number | null) => {
-      const lookup = id === null ? null : vendor === "cmc" ? cmcLookups.get(Number(id)) ?? null : gecko.lookups.get(String(id)) ?? null;
+      let lookup = id === null ? null : vendor === "cmc" ? cmcLookups.get(Number(id)) ?? null : gecko.lookups.get(String(id)) ?? null;
+      if (capConflict) lookup = excludeQuoteField(lookup, "mcap", "가격·유통량과 시총 불일치");
       return fdvConflict ? excludeQuoteField(lookup, "fdv", "FDV가 유통 시총보다 작음") : lookup;
     };
     const preferredQuote = revisedMarket && price.source === "CoinGecko";
@@ -827,7 +837,7 @@ export function normalizeCoinInputs(inputs: CoinInputs): CoinRaw[] {
       volume30d: vol?.d30 ?? null,
 
       fdv: fdv.value,
-      circulatingSupply: cap.source === "CoinGecko" ? num(g?.circulating_supply) : num(cmcRow?.circulating_supply) ?? num(g?.circulating_supply),
+      circulatingSupply,
       totalSupply: geckoFirst ? num(g?.total_supply) ?? num(cmcRow?.total_supply) : num(cmcRow?.total_supply) ?? num(g?.total_supply),
       maxSupply: geckoFirst ? num(g?.max_supply) ?? num(cmcRow?.max_supply) : num(cmcRow?.max_supply) ?? num(g?.max_supply),
     });
