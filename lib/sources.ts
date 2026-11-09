@@ -459,7 +459,10 @@ export async function collectCoinInputs(observations: SourceObservation[] = [], 
     return windows;
   };
   const histories = Promise.all([fetchRevenueHistory(observations, preserved("revenueHistory")), fetchHolderHistory(observations,preserved("holderHistory"))]);
-  const cmcDeadline=sourceAcquisitionRevision()>=2?Date.now()+(sourceAcquisitionRevision()>=11?300_000:180_000):undefined;
+  const acquisitionRevision = sourceAcquisitionRevision();
+  const cmcDeadline = acquisitionRevision >= 2
+    ? Date.now() + (acquisitionRevision >= 13 ? 420_000 : acquisitionRevision >= 11 ? 300_000 : 180_000)
+    : undefined;
   const initial = await Promise.allSettled([
     getJson<Json[]>(`${LLAMA}/protocols`, observations),
     fetchOverviewList("/overview/fees", observations),

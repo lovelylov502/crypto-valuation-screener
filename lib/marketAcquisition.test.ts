@@ -6,18 +6,23 @@ import {readHistorySummary} from "./historyRequest";
 
 afterEach(()=>{vi.unstubAllGlobals();vi.useRealTimers();});
 const at="2026-10-07T20:51:50.000Z",listing="https://pro-api.coinmarketcap.com/public-api/v3/cryptocurrency/listings/latest?start=1&limit=5000&convert=USD";
-it.each([[1200,11,false],[2232,11,false],[2233,12,true]] as const)("collects %i CMC IDs on revision %i (discovery limited: %s)",async (count,revision,limited)=>{
+it.each([[1200,11,false],[2232,11,false],[2233,12,true],[2233,13,true]] as const)("collects %i CMC IDs on revision %i (discovery limited: %s)",async (count,revision,limited)=>{
  vi.useFakeTimers();vi.setSystemTime(at);
  const rows=Array.from({length:count},(_,i)=>({slug:`token-${i+1}`,name:`Token ${i+1}`,symbol:`T${i+1}`,cmcId:i+1}));
- const starts:number[]=[],batches:number[][]=[];
+ const starts:number[]=[],batches:number[][]=[],limitedBatches=new Set<number>();
  vi.stubGlobal("fetch",async(input:string|URL|Request)=>{
   const u=new URL(String(input));
   if(u.hostname.includes("coinmarketcap")) {
    const now=Date.now(); starts.push(now);
    if(starts.filter(t=>now-t<60_000).length>2)return new Response("limited",{status:429});
    if(u.pathname.endsWith("listings/latest"))return limited ? new Response("limited",{status:429}) : Response.json({data:[{id:9999,name:"Unrelated",symbol:"OTHER"}]});
-   const ids=u.searchParams.get("id")!.split(",").map(Number); batches.push(ids);
+   const ids=u.searchParams.get("id")!.split(",").map(Number);
    if(ids.length>400)return new Response("id parameter restricted to 400",{status:400});
+   if(revision===13&&[801,1201].includes(ids[0])&&!limitedBatches.has(ids[0])) {
+    limitedBatches.add(ids[0]);
+    return new Response("limited",{status:429});
+   }
+   batches.push(ids);
    return Response.json({data:ids.map(id=>({id,name:`Token ${id}`,symbol:`T${id}`,quote:[{symbol:"USD",price:1,market_cap:100,fully_diluted_market_cap:200}]}))});
   }
   return Response.json(u.hostname.includes("stablecoins")?{peggedAssets:[{gecko_id:"tether",symbol:"USDT"}]}:u.pathname==="/protocols"?rows:u.pathname==="/config"?{parentProtocols:[{id:"parent#unrelated",name:"Unrelated"}]}:{protocols:rows,totalDataChartBreakdown:[]});
@@ -25,8 +30,10 @@ it.each([[1200,11,false],[2232,11,false],[2233,12,true]] as const)("collects %i 
  const run=()=>collectCoinInputs();
  const pending=captureSourceBundle(at,null,run,undefined,2,revision);await vi.runAllTimersAsync();const captured=await pending;
  expect(captured.error).toBeUndefined();
- expect(captured.bundle.requestStats).toMatchObject({rateLimited:limited?1:0,deferred:0});
- expect(starts.map(t=>t-Date.parse(at))).toEqual([0,...Array.from({length:Math.ceil(count/400)},(_,i)=>(i+(limited?2:1))*30_000)]);
+ expect(captured.bundle.requestStats).toMatchObject({rateLimited:revision===13?3:limited?1:0,deferred:0});
+ const expectedStarts=revision===13?[0,60,90,120,180,240,270,300,330].map(seconds=>seconds*1000)
+  :[0,...Array.from({length:Math.ceil(count/400)},(_,i)=>(i+(limited?2:1))*30_000)];
+ expect(starts.map(t=>t-Date.parse(at))).toEqual(expectedStarts);
  expect(captured.value!.cmcDiscoveryComplete).toBe(!limited);
  expect(batches.every(b=>b.length<=400)).toBe(true);
  expect(batches.flat()).toEqual(rows.map(p=>p.cmcId));
@@ -71,7 +78,8 @@ it("rejects unknown acquisition semantics rather than replaying with current beh
  expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:10})).not.toThrow();
  expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:11})).not.toThrow();
  expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:12})).not.toThrow();
- expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:13} as any)).toThrow("Invalid source bundle");
+ expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:13})).not.toThrow();
+ expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:14} as any)).toThrow("Invalid source bundle");
  expect(()=>validateSourceBundle({...captured.bundle,pipelineSchema:undefined})).toThrow("Invalid source bundle");
 });
 it("history transport also begins its15s timeout after cooldown and preserves historical retry semantics",async()=>{
