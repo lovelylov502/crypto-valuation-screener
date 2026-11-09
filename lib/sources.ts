@@ -31,8 +31,8 @@ const CMC_SLUG_OVERRIDES: Record<string, string> = {
 
 type Json = Record<string, unknown>;
 
-export async function getJson<T>(url: string, observations: SourceObservation[], options: { timeout?: number; beforeAttempt?: () => Promise<void>; deadline?: number } = {}): Promise<T> {
-  const { timeout = 30_000, beforeAttempt, deadline = Infinity } = options;
+export async function getJson<T>(url: string, observations: SourceObservation[], options: { timeout?: number; beforeAttempt?: () => Promise<void>; deadline?: number; retryRateLimit?: boolean } = {}): Promise<T> {
+  const { timeout = 30_000, beforeAttempt, deadline = Infinity, retryRateLimit = true } = options;
   const boundedTransport=sourceAcquisitionRevision()>=2;
   let httpStatus: number | undefined;
   try {
@@ -57,7 +57,7 @@ export async function getJson<T>(url: string, observations: SourceObservation[],
       observations.push({ url, observedAt: sourceObservedAt(url), status: "ok" });
       return result;
     }
-    if ((res.status !== 429 && res.status < 500) || attempt === 2) {
+    if ((res.status !== 429 && res.status < 500) || (res.status === 429 && !retryRateLimit) || attempt === 2) {
       throw new Error(`fetch ${url} -> ${res.status}`);
     }
     const retryAfter = Number(res.headers.get("retry-after"));
@@ -226,7 +226,9 @@ export async function fetchCmc(observations: SourceObservation[], deadline = Dat
   for (let start = 1; ; start += 5000) {
     const url = `${CMC}/v3/cryptocurrency/listings/latest?start=${start}&limit=5000&convert=USD`;
     try {
-      const response = await getJson<{ data?: Json[] }>(url, observations, { timeout: 10_000, deadline });
+      // The shared transport still honors the provider cooldown. Spend the
+      // remaining window on direct source-backed IDs after a rate-limited listing.
+      const response = await getJson<{ data?: Json[] }>(url, observations, { timeout: 10_000, deadline, retryRateLimit: sourceAcquisitionRevision() < 12 });
       if (!Array.isArray(response.data) || (start === 1 && !response.data.length)) throw new Error("CMC response is empty");
       const before = index.byId.size;
       indexCmcRows(index, response.data.map(row=>validateQuoteRow(row,"cmc",url,observations,false)));

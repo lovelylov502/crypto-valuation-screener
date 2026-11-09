@@ -22,7 +22,7 @@ export interface SourceBundle {
   schema: 1;
   pipelineSchema?: 2;
   /** Revision 11 bounds keyless CMC acquisition and checks joined market values; older replay stays exact. */
-  acquisitionRevision?: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+  acquisitionRevision?: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
   economicPolicy?: EconomicPolicyIdentity;
   economicProvenance?: EconomicProvenance;
   economicReviewBaseline?: import("./economicReview").EconomicReviewState;
@@ -189,7 +189,7 @@ export async function sourceFetch(input: string | URL | Request, init?: RequestI
 }
 
 export function validateSourceBundle(bundle: SourceBundle): void {
-  if (bundle?.schema !== 1 || (bundle.pipelineSchema !== undefined && bundle.pipelineSchema !== 2) || (bundle.acquisitionRevision!==undefined&&(bundle.pipelineSchema!==2||![2,3,4,5,6,7,8,9,10,11].includes(bundle.acquisitionRevision))) || !Number.isFinite(Date.parse(bundle.asOf)) || !Array.isArray(bundle.receipts) || !bundle.receipts.length) throw new Error("Invalid source bundle");
+  if (bundle?.schema !== 1 || (bundle.pipelineSchema !== undefined && bundle.pipelineSchema !== 2) || (bundle.acquisitionRevision!==undefined&&(bundle.pipelineSchema!==2||![2,3,4,5,6,7,8,9,10,11,12].includes(bundle.acquisitionRevision))) || !Number.isFinite(Date.parse(bundle.asOf)) || !Array.isArray(bundle.receipts) || !bundle.receipts.length) throw new Error("Invalid source bundle");
   if(bundle.economicPolicy) { validateEconomicPolicy(bundle.economicPolicy); if(bundle.pipelineSchema!==2)throw new Error("Economic policy requires pipeline schema 2"); }
   else if(bundle.economicProvenance)throw new Error("Economic provenance has no bound policy");
   if(bundle.economicReviewBaseline||bundle.economicReviewBaselineRef) {

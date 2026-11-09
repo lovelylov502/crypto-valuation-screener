@@ -6,7 +6,7 @@ import {readHistorySummary} from "./historyRequest";
 
 afterEach(()=>{vi.unstubAllGlobals();vi.useRealTimers();});
 const at="2026-10-07T20:51:50.000Z",listing="https://pro-api.coinmarketcap.com/public-api/v3/cryptocurrency/listings/latest?start=1&limit=5000&convert=USD";
-it.each([1200,2232])("collects all %i CMC IDs within the keyless batch limit and a two-request-per-minute pool",async count=>{
+it.each([[1200,11,false],[2232,11,false],[2233,12,true]] as const)("collects %i CMC IDs on revision %i (discovery limited: %s)",async (count,revision,limited)=>{
  vi.useFakeTimers();vi.setSystemTime(at);
  const rows=Array.from({length:count},(_,i)=>({slug:`token-${i+1}`,name:`Token ${i+1}`,symbol:`T${i+1}`,cmcId:i+1}));
  const starts:number[]=[],batches:number[][]=[];
@@ -15,7 +15,7 @@ it.each([1200,2232])("collects all %i CMC IDs within the keyless batch limit and
   if(u.hostname.includes("coinmarketcap")) {
    const now=Date.now(); starts.push(now);
    if(starts.filter(t=>now-t<60_000).length>2)return new Response("limited",{status:429});
-   if(u.pathname.endsWith("listings/latest"))return Response.json({data:[{id:9999,name:"Unrelated",symbol:"OTHER"}]});
+   if(u.pathname.endsWith("listings/latest"))return limited ? new Response("limited",{status:429}) : Response.json({data:[{id:9999,name:"Unrelated",symbol:"OTHER"}]});
    const ids=u.searchParams.get("id")!.split(",").map(Number); batches.push(ids);
    if(ids.length>400)return new Response("id parameter restricted to 400",{status:400});
    return Response.json({data:ids.map(id=>({id,name:`Token ${id}`,symbol:`T${id}`,quote:[{symbol:"USD",price:1,market_cap:100,fully_diluted_market_cap:200}]}))});
@@ -23,10 +23,11 @@ it.each([1200,2232])("collects all %i CMC IDs within the keyless batch limit and
   return Response.json(u.hostname.includes("stablecoins")?{peggedAssets:[{gecko_id:"tether",symbol:"USDT"}]}:u.pathname==="/protocols"?rows:u.pathname==="/config"?{parentProtocols:[{id:"parent#unrelated",name:"Unrelated"}]}:{protocols:rows,totalDataChartBreakdown:[]});
  });
  const run=()=>collectCoinInputs();
- const pending=captureSourceBundle(at,null,run,undefined,2,11);await vi.runAllTimersAsync();const captured=await pending;
+ const pending=captureSourceBundle(at,null,run,undefined,2,revision);await vi.runAllTimersAsync();const captured=await pending;
  expect(captured.error).toBeUndefined();
- expect(captured.bundle.requestStats).toMatchObject({rateLimited:0,deferred:0});
- expect(starts.map(t=>t-Date.parse(at))).toEqual(Array.from({length:1+Math.ceil(count/400)},(_,i)=>i*30_000));
+ expect(captured.bundle.requestStats).toMatchObject({rateLimited:limited?1:0,deferred:0});
+ expect(starts.map(t=>t-Date.parse(at))).toEqual([0,...Array.from({length:Math.ceil(count/400)},(_,i)=>(i+(limited?2:1))*30_000)]);
+ expect(captured.value!.cmcDiscoveryComplete).toBe(!limited);
  expect(batches.every(b=>b.length<=400)).toBe(true);
  expect(batches.flat()).toEqual(rows.map(p=>p.cmcId));
  expect(captured.value!.cmcLookups.filter(([id])=>id!==9999).every(([,q])=>q.status==="received")).toBe(true);
@@ -69,7 +70,8 @@ it("rejects unknown acquisition semantics rather than replaying with current beh
  expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:9})).not.toThrow();
  expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:10})).not.toThrow();
  expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:11})).not.toThrow();
- expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:12} as any)).toThrow("Invalid source bundle");
+ expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:12})).not.toThrow();
+ expect(()=>validateSourceBundle({...captured.bundle,acquisitionRevision:13} as any)).toThrow("Invalid source bundle");
  expect(()=>validateSourceBundle({...captured.bundle,pipelineSchema:undefined})).toThrow("Invalid source bundle");
 });
 it("history transport also begins its15s timeout after cooldown and preserves historical retry semantics",async()=>{
