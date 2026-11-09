@@ -1,0 +1,80 @@
+{
+  "verifiedAt": "2026-10-08T15:12:17.325Z",
+  "historical": {
+    "responseSha256": "04c5b871a621fa2ecffb9a8408e54c3c07e142196322c5d8b5e1c5bdeb35a913",
+    "deployment": {
+      "environment": "production",
+      "codeCommit": "2ee9b7f932aa8380ab1583bf2f6670214c02b06c",
+      "id": "dpl_9ytRpXsNY5WHE311xmjsmiRG1Poh",
+      "url": "https://crypto-valuation-screener-jx7xr1h40-bodycation.vercel.app"
+    },
+    "compatibility": {
+      "release": "four-daily-freshness-v2",
+      "pipelineSchemas": [
+        1,
+        2
+      ],
+      "journalSchemas": [
+        1,
+        2
+      ]
+    },
+    "collectionRelease": {
+      "writerSchema": 1,
+      "schedule": "legacy",
+      "phaseADeploymentId": null
+    }
+  },
+  "economic": {
+    "responseSha256": "3442f1a5d11fce2b6987539e0d7fb8b18a542973c707aa36391f57c528779d3e",
+    "deployment": {
+      "environment": "production",
+      "codeCommit": "574ec3766c09e35b2ec423f78f36dde87a692ce8",
+      "id": "dpl_7L64Na5R77Vrb9tJDDfCgy1MLCzf",
+      "url": "https://crypto-valuation-screener-fq8e3arlf-bodycation.vercel.app"
+    },
+    "compatibility": {
+      "release": "metric-economic-decisions-v3",
+      "pipelineSchemas": [
+        1,
+        2
+      ],
+      "journalSchemas": [
+        1,
+        2
+      ],
+      "economicPolicies": [
+        "legacy",
+        {
+          "algorithm": "metric-decisions-v1",
+          "artifact": "economic-policy-2026-10-08",
+          "sha256": "e88eb1004d43319cc257c8fe832ca3c7ec6354c4c671f2346d65ff9d6259c14d"
+        },
+        {
+          "algorithm": "metric-decisions-v2",
+          "artifact": "economic-policy-2026-10-08-v2",
+          "sha256": "11e4e094ef380436cb64b13f0aba31e65c21a2952de122af13cb3f4b29272e31"
+        },
+        {
+          "algorithm": "metric-decisions-v3",
+          "artifact": "economic-policy-2026-10-08-v3",
+          "sha256": "e582ebe1694702e45193467a69f5e1a587363c08f37880c5901c5bb7ea1e584b"
+        }
+      ]
+    },
+    "collectionRelease": {
+      "writerSchema": 2,
+      "schedule": "paused",
+      "phaseADeploymentId": "dpl_9ytRpXsNY5WHE311xmjsmiRG1Poh",
+      "economic": {
+        "policy": {
+          "algorithm": "metric-decisions-v3",
+          "artifact": "economic-policy-2026-10-08-v3",
+          "sha256": "e582ebe1694702e45193467a69f5e1a587363c08f37880c5901c5bb7ea1e584b"
+        },
+        "active": false,
+        "readerDeploymentId": null
+      }
+    }
+  }
+}

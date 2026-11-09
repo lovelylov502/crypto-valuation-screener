@@ -14,6 +14,9 @@ it("prepares only newly published snapshots and serializes all file writers", ()
   expect(job.concurrency.group).toBe("screener-read-model-writer"); expect(job.concurrency["cancel-in-progress"]).toBe(false);
   expect(job.env).not.toHaveProperty("TURSO_AUTH_TOKEN");
   expect(JSON.stringify(job.steps)).toContain("publish-read-artifacts.ts");
+  const prepare=job.steps.find((step:{run?:string})=>step.run?.includes("publish-read-artifacts.ts"));
+  expect(prepare.env.EXPECTED_PUBLICATION_ID).toBe("${{ needs.capture.outputs.publication_id }}");
+  expect(prepare.run).toContain('--publication "$EXPECTED_PUBLICATION_ID"');
   expect(JSON.stringify(job.steps)).not.toContain("prepare-daily-history.ts");
 });
 

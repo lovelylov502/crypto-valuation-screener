@@ -1,4 +1,5 @@
 import contract from "./pipeline-release.json";
+import retiredReaderProofs from "./retired-reader-proofs.json";
 import { ECONOMIC_POLICY_IDENTITY as ECONOMIC_POLICY,ECONOMIC_POLICIES,knownEconomicPolicy } from "./economicPolicyIdentity";
 import type {EconomicPolicyIdentity} from "./economicTypes";
 export function activeEconomicPolicy() { return (contract as { economic?: { active: boolean } }).economic?.active ? ECONOMIC_POLICY : undefined; }
@@ -40,10 +41,20 @@ export async function verifyWriterActivation(fetcher = fetch) {
     for(const p of [historical,reader])if(p.base!==base||!/^[a-f0-9]{40}$/.test(p.codeCommit)||!/^dpl_[a-zA-Z0-9]+$/.test(p.deploymentId)||!/^https:\/\/crypto-valuation-screener-[a-zA-Z0-9-]+\.vercel\.app$/.test(p.deploymentUrl))throw new Error("Invalid economic reader deployment proof");
     const executing=process.env.GITHUB_SHA??process.env.VERCEL_GIT_COMMIT_SHA;
     if(!/^[a-f0-9]{40}$/.test(executing??""))throw new Error("Executing economic revision unavailable");
-    const bypass=process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();if(!bypass)throw new Error("Protected reader proof credential is unavailable");
-    const responses=await Promise.all([base,reader.deploymentUrl,historical.deploymentUrl].map((url,i)=>fetcher(`${url}/api/status`,{cache:"no-store",redirect:"error",signal:AbortSignal.timeout(10_000),...(i?{headers:{"x-vercel-protection-bypass":bypass}}:{})})));
-    if(responses.some(r=>!r.ok))throw new Error("Economic reader proof unavailable");
-    const [current,pinned,old]=await Promise.all(responses.map(r=>r.json()));
+    const readStatus=async (url:string,role:string,protectedReader=false)=>{
+      const bypass=protectedReader?process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim():undefined;
+      if(protectedReader&&!bypass)throw new Error("Protected reader proof credential is unavailable");
+      const response=await fetcher(`${url}/api/status`,{cache:"no-store",redirect:"error",signal:AbortSignal.timeout(10_000),...(bypass?{headers:{"x-vercel-protection-bypass":bypass}}:{})});
+      if(!response.ok)throw new Error(`Economic reader proof unavailable: ${role} HTTP ${response.status}`);
+      return response.json();
+    };
+    // These two deployments completed their reader-first checks before retirement.
+    // An unlisted deployment still needs a live protected proof.
+    const readPinned=(p:ReaderProof,role:"historical"|"economic")=>{
+      const archived=retiredReaderProofs[role];
+      return archived.deployment.id===p.deploymentId?archived:readStatus(p.deploymentUrl,role,true);
+    };
+    const [current,pinned,old]=await Promise.all([readStatus(base,"canonical"),readPinned(reader,"economic"),readPinned(historical,"historical")]);
     const identity=(v:any,p?:ReaderProof)=>v.deployment?.environment==="production"&&/^dpl_[a-zA-Z0-9]+$/.test(v.deployment?.id??"")&&/^[a-f0-9]{40}$/.test(v.deployment?.codeCommit??"")&&(!p||v.deployment.id===p.deploymentId&&v.deployment.codeCommit===p.codeCommit&&v.deployment.url===p.deploymentUrl);
     const schemas=(v:any)=>JSON.stringify(v.compatibility?.pipelineSchemas)==="[1,2]"&&JSON.stringify(v.compatibility?.journalSchemas)==="[1,2]";
     const compatible=(v:any)=>v.compatibility?.release===READER_COMPATIBILITY.release&&schemas(v)&&v.compatibility?.economicPolicies?.some((p:unknown)=>currentEconomicPolicy(p));

@@ -7,6 +7,7 @@ import {verifyWriterActivation,collectionReleaseState,READER_COMPATIBILITY} from
 import {ECONOMIC_POLICY_IDENTITY as policy,ECONOMIC_POLICY_V2_IDENTITY as previousPolicy} from "./economicPolicyIdentity";
 import {verifyWriterActivation as actualB519Writer} from "./fixtures/legacy-b519-writer/pipelineRelease";
 import b519Contract from "./fixtures/legacy-b519-writer/pipeline-release.json";
+import retiredProofs from "./retired-reader-proofs.json";
 import {readEconomicReaderProof,economicActivationFile,economicPauseFile} from "../scripts/prepare-economic-release.mjs";
 const reader={base:contract.phaseA.base,readerRelease:contract.readerRelease,codeCommit:"b".repeat(40),deploymentId:"dpl_economicReader",deploymentUrl:"https://crypto-valuation-screener-economic-reader.vercel.app"};
 const executing="c".repeat(40);contract.economic.policy=policy;
@@ -38,6 +39,30 @@ it("rechecks exact executing commit, algorithm/artifact, activation and both pin
   }
   const before=network();await verifyWriterActivation(before);
   await expect(verifyWriterActivation(network((v,u)=>u===contract.phaseA.base+"/api/status"?{...v,deployment:{...v.deployment,codeCommit:"d".repeat(40)}}:v))).rejects.toThrow("revision");
+});
+it("verifies both retired migration receipts while still fencing against the exact live writer",async()=>{
+  activate();
+  const original=contract.phaseA;
+  const ref=(role:"historical"|"economic")=>{
+    const {deployment,compatibility}=retiredProofs[role];
+    return {base:original.base,readerRelease:compatibility.release,codeCommit:deployment.codeCommit,deploymentId:deployment.id,deploymentUrl:deployment.url};
+  };
+  contract.phaseA=ref("historical");
+  contract.economic.reader=ref("economic");
+  vi.stubEnv("VERCEL_AUTOMATION_BYPASS_SECRET","");
+  const fetcher=vi.fn(async(input:RequestInfo|URL)=>{
+    if(String(input)!==original.base+"/api/status")return new Response(null,{status:410});
+    return Response.json(current());
+  });
+  try {
+    await verifyWriterActivation(fetcher);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await expect(verifyWriterActivation(vi.fn(async()=>Response.json({...current(),deployment:{...current().deployment,codeCommit:"e".repeat(40)}})))).rejects.toThrow("revision");
+    contract.economic.reader={...ref("economic"),codeCommit:"d".repeat(40)};
+    await expect(verifyWriterActivation(fetcher)).rejects.toThrow("unverified");
+  } finally {
+    contract.phaseA=original;
+  }
 });
 it("prepares activation only after exact paused canonical and protected immutable economic readers agree",async()=>{
   vi.stubEnv("VERCEL_AUTOMATION_BYPASS_SECRET","test-only-bypass");

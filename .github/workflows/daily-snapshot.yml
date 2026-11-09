@@ -163,7 +163,9 @@ jobs:
           node-version: "22"
       - run: npm ci --no-audit --no-fund
       - name: Prepare one complete version locally, skipping an already published input
-        run: npx tsx scripts/publish-read-artifacts.ts --cache "$RUNNER_TEMP/prepared-reads" --publish
+        env:
+          EXPECTED_PUBLICATION_ID: ${{ needs.capture.outputs.publication_id }}
+        run: npx tsx scripts/publish-read-artifacts.ts --cache "$RUNNER_TEMP/prepared-reads" --publication "$EXPECTED_PUBLICATION_ID" --publish
       - uses: actions/upload-artifact@v7
         if: always()
         with:

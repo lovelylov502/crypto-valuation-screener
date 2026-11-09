@@ -8,7 +8,8 @@ import { createGunzip } from "node:zlib";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { spawnSync } from "node:child_process";
-import { readJournal } from "../lib/snapshotArchive";
+import { readArchivedJournal, readJournal } from "../lib/snapshotArchive";
+import { stateUrl } from "../lib/publication";
 import { loadHistoryInputs } from "../lib/historyCollection";
 import { initializeDailyRaw } from "../lib/dailyRawDatabase";
 import { objectHash } from "../lib/sourceBundle";
@@ -95,7 +96,11 @@ async function main() {
     if (!before) throw Error("read_artifact_verified_seed_required");
     await restore(before.manifest, database); await writeFile(join(cache, "base-pointer.json"), JSON.stringify(before.pointer)); return;
   }
-  const publication = await readJournal(); if (!publication?.published) throw Error("read_artifact_publication_required");
+  const expected = arg("--publication");
+  if (process.argv.includes("--publication") && !/^data-\d+-\d+-complete$/.test(expected ?? "")) throw Error("read_artifact_invalid_publication_id");
+  const publication = expected ? await readArchivedJournal(stateUrl(expected)) : await readJournal();
+  if (!publication.published || (expected && (publication.id !== expected || publication.published.id !== expected || publication.attempt.outcome !== "published"))) throw Error("read_artifact_publication_required");
+  if (before && before.manifest.publication.dataAt > publication.published.dataAt) throw Error("read_artifact_stale_publication");
   const token = arg("--input-token") ?? "snapshot", inputKey = objectHash([READ_ARTIFACT_VERSION, publication.published.sha256, token]);
   if (before?.manifest.inputKey === inputKey) { console.log(JSON.stringify({ status: "unchanged", inputKey, remoteDatabase: { reads: 0, writes: 0 } })); return; }
   if (!arg("--database")) { if (!before) throw Error("read_artifact_verified_seed_required"); await restore(before.manifest, database); }
